@@ -102,7 +102,7 @@ argv arrays — never string interpolation into a shell.
 
 ## 5. Diff viewing (`4-diff-viewing.md`) — **Shipped**
 
-Split mode is default; unified mode is available. Added/deleted files
+Unified mode is the startup default; split mode is available. Added/deleted files
 always render unified regardless of setting. Line numbers render as CSS
 pseudo-elements so they're excluded from selection/copy. In split mode,
 text selection is single-column. Status badges indicate added / modified
@@ -250,7 +250,7 @@ marker) so the DOM never holds a multi-hundred-KB text node whose layout/paint
 freezes the main thread, and such lines are also left unhighlighted; the freeze is
 worst in the desktop WKWebView and is invisible to headless timing tests, so the
 regression guard asserts bounded rendered content, not a time budget),
-context expansion (live from working tree), symbol
+full file context (from the reviewed revision, without fold controls), symbol
 outline (functions/classes/methods) with click-to-navigate, and in-diff
 find (`Cmd/Ctrl+F`) with match nav and Escape dismiss. In Tauri, the
 native Find menu routes to the in-app find bar.
@@ -369,7 +369,12 @@ toggle), Updates (Tauri-only).
 
 Keyboard shortcuts: `Cmd/Ctrl+Enter` saves annotation form; `Escape`
 closes modals/forms; `j`/`k` navigates files; `Cmd/Ctrl+F` opens find;
-`Cmd/Ctrl+Click` on a symbol goes to its definition.
+`Cmd/Ctrl+Click` on a symbol goes to its definition. `Tab` / `Shift+Tab` move
+past fully visible changes to the next/previous unseen change, with ideally five
+lines of context. Long changes page with ten lines of overlap, accounting for
+sticky chrome. Navigation crosses files in visible sidebar order after the last
+page and stops at the review ends. The destination is focused after its file
+renders; text inputs and dialogs keep normal Tab behavior.
 
 Completion is immediate (a stale-annotation prompt gates when needed);
 the post-completion modal shows the export summary + copy hint (gitignore

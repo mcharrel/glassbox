@@ -6,8 +6,8 @@ Requirements for displaying file diffs and navigating changes.
 
 ### 4.1 Diff Display
 
-- **Split mode** — The system shall render diffs in split mode (side-by-side old/new columns) by default.
-- **Unified mode** — The system shall support unified mode (single-column traditional diff format).
+- **Split mode** — The system shall support split mode (side-by-side old/new columns).
+- **Unified mode** — The system shall open each session in unified mode (single-column traditional diff format). Split mode remains available during the session.
 - **Added/deleted override** — Added and deleted files shall always render in unified mode regardless of the selected diff mode.
 - **Line numbers** — Each diff line shall display its line number (old-side and/or new-side as applicable). Line numbers are rendered via CSS pseudo-elements so they are excluded from text selection and clipboard copies.
 - **Visual distinction** — Lines shall be visually distinguished by type: added (green), removed (red), context (neutral).
@@ -69,10 +69,11 @@ The user's Code/Rendered choice is remembered across file selections.
 - **Truncated display (primary):** Server-side, any diff line longer than `MAX_DIFF_LINE_LENGTH` (`src/utils/lineTruncate.ts`, used by `DiffView` in `src/components/diffView.tsx`) renders only a bounded prefix plus a `.line-truncated` marker naming how many characters were elided. The giant content never reaches the DOM, so there is nothing huge to lay out or paint. Full line content is preserved in the stored diff (annotations key off line numbers, and export reads the stored diff), so nothing downstream is lost.
 - **Skipped highlighting (secondary):** Syntax highlighting emits one nested `<span>` per token, so highlighting a long line would inject tens of thousands of elements; lines past `MAX_HIGHLIGHT_LINE_LENGTH` are left unhighlighted (`src/client/diff/highlightLimits.ts`, used in `applyHighlighting()`), and cells carrying a `.line-truncated` marker are skipped entirely so re-highlighting can't fold the marker back into the source. Highlighting such lines is visually useless anyway.
 
-### 4.5 Context Expansion
+### 4.5 Full File Context
 
-- **Expand beyond hunks** — Users shall be able to expand context beyond the default hunk boundaries to see surrounding lines from the working directory file.
-- **Live file reads** — Context expansion shall fetch lines from the current file on disk, not from the git diff.
+- **Always expanded** — Text files show all available lines, including unchanged prefixes, gaps, and suffixes, in both split and unified views. No fold or "Show remaining lines" controls are displayed.
+- **Reviewed content** — Context comes from the review's new-side revision (or working files for working-tree/direct comparisons). Saved changes and annotation line numbers remain unchanged. Difftool captures full context before its temporary inputs disappear.
+- **Unavailable content** — If full content cannot be reconciled with the saved diff, show the saved changes with an explicit notice; never fabricate missing lines.
 
 ### 4.6 Code Outline
 

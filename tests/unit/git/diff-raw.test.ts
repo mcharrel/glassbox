@@ -10,6 +10,21 @@ import { diffRawContent } from '../../../src/git/diff.js';
 const buf = (s: string): Buffer => Buffer.from(s, 'utf-8');
 
 describe('diffRawContent', () => {
+  it('retains all context before temporary difftool inputs disappear', () => {
+    const before = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n') + '\n';
+    const after = before.replace('line 20', 'changed');
+    const diff = diffRawContent('sample.txt', buf(before), buf(after));
+    const lines = diff.hunks.flatMap(h => h.lines);
+    expect(lines.filter(l => l.type !== 'remove').map(l => l.content).join('\n') + '\n').toBe(after);
+    expect(lines.filter(l => l.type !== 'add').map(l => l.content).join('\n') + '\n').toBe(before);
+  });
+
+  it('shows identical text inputs as full context with no change markers', () => {
+    const diff = diffRawContent('same.txt', buf('one\ntwo\n'), buf('one\ntwo\n'));
+    expect(diff.hunks[0].lines.map(l => l.content)).toEqual(['one', 'two']);
+    expect(diff.hunks[0].lines.every(l => l.type === 'context')).toBe(true);
+  });
+
   it('produces a modified-file diff with add/remove lines', () => {
     const diff = diffRawContent('src/example.ts', buf('a\nb\nc\n'), buf('a\nB\nc\n'));
     expect(diff.filePath).toBe('src/example.ts');

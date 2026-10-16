@@ -90,6 +90,36 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe('getFileDiffs — uncommitted mode', () => {
+  it('reads full context from the reviewed revisions and index, not newer working files', () => {
+    const r = createTempRepo();
+    try {
+      const path = join(r.path, 'context.txt');
+      writeFileSync(path, 'base\n');
+      const base = gitCommit(r.path, 'base', true);
+      writeFileSync(path, 'reviewed\n');
+      const reviewed = gitCommit(r.path, 'reviewed', true);
+      writeFileSync(path, 'later\n');
+      gitCommit(r.path, 'later', true);
+      writeFileSync(path, 'staged\n');
+      execSync('git add context.txt', { cwd: r.path });
+      writeFileSync(path, 'working\n');
+      const cases = [
+        [{ type: 'commit', sha: reviewed }, 'base\n', 'reviewed\n'],
+        [{ type: 'range', from: base, to: reviewed }, 'base\n', 'reviewed\n'],
+        [{ type: 'staged' }, 'later\n', 'staged\n'],
+        [{ type: 'unstaged' }, 'staged\n', 'working\n'],
+        [{ type: 'branch', name: base }, 'base\n', 'later\n'],
+        [{ type: 'uncommitted' }, 'later\n', 'working\n'],
+        [{ type: 'files', patterns: ['context.txt'] }, 'later\n', 'working\n'],
+        [{ type: 'all' }, '', 'working\n'],
+      ] as const;
+      for (const [mode, oldContent, newContent] of cases) {
+        expect(getModeFileContent(mode as import('../../../src/git/types.js').ReviewMode, 'context.txt', 'old', r.path)).toBe(oldContent);
+        expect(getModeFileContent(mode as import('../../../src/git/types.js').ReviewMode, 'context.txt', 'new', r.path)).toBe(newContent);
+      }
+    } finally { r.cleanup(); }
+  });
+
   let cleanup: (() => void) | undefined;
 
   afterAll(() => cleanup?.());

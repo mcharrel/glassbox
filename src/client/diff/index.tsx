@@ -11,6 +11,7 @@ import { openLightbox } from '../lightbox.js';
 import { aiStore, diffViewStore, dragStore, reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
 import { renderAINotes } from './aiNotes.js';
+import { bindChangeNavigation } from './changeNavigation.js';
 import { navigateToLocation } from './goToDefinition.js';
 import { applyHighlighting, detectLanguage } from './highlight.js';
 import { handleHunkExpand } from './hunkExpander.js';
@@ -51,7 +52,7 @@ export function initDiffView(): void {
   if (container === null) return;
 
   setupFetchEffect();
-  setupMount(container);
+  setupMount(container, bindChangeNavigation());
   setupAINotesEffect(container);
   setupImageModeEffect();
   setupWrapClassEffect(container);
@@ -135,7 +136,7 @@ function setupFetchEffect(): void {
 
 // --- Mount + post-render setup ---
 
-function setupMount(container: HTMLElement): void {
+function setupMount(container: HTMLElement, onDiffRendered: (fileId: string | null) => void): void {
   // remountOn (kerfjs/remount) REPLACES the diff subtree whenever `generation`
   // changes — a file / split-unified / whitespace / SVG switch — instead of
   // morphing it. That is exactly what the diff content needs: the server HTML is
@@ -165,7 +166,10 @@ function setupMount(container: HTMLElement): void {
         const content = diffContentSignal.value;
         if (content.kind === 'empty') return;
         if (content.kind !== 'raw' && content.fileId === null) return;
-        queueMicrotask(() => { runPostRender(container, content); });
+        queueMicrotask(() => {
+          runPostRender(container, content);
+          onDiffRendered(content.fileId);
+        });
       },
     },
   );

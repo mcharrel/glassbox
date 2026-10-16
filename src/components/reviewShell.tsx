@@ -83,8 +83,8 @@ export function ReviewShell({ reviewId, review, files, annotationCounts, staleCo
             <div className="diff-toolbar-text">
               <div className="diff-toolbar-left">
                 <div className="segmented-control">
-                  <button className="segment active" data-diff-mode="split">Split</button>
-                  <button className="segment" data-diff-mode="unified">Unified</button>
+                  <button className="segment" data-diff-mode="split">Split</button>
+                  <button className="segment active" data-diff-mode="unified">Unified</button>
                 </div>
                 <button className="toolbar-btn" id="wrap-toggle">Wrap</button>
                 <button className="toolbar-btn" id="whitespace-toggle">Ignore Whitespace</button>

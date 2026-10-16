@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { debugLog } from '../debug.js';
 import { sanitizeRelPath } from '../utils/relPath.js';
+import { withFullContext } from './fullContext.js';
 import { parseDiff } from './parseDiff.js';
 import { getRepoRoot } from './repo.js';
 import { git } from './spawn.js';
@@ -164,12 +165,13 @@ export function diffRawContent(displayPath: string, oldContent: Buffer, newConte
     writeFileSync(oldAbs, oldContent);
     writeFileSync(newAbs, newContent);
 
-    const rawDiff = gitOrEmpty(['diff', '--no-index', '-U3', toGitArg(oldAbs), toGitArg(newAbs)], work);
+    const rawDiff = gitOrEmpty(['diff', '--no-index', '-U2147483647', toGitArg(oldAbs), toGitArg(newAbs)], work);
     const diffs = normalizeDiffPaths(parseDiff(rawDiff), rootA, rootB);
     if (diffs.length === 0) {
       // git emits nothing for identical content; still surface the file so it
       // appears in the accumulating review (as an unchanged entry).
-      return { filePath: safeRel, oldPath: null, status: 'modified', hunks: [], isBinary: false };
+      const unchanged: FileDiff = { filePath: safeRel, oldPath: null, status: 'modified', hunks: [], isBinary: newContent.subarray(0, 8192).includes(0) };
+      return withFullContext(unchanged, newContent.toString('utf-8')) ?? unchanged;
     }
     const diff = diffs[0];
     // Both sides are always written, so `git diff --no-index` reports every file
@@ -298,8 +300,8 @@ export function getFileContent(filePath: string, ref: string, cwd: string): stri
 /**
  * Read a review file's content for a given side ('old' | 'new'), aware of
  * direct-comparison mode where the two sides live under two arbitrary roots on
- * disk (no git refs). Used by context expansion (doc 18, FR-18.5). For all
- * git-backed modes it falls back to {@link getFileContent}.
+ * disk (no git refs). Git-backed reviews read the revision or index being
+ * reviewed, so newer working-tree edits cannot leak into historical context.
  */
 export function getModeFileContent(mode: ReviewMode, filePath: string, side: 'old' | 'new', cwd: string): string {
   if (mode.type === 'diff') {
@@ -314,7 +316,22 @@ export function getModeFileContent(mode: ReviewMode, filePath: string, side: 'ol
   // Ground-truth entries are images with no text hunks, so context expansion is
   // never requested; reading the bytes as text would be meaningless.
   if (mode.type === 'ground-truth') return '';
-  return getFileContent(filePath, side === 'old' ? 'HEAD' : 'working', cwd);
+  switch (mode.type) {
+    case 'commit': return getFileContent(filePath, side === 'old' ? `${mode.sha}~1` : mode.sha, cwd);
+    case 'range': return getFileContent(filePath, side === 'old' ? mode.from : mode.to, cwd);
+    // An empty ref makes `git show :path` read the index.
+    case 'staged': return getFileContent(filePath, side === 'old' ? 'HEAD' : '', cwd);
+    case 'unstaged': return getFileContent(filePath, side === 'old' ? '' : 'working', cwd);
+    case 'branch': {
+      try {
+        const ref = side === 'old' ? git(['merge-base', mode.name, 'HEAD'], cwd).trim() : 'HEAD';
+        return getFileContent(filePath, ref, cwd);
+      } catch { return ''; }
+    }
+    case 'all': return side === 'old' ? '' : getFileContent(filePath, 'working', cwd);
+    case 'files':
+    case 'uncommitted': return getFileContent(filePath, side === 'old' ? 'HEAD' : 'working', cwd);
+  }
 }
 
 export function parseModeString(modeStr: string): ReviewMode {
