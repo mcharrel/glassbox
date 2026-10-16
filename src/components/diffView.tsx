@@ -15,11 +15,12 @@ import { renderNoteMarkdown } from '../utils/noteMarkdown.js';
 import { ImageDiff } from './imageDiff.js';
 import { ReviewNoteRegionThumb } from './reviewNoteRegionThumb.js';
 
-export function DiffView({ file, diff, annotations, mode, reviewNotes = [], imageSideLabels, stepNav }: {
+export function DiffView({ file, diff, annotations, mode, reviewNotes = [], imageSideLabels, stepNav, fullContext = false }: {
   file: ReviewFile;
   diff: FileDiff;
   annotations: Annotation[];
   mode: 'split' | 'unified';
+  fullContext?: boolean;
   reviewNotes?: ReviewNoteView[];
   /** Ground-truth mode (doc 26 §26.1) overrides the image pane captions. */
   imageSideLabels?: { old: string; new: string };
@@ -50,6 +51,19 @@ export function DiffView({ file, diff, annotations, mode, reviewNotes = [], imag
     reviewNotesByLine[key].push(n);
   }
 
+  // One anchor per contiguous change, ordered logically across split columns.
+  const changeStarts = new Map<DiffLine, number>();
+  for (const hunk of diff.hunks) {
+    let changing = false;
+    for (const line of hunk.lines) {
+      if (line.type === 'context') changing = false;
+      else if (!changing) {
+        changeStarts.set(line, changeStarts.size);
+        changing = true;
+      }
+    }
+  }
+
   return (
     <div className="diff-view" data-file-id={file.id} data-file-path={file.file_path}
       {...(isSvgFile(diff.filePath) ? { 'data-is-svg': 'true' } : {})}>
@@ -71,9 +85,9 @@ export function DiffView({ file, diff, annotations, mode, reviewNotes = [], imag
       ) : diff.isBinary ? (
         <div className="hunk-separator">Binary file</div>
       ) : (diff.status === 'added' || diff.status === 'deleted' || mode === 'unified') ? (
-        <UnifiedDiff hunks={diff.hunks} annotationsByLine={annotationsByLine} reviewNotesByLine={reviewNotesByLine} repliesByNote={repliesByNote} filePath={diff.filePath} />
+        <UnifiedDiff hunks={diff.hunks} annotationsByLine={annotationsByLine} reviewNotesByLine={reviewNotesByLine} repliesByNote={repliesByNote} filePath={diff.filePath} fullContext={fullContext} changeStarts={changeStarts} />
       ) : (
-        <SplitDiff hunks={diff.hunks} annotationsByLine={annotationsByLine} reviewNotesByLine={reviewNotesByLine} repliesByNote={repliesByNote} filePath={diff.filePath} />
+        <SplitDiff hunks={diff.hunks} annotationsByLine={annotationsByLine} reviewNotesByLine={reviewNotesByLine} repliesByNote={repliesByNote} filePath={diff.filePath} fullContext={fullContext} changeStarts={changeStarts} />
       )}
     </div>
   );
@@ -115,8 +129,9 @@ function getReviewNotes(pair: LinePair, reviewNotesByLine: Record<string, Review
   return pair.right ? reviewNotesByLine[`${pair.right.newNum}:new`] ?? [] : [];
 }
 
-function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote, filePath }: {
+function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote, filePath, fullContext, changeStarts }: {
   hunks: DiffHunk[]; annotationsByLine: Record<string, Annotation[]>; reviewNotesByLine: Record<string, ReviewNoteView[]>; repliesByNote: Record<string, Annotation[]>; filePath: string;
+  fullContext: boolean; changeStarts: Map<DiffLine, number>;
 }) {
   const lastHunk = hunks[hunks.length - 1] as DiffHunk | undefined;
   const tailStart = lastHunk ? lastHunk.newStart + lastHunk.newCount : 1;
@@ -128,7 +143,7 @@ function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote,
     const prevHunk = hunkIdx > 0 ? hunks[hunkIdx - 1] : null;
     const gapStart = prevHunk ? prevHunk.newStart + prevHunk.newCount : 1;
     const gapEnd = hunk.newStart - 1;
-    items.push({ kind: 'separator', hunkIdx, hunk, gapStart, gapEnd });
+    if (!fullContext) items.push({ kind: 'separator', hunkIdx, hunk, gapStart, gapEnd });
 
     for (const pair of pairLines(hunk.lines)) {
       const anns = getAnnotations(pair, annotationsByLine);
@@ -140,7 +155,7 @@ function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote,
       }
     }
   }
-  items.push({ kind: 'tail', start: tailStart });
+  if (!fullContext) items.push({ kind: 'tail', start: tailStart });
 
   // Group consecutive non-annotated items into split-columns blocks. A pair
   // with annotations or review notes breaks the flow so they render full-width.
@@ -169,12 +184,14 @@ function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote,
             <div>
               <div className="split-row">
                 <div className={`diff-line split-left ${group.pair.left?.type || 'empty'}`}
+                  data-change-start={group.pair.left ? changeStarts.get(group.pair.left) : undefined}
                   data-line={group.pair.left?.oldNum ?? ''} data-side="old"
                   data-new-line={group.pair.left?.newNum ?? group.pair.right?.newNum ?? ''}>
                   <span className="gutter" data-line-number={group.pair.left?.oldNum ?? ''}></span>
                   <span className="code">{renderPairContent(group.pair, 'left')}</span>
                 </div>
                 <div className={`diff-line split-right ${group.pair.right?.type || 'empty'}`}
+                  data-change-start={group.pair.right ? changeStarts.get(group.pair.right) : undefined}
                   data-line={group.pair.right?.newNum ?? ''} data-side="new">
                   <span className="gutter" data-line-number={group.pair.right?.newNum ?? ''}></span>
                   <span className="code">{renderPairContent(group.pair, 'right')}</span>
@@ -190,10 +207,10 @@ function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote,
         return (
           <div className="split-columns">
             <div className="split-col split-col-left">
-              {renderSplitColumn(group.items, 'left')}
+              {renderSplitColumn(group.items, 'left', changeStarts)}
             </div>
             <div className="split-col split-col-right">
-              {renderSplitColumn(group.items, 'right')}
+              {renderSplitColumn(group.items, 'right', changeStarts)}
             </div>
           </div>
         );
@@ -208,6 +225,7 @@ function SplitDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote,
 function renderSplitColumn(
   items: Exclude<SplitItem, { kind: 'annotated' }>[],
   side: 'left' | 'right',
+  changeStarts: Map<DiffLine, number>,
 ): SafeHtml {
   return (
     <>
@@ -234,6 +252,7 @@ function renderSplitColumn(
         if (side === 'left') {
           return (
             <div className={`diff-line split-left ${pair.left?.type || 'empty'}`}
+              data-change-start={pair.left ? changeStarts.get(pair.left) : undefined}
               data-line={pair.left?.oldNum ?? ''} data-side="old"
               data-new-line={pair.left?.newNum ?? pair.right?.newNum ?? ''}>
               <span className="gutter" data-line-number={pair.left?.oldNum ?? ''}></span>
@@ -243,6 +262,7 @@ function renderSplitColumn(
         }
         return (
           <div className={`diff-line split-right ${pair.right?.type || 'empty'}`}
+            data-change-start={pair.right ? changeStarts.get(pair.right) : undefined}
             data-line={pair.right?.newNum ?? ''} data-side="new">
             <span className="gutter" data-line-number={pair.right?.newNum ?? ''}></span>
             <span className="code">{renderPairContent(pair, 'right')}</span>
@@ -354,8 +374,9 @@ function buildUnifiedCharDiffs(lines: DiffLine[]): Map<DiffLine, DiffSegment[]> 
   return result;
 }
 
-function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote, filePath }: {
+function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote, filePath, fullContext, changeStarts }: {
   hunks: DiffHunk[]; annotationsByLine: Record<string, Annotation[]>; reviewNotesByLine: Record<string, ReviewNoteView[]>; repliesByNote: Record<string, Annotation[]>; filePath: string;
+  fullContext: boolean; changeStarts: Map<DiffLine, number>;
 }) {
   const lastHunk = hunks[hunks.length - 1] as DiffHunk | undefined;
   const tailStart = lastHunk ? lastHunk.newStart + lastHunk.newCount : 1;
@@ -366,11 +387,11 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
         const charDiffs = buildUnifiedCharDiffs(hunk.lines);
         return (
         <div className="hunk-block">
-          <div className="hunk-separator" data-hunk-idx={hunkIdx}
+          {!fullContext && <div className="hunk-separator" data-hunk-idx={hunkIdx}
             data-old-start={hunk.oldStart} data-old-count={hunk.oldCount}
             data-new-start={hunk.newStart} data-new-count={hunk.newCount}>
             @@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@
-          </div>
+          </div>}
           {hunk.lines.map(line => {
             const lineNum = line.type === 'remove' ? line.oldNum : line.newNum;
             const side = line.type === 'remove' ? 'old' : 'new';
@@ -381,6 +402,7 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
               <div>
                 <div
                   className={`diff-line ${line.type}${anns.length ? ' has-annotation' : ''}`}
+                  data-change-start={changeStarts.get(line)}
                   data-line={lineNum}
                   data-side={side}
                 >
@@ -396,9 +418,9 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
         </div>
         );
       })}
-      <div className="hunk-separator hunk-expander-tail" data-start={tailStart}>
+      {!fullContext && <div className="hunk-separator hunk-expander-tail" data-start={tailStart}>
         <IconChevronsUpDown /> Show remaining lines
-      </div>
+      </div>}
     </div>
   );
 }

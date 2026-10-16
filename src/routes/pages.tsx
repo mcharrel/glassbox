@@ -13,7 +13,8 @@ import { getAnnotationCountsForReview, getAnnotationsForFile, getReview, getRevi
 import { getDemoMode } from '../debug.js';
 import { demoReviewNotes } from '../demo.js';
 import type { FileDiff } from '../git/diff.js';
-import { getSingleFileDiff, parseDiffData, parseModeString } from '../git/diff.js';
+import { getModeFileContent, getSingleFileDiff, parseDiffData, parseModeString } from '../git/diff.js';
+import { withFullContext } from '../git/fullContext.js';
 import { getNewImage, getOldImage,isSvgFile  } from '../git/image.js';
 import { emptyFileDiff } from '../git/parseDiffData.js';
 import { parseSvgDimensions, svgUsesExternalFonts } from '../git/svg-meta.js';
@@ -164,6 +165,12 @@ pageRoutes.get('/file/:fileId', async (c) => {
     }
   }
 
+  // Expand only the display; saved review diffs and annotation anchors stay intact.
+  const expanded = diff.isBinary || review?.mode === 'difftool'
+    ? finalDiff
+    : reviewMode ? withFullContext(finalDiff, getModeFileContent(reviewMode, file.file_path, 'new', c.get('repoRoot'))) : null;
+  if (expanded) finalDiff = expanded;
+
   // AI-authored review notes from `.pr-notes/` (docs/20 P2). Demo mode has no
   // on-disk notes, so it serves a small illustrative set instead. Re-anchor them
   // against the current diff so a note whose line shifted lands correctly and a
@@ -190,7 +197,10 @@ pageRoutes.get('/file/:fileId', async (c) => {
   // diff here (the "Code" side); the "Rendered" view is served above via the
   // image viewer. So no per-file plugin render happens in the text-diff path.
 
-  const html = <DiffView file={file} diff={finalDiff} annotations={annotations} mode={mode} reviewNotes={reviewNotes} imageSideLabels={imageSideLabels} stepNav={stepNav} />;
+  const html = <>
+    {expanded === null && !diff.isBinary ? <div className="diff-load-error" role="status">Full file content is unavailable. Showing the saved changes.</div> : null}
+    <DiffView file={file} diff={finalDiff} annotations={annotations} mode={mode} reviewNotes={reviewNotes} imageSideLabels={imageSideLabels} stepNav={stepNav} fullContext />
+  </>;
   return c.html(html.toString());
 });
 
@@ -232,7 +242,7 @@ pageRoutes.get('/file-raw', (c) => {
   };
 
   const fakeFile: ReviewFile = { id: '', review_id: '', file_path: filePath, status: 'reviewed', diff_data: null, difference_score: null, created_at: '' };
-  const html = <DiffView file={fakeFile} diff={diff} annotations={[]} mode="unified" />;
+  const html = <DiffView file={fakeFile} diff={diff} annotations={[]} mode="unified" fullContext />;
   return c.html(html.toString());
 });
 

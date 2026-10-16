@@ -250,7 +250,7 @@ marker) so the DOM never holds a multi-hundred-KB text node whose layout/paint
 freezes the main thread, and such lines are also left unhighlighted; the freeze is
 worst in the desktop WKWebView and is invisible to headless timing tests, so the
 regression guard asserts bounded rendered content, not a time budget),
-context expansion (live from working tree), symbol
+full file context (from the reviewed revision, without fold controls), symbol
 outline (functions/classes/methods) with click-to-navigate, and in-diff
 find (`Cmd/Ctrl+F`) with match nav and Escape dismiss. In Tauri, the
 native Find menu routes to the in-app find bar.
@@ -369,7 +369,9 @@ toggle), Updates (Tauri-only).
 
 Keyboard shortcuts: `Cmd/Ctrl+Enter` saves annotation form; `Escape`
 closes modals/forms; `j`/`k` navigates files; `Cmd/Ctrl+F` opens find;
-`Cmd/Ctrl+Click` on a symbol goes to its definition.
+`Cmd/Ctrl+Click` on a symbol goes to its definition. `Tab` / `Shift+Tab` move
+between contiguous changed blocks within the current text file, bounded at the
+ends; text inputs and dialogs keep normal Tab behavior.
 
 Completion is immediate (a stale-annotation prompt gates when needed);
 the post-completion modal shows the export summary + copy hint (gitignore
