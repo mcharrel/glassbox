@@ -102,7 +102,7 @@ argv arrays — never string interpolation into a shell.
 
 ## 5. Diff viewing (`4-diff-viewing.md`) — **Shipped**
 
-Split mode is default; unified mode is available. Added/deleted files
+Unified mode is the startup default; split mode is available. Added/deleted files
 always render unified regardless of setting. Line numbers render as CSS
 pseudo-elements so they're excluded from selection/copy. In split mode,
 text selection is single-column. Status badges indicate added / modified
@@ -370,8 +370,10 @@ toggle), Updates (Tauri-only).
 Keyboard shortcuts: `Cmd/Ctrl+Enter` saves annotation form; `Escape`
 closes modals/forms; `j`/`k` navigates files; `Cmd/Ctrl+F` opens find;
 `Cmd/Ctrl+Click` on a symbol goes to its definition. `Tab` / `Shift+Tab` move
-between contiguous changed blocks within the current text file, bounded at the
-ends; text inputs and dialogs keep normal Tab behavior.
+between contiguous changed blocks, crossing to the next/previous file in visible
+sidebar order at file boundaries and stopping at the ends of the review. The
+destination block is focused after its file renders; text inputs and dialogs
+keep normal Tab behavior.
 
 Completion is immediate (a stale-annotation prompt gates when needed);
 the post-completion modal shows the export summary + copy hint (gitignore

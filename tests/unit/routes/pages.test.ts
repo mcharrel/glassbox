@@ -76,6 +76,7 @@ describe('pageRoutes', () => {
       expect(html).toContain('review-app');
       expect(html).toContain('sidebar');
       expect(html).toContain('file-list');
+      expect(html).toContain('class="segment active" data-diff-mode="unified"');
     });
 
     it('returns 404 when review not found', async () => {
@@ -123,17 +124,17 @@ describe('pageRoutes', () => {
       expect(getModeFileContent).toHaveBeenLastCalledWith({ type: 'range', from: 'base', to: 'reviewed' }, 'src/app.ts', 'new', '/fake/repo');
     });
 
-    it('renders file diff in split mode by default', async () => {
+    it('renders file diff in unified mode by default', async () => {
       const res = await app.request('/file/f1');
       expect(res.status).toBe(200);
       const html = await res.text();
-      expect(html).toContain('diff-view');
+      expect(html).toContain('diff-table-unified');
     });
 
-    it('renders file diff in unified mode', async () => {
-      const res = await app.request('/file/f1?mode=unified');
+    it.each(['split', 'unified'])('honors an explicit %s mode', async mode => {
+      const res = await app.request(`/file/f1?mode=${mode}`);
       const html = await res.text();
-      expect(html).toContain('diff-table-unified');
+      expect(html).toContain(`diff-table-${mode}`);
     });
 
     it('returns 404 for missing file', async () => {

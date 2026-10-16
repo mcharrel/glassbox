@@ -82,6 +82,10 @@ beforeEach(() => {
   setEditForm(null);
 });
 
+it('starts each session in unified view', () => {
+  expect(diffViewStore.state.value.diffMode).toBe('unified');
+});
+
 describe('filteredFiles', () => {
   const files = [mkFile('a', 'src/auth/session.ts'), mkFile('b', 'src/db/redis.ts'), mkFile('c', 'README.md')];
 

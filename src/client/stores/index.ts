@@ -76,7 +76,7 @@ interface DiffViewState {
 
 export const diffViewStore = defineStore({
   initial: (): DiffViewState => ({
-    diffMode: 'split',
+    diffMode: 'unified',
     wrapLines: false,
     ignoreWhitespace: false,
     lastImageMode: 'side-by-side',
