@@ -5,14 +5,11 @@ import { asEl, asElement, asElOrNull, asTextarea, cssEscape, toElement } from '.
 import { asCategory } from '../narrow.js';
 import type { Annotation } from '../state.js';
 import {
-  dragStore,
   editFormSignal,
   reviewStore,
   setEditForm,
 } from '../stores/index.js';
 import { bindAttachmentEvents } from './attachments.js';
-import { buildCategoryBadge } from './categories.js';
-import { showReclassifyPopup } from './reclassifyPopup.js';
 import { buildAnnotationItemHtml } from './render.js';
 
 /** Register all annotation-related delegates on the diff container. Called
@@ -32,28 +29,18 @@ export function bindAnnotationEvents(diffContainer: HTMLElement): void {
     void handleDelete(item);
   });
 
-  void delegate(diffContainer, 'click', '.annotation-item [data-action="edit"]', (e, btn) => {
+  void delegate(diffContainer, 'click', '.annotation-item', (e, item) => {
+    // Keep buttons, links, attachments and text selection independently usable.
+    if (asElement(e.target).closest('button, a, input, textarea, select, .attachment-chip, .ai-note-reply-region')) return;
+    if (window.getSelection()?.isCollapsed === false) return;
     e.stopPropagation();
-    const item = asEl(btn).closest<HTMLElement>('.annotation-item');
-    if (item === null) return;
-    startEdit(item);
+    startEdit(asEl(item));
   });
 
-  void delegate(diffContainer, 'dblclick', '.annotation-item', (e, item) => {
-    e.stopPropagation();
-    const el = asEl(item);
-    if (el.querySelector('.annotation-form') !== null) return;
-    if (asElement(e.target).closest('.annotation-form-container') !== null) return;
-    startEdit(el);
-  });
-
-  void delegate(diffContainer, 'click', '.annotation-item [data-action="reclassify"]', (e, badge) => {
-    e.stopPropagation();
-    const item = asEl(badge).closest<HTMLElement>('.annotation-item');
-    if (item === null) return;
-    const annotation = readAnnotation(item);
-    if (annotation === null) return;
-    showReclassifyPopup(asEl(badge), item, annotation);
+  void delegate(diffContainer, 'keydown', '.annotation-item', (e, item) => {
+    if (e.target !== item || (e as KeyboardEvent).key !== 'Enter') return;
+    e.preventDefault();
+    startEdit(asEl(item));
   });
 
   void delegate(diffContainer, 'click', '.annotation-item [data-action="keep"]', (e, btn) => {
@@ -61,20 +48,6 @@ export function bindAnnotationEvents(diffContainer: HTMLElement): void {
     const item = asEl(btn).closest<HTMLElement>('.annotation-item');
     if (item === null) return;
     void handleKeep(item);
-  });
-
-  void delegate(diffContainer, 'dragstart', '.annotation-drag-handle', (e, handle) => {
-    e.stopPropagation();
-    const item = asEl(handle).closest<HTMLElement>('.annotation-item');
-    if (item === null) return;
-    const annotation = readAnnotation(item);
-    if (annotation === null) return;
-    dragStore.actions.setAnnotation({ id: annotation.id, item, annotation });
-    const de = e as DragEvent;
-    if (de.dataTransfer !== null) {
-      de.dataTransfer.effectAllowed = 'move';
-      de.dataTransfer.setData('text/plain', annotation.id);
-    }
   });
 
   // Edit-form delegates. Scoped to `[data-edit-for]` so the equivalent
@@ -106,30 +79,18 @@ export function bindAnnotationEvents(diffContainer: HTMLElement): void {
       cancelEdit();
     }
   });
-
-  // Form category badge → opens the category picker. Matches both the
-  // edit form (`[data-edit-for]`) and the create form (`[data-form-key]`),
-  // since `showCategoryPickerForBadge` writes back through the shared
-  // `editFormSignal` either way. Restricting this to `[data-edit-for]`
-  // silently broke type changes during initial annotation entry — the
-  // picker would open via the badge click, but no option click handler
-  // would fire because there was no delegate match.
-  void delegate(diffContainer, 'click', '.annotation-form-container .form-category-badge', (e, badge) => {
-    e.stopPropagation();
-    showReclassifyPopupForEdit(asEl(badge));
-  });
 }
 
 function readAnnotation(item: HTMLElement): Annotation | null {
   const id = item.dataset.annotationId;
   if (id === undefined || id === '') return null;
-  const category = item.querySelector('.annotation-category')?.textContent ?? '';
+  const category = item.dataset.category ?? 'note';
   const content = item.querySelector('.annotation-text')?.textContent ?? '';
   const isStale = item.dataset.isStale === 'true';
   // Preserve the artifact-region marker across re-renders (GB-953) so an
   // edit/keep morph doesn't drop a reply's marked-region thumbnail.
   const regionData = item.dataset.regionData ?? null;
-  return { id, category, content, is_stale: isStale, region_data: regionData };
+  return { id, category, content, is_stale: isStale, region_data: regionData, reply_to_note_id: item.dataset.replyToNoteId ?? null };
 }
 
 async function handleDelete(item: HTMLElement): Promise<void> {
@@ -172,6 +133,8 @@ function startEdit(item: HTMLElement): void {
   const annotationRow = item.closest<HTMLElement>('.annotation-row');
   if (annotationRow === null) return;
 
+  if (editFormSignal.value !== null) return;
+
   // Seed the edit-form signal so any concurrent re-render reads the same
   // content/category we're about to put in the textarea.
   setEditForm({
@@ -184,7 +147,6 @@ function startEdit(item: HTMLElement): void {
   const formContainer = toElement(
     <div className="annotation-form-container" data-edit-for={annotation.id}>
       <div className="annotation-form">
-        {buildCategoryBadge(annotation.category)}
         <textarea>{annotation.content}</textarea>
         <div className="annotation-form-actions">
           <button className="btn btn-sm cancel-edit">Cancel</button>
@@ -223,6 +185,7 @@ async function saveEdit(): Promise<void> {
   const item = findAnnotationItem(state.annotationId);
   if (item !== null) {
     const updated: Annotation = {
+      ...readAnnotation(item),
       id: state.annotationId,
       category: state.category,
       content,
@@ -247,15 +210,6 @@ function closeEditForm(): void {
 
 function findAnnotationItem(id: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`.annotation-item[data-annotation-id="${cssEscape(id)}"]`);
-}
-
-function showReclassifyPopupForEdit(badge: HTMLElement): void {
-  // The edit-form badge — picker writes the chosen category back into the
-  // form signal AND updates the badge DOM, so a subsequent save reads the
-  // right category.
-  void import('./reclassifyPopup.js').then(({ showCategoryPickerForBadge }) => {
-    showCategoryPickerForBadge(badge);
-  });
 }
 
 // Expose `closeEditForm` so the diff view's outside-click handler (if any)

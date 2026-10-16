@@ -37,3 +37,5 @@ Requirements for code navigation features — go-to-definition and navigation hi
 
 - The navigation stack is in-memory only (not persisted across page reloads).
 - Stack operations (push, back, forward) shall be instantaneous from a user perspective.
+
+Personal fork: gg scrolls to the top of the current file. Cmd/Ctrl+click highlights the symbol in Find while navigating, preserving that query when the destination mounts. A brace-scoped, best-effort lookup handles common local variable declarations and typed parameters before using the server class/function index.

@@ -292,7 +292,7 @@ describe('DiffView', () => {
     }).toString();
     expect(html).toContain('annotation-row');
     expect(html).toContain('Fix this');
-    expect(html).toContain('category-bug');
+    expect(html).toContain('data-category="bug"');
   });
 
   it('renders stale annotation with keep button', () => {
@@ -343,7 +343,7 @@ describe('DiffView', () => {
     expect(html).not.toContain('↕');
   });
 
-  it('renders character-level diff for paired remove+add lines', () => {
+  it.each(['split', 'unified'] as const)('keeps whole-line diffs without character overlays in %s', (mode) => {
     const lines = [
       makeLine('remove', 1, 'hello world'),
       makeLine('add', 1, 'hello earth'),
@@ -351,9 +351,11 @@ describe('DiffView', () => {
     const html = DiffView({
       file: makeFile(),
       diff: makeDiff({ hunks: [makeHunk(lines)] }),
-      annotations: [], mode: 'split',
+      annotations: [], mode,
     }).toString();
-    expect(html).toContain('char-change');
+    expect(html).not.toContain('char-change');
+    expect(html).toContain('hello world');
+    expect(html).toContain('hello earth');
   });
 
   it('adds data-is-svg for SVG files', () => {
@@ -395,7 +397,7 @@ describe('DiffView', () => {
     expect(html).toContain('more characters hidden');
   });
 
-  it('renders drag handle and action buttons on annotations', () => {
+  it('renders click-to-edit comments with delete but no extra controls', () => {
     const lines = [makeLine('add', 1, 'code')];
     const ann = makeAnnotation({ line_number: 1, side: 'new' });
     const html = DiffView({
@@ -403,29 +405,12 @@ describe('DiffView', () => {
       diff: makeDiff({ status: 'added', hunks: [makeHunk(lines)] }),
       annotations: [ann], mode: 'unified',
     }).toString();
-    expect(html).toContain('annotation-drag-handle');
-    expect(html).toContain('data-action="edit"');
+    expect(html).not.toContain('annotation-drag-handle');
+    expect(html).not.toContain('data-action="edit"');
     expect(html).toContain('data-action="delete"');
-    expect(html).toContain('data-action="reclassify"');
+    expect(html).not.toContain('data-action="reclassify"');
     // GB-952: the drag handle is a lucide grip icon, not the ⠿ braille glyph.
     expect(html).not.toContain('⠿');
   });
 
-  // `draggable` is an HTML *enumerated* attribute, not a boolean one: the bare
-  // `<span draggable>` a boolean JSX value used to emit is an invalid value, so
-  // the element falls back to `auto` — and `auto` for a span is NOT draggable,
-  // which silently disabled mouse drag for every annotation. Only the keyword
-  // string turns it on. The drag e2e cannot catch this because a dispatched
-  // `dragstart` fires regardless of the attribute, so pin the markup here.
-  it('gives the drag handle the draggable="true" keyword, not a bare attribute', () => {
-    const lines = [makeLine('add', 1, 'code')];
-    const ann = makeAnnotation({ line_number: 1, side: 'new' });
-    const html = DiffView({
-      file: makeFile(),
-      diff: makeDiff({ status: 'added', hunks: [makeHunk(lines)] }),
-      annotations: [ann], mode: 'unified',
-    }).toString();
-    expect(html).toContain('<span class="annotation-drag-handle" draggable="true"');
-    expect(html).not.toContain('annotation-drag-handle" draggable>');
-  });
 });
