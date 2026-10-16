@@ -2,27 +2,64 @@ import { reviewStore, visibleFileOrder } from '../stores/index.js';
 import { JUMP_HIGHLIGHT_DURATION_MS } from '../timing.js';
 import { selectFile } from './selection.js';
 
-/** Tab moves between changed blocks, continuing through the sidebar's file order. */
+interface ChangeRow { element: HTMLElement; top: number; bottom: number }
+interface ChangeBlock { id: number; rows: ChangeRow[]; top: number; bottom: number }
+
+function blocksIn(view: Element): ChangeBlock[] {
+  const blocks = new Map<number, ChangeBlock>();
+  for (const element of view.querySelectorAll<HTMLElement>('[data-change-block]')) {
+    const id = Number(element.dataset.changeBlock);
+    const { top, bottom } = element.getBoundingClientRect();
+    const block = blocks.get(id) ?? { id, rows: [], top, bottom };
+    block.rows.push({ element, top, bottom });
+    block.top = Math.min(block.top, top);
+    block.bottom = Math.max(block.bottom, bottom);
+    blocks.set(id, block);
+  }
+  return [...blocks.values()].sort((a, b) => a.id - b.id);
+}
+
+/** Tab reveals unread changes, paging through long blocks before continuing to other files. */
 export function bindChangeNavigation(): (fileId: string | null) => void {
   const element = document.getElementById('diff-container');
   if (!element) return () => {};
   const container = element;
-  let last: { view: Element; index: number; scrollTop: number } | null = null;
   let pending: { fileId: string; backward: boolean } | null = null;
   let highlighted: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  function blocksIn(view: Element): HTMLElement[] {
-    return [...view.querySelectorAll<HTMLElement>('[data-change-start]')]
-      .sort((a, b) => Number(a.dataset.changeStart) - Number(b.dataset.changeStart));
+  function viewport(): { top: number; bottom: number } {
+    const top = container.getBoundingClientRect().top + container.clientTop;
+    const bottom = top + container.clientHeight;
+    // Sticky chrome obscures code even though it lies inside the scrolling pane.
+    const chrome = [...container.querySelectorAll<HTMLElement>('.diff-header, .outline-bar')];
+    return { top: Math.max(top, ...chrome.map(el => el.getBoundingClientRect().bottom)), bottom };
   }
 
-  function jump(view: Element, blocks: HTMLElement[], index: number): void {
-    const target = blocks[index];
-    container.scrollTop += target.getBoundingClientRect().top - (container.getBoundingClientRect().top + 24);
+  function jump(block: ChangeBlock, backward: boolean, fromEdge = false): void {
+    const { top, bottom } = viewport();
+    const height = bottom - top;
+    if (height <= 0) return;
+    const style = getComputedStyle(block.rows[0].element);
+    const lineHeight = (parseFloat(style.lineHeight) || 20)
+      + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+    const fits = block.bottom - block.top <= height;
+    const padding = Math.min(5 * lineHeight, Math.max(0, height - (fits ? block.bottom - block.top : lineHeight)));
+    let delta = backward ? block.bottom + padding - bottom : block.top - padding - top;
+    if (!fromEdge && !fits && (backward ? block.bottom >= bottom - padding : block.top <= top + padding)) {
+      // Preserve ten lines while advancing; tiny windows still reveal at least one new line.
+      const step = Math.max(Math.min(lineHeight, height), height - 10 * lineHeight);
+      delta = backward ? -step : step;
+    }
+    const before = container.scrollTop;
+    container.scrollTop += delta;
+    const moved = container.scrollTop - before;
+    const rows = [...block.rows].sort((a, b) => a.top - b.top);
+    if (backward) rows.reverse();
+    const target = rows.find(row => row.bottom - moved > top && row.top - moved < bottom)?.element;
+    if (!target) return;
     target.tabIndex = -1;
     target.focus({ preventScroll: true });
-    last = { view, index, scrollTop: container.scrollTop };
     highlighted?.classList.remove('jump-highlight');
     clearTimeout(timer);
     highlighted = target;
@@ -43,36 +80,20 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
     if (currentFileId === null || !view || view.dataset.fileId !== currentFileId) return;
 
     event.preventDefault();
+    const { top, bottom } = viewport();
+    if (bottom <= top) return;
     const blocks = blocksIn(view);
+    if (event.shiftKey) blocks.reverse();
+    const next = blocks.find(block => event.shiftKey ? block.top < top - 1 : block.bottom > bottom + 1);
+    if (next) { jump(next, event.shiftKey); return; }
 
-    const top = container.getBoundingClientRect().top + 24;
-    let index: number;
-    // Remember the jump when scrolling is clamped at the bottom of a short file.
-    if (last?.view === view && Math.abs(last.scrollTop - container.scrollTop) < 1) {
-      index = last.index + (event.shiftKey ? -1 : 1);
-    } else if (event.shiftKey) {
-      index = -1;
-      for (let i = blocks.length - 1; i >= 0; i--) {
-        if (blocks[i].getBoundingClientRect().top < top - 1) { index = i; break; }
-      }
-    } else {
-      index = blocks.findIndex(block => block.getBoundingClientRect().top > top + 1);
-      if (index < 0) index = blocks.length;
+    const order = visibleFileOrder.value;
+    const current = order.indexOf(currentFileId);
+    const nextFileId = current < 0 ? undefined : order[current + (event.shiftKey ? -1 : 1)];
+    if (nextFileId !== undefined) {
+      pending = { fileId: nextFileId, backward: event.shiftKey };
+      void selectFile(nextFileId);
     }
-    if (index < 0 || index >= blocks.length) {
-      const order = visibleFileOrder.value;
-      const current = order.indexOf(currentFileId);
-      const nextFileId = current < 0 ? undefined : order[current + (event.shiftKey ? -1 : 1)];
-      if (nextFileId !== undefined) {
-        pending = { fileId: nextFileId, backward: event.shiftKey };
-        last = null;
-        void selectFile(nextFileId);
-        return;
-      }
-    }
-    if (blocks.length === 0) return;
-    index = Math.max(0, Math.min(blocks.length - 1, index));
-    jump(view, blocks, index);
   });
 
   // File selection starts an asynchronous fetch; jump only after its DOM is ready.
@@ -85,7 +106,7 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
     const view = container.querySelector<HTMLElement>('.diff-view');
     if (!view || view.dataset.fileId !== fileId) return;
     const blocks = blocksIn(view);
-    if (blocks.length > 0) jump(view, blocks, backward ? blocks.length - 1 : 0);
+    if (blocks.length > 0) jump(blocks[backward ? blocks.length - 1 : 0], backward, true);
     else {
       container.scrollTop = 0;
       container.tabIndex = -1;

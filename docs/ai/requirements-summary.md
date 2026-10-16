@@ -370,10 +370,11 @@ toggle), Updates (Tauri-only).
 Keyboard shortcuts: `Cmd/Ctrl+Enter` saves annotation form; `Escape`
 closes modals/forms; `j`/`k` navigates files; `Cmd/Ctrl+F` opens find;
 `Cmd/Ctrl+Click` on a symbol goes to its definition. `Tab` / `Shift+Tab` move
-between contiguous changed blocks, crossing to the next/previous file in visible
-sidebar order at file boundaries and stopping at the ends of the review. The
-destination block is focused after its file renders; text inputs and dialogs
-keep normal Tab behavior.
+past fully visible changes to the next/previous unseen change, with ideally five
+lines of context. Long changes page with ten lines of overlap, accounting for
+sticky chrome. Navigation crosses files in visible sidebar order after the last
+page and stops at the review ends. The destination is focused after its file
+renders; text inputs and dialogs keep normal Tab behavior.
 
 Completion is immediate (a stale-annotation prompt gates when needed);
 the post-completion modal shows the export summary + copy hint (gitignore

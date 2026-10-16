@@ -56,7 +56,24 @@ describe('DiffView', () => {
     expect(html).not.toContain('Show remaining lines');
     const starts = [...html.matchAll(/data-change-start="(\d+)"/g)].map(match => Number(match[1]));
     expect(starts.sort()).toEqual([0, 1, 2]);
+    const blocks = [...html.matchAll(/data-change-block="(\d+)"/g)].map(match => Number(match[1]));
+    expect(blocks.sort()).toEqual([0, 1, 1, 2]);
     expect(html).toContain('Fix this');
+  });
+
+  it.each(['split', 'unified'] as const)('marks every row of uneven replacement blocks across annotation splits in %s', mode => {
+    const lines = [makeLine('remove', 1), makeLine('remove', 2),
+      ...Array.from({ length: 30 }, (_, i) => makeLine('add', i + 1)),
+      makeLine('context', 31), makeLine('remove', 32)];
+    const html = DiffView({
+      file: makeFile(), diff: makeDiff({ hunks: [makeHunk(lines), makeHunk([makeLine('add', 40)], 40)] }), mode,
+      fullContext: true, annotations: [makeAnnotation({ line_number: 15 })],
+    }).toString();
+    const blocks = [...html.matchAll(/data-change-block="(\d+)"/g)].map(match => Number(match[1]));
+    expect(blocks.filter(id => id === 0)).toHaveLength(32);
+    expect(blocks.filter(id => id === 1)).toHaveLength(1);
+    expect(blocks.filter(id => id === 2)).toHaveLength(1);
+    expect([...html.matchAll(/data-change-start="(\d+)"/g)].map(match => Number(match[1])).sort()).toEqual([0, 1, 2]);
   });
 
   it('renders diff header with file path and status', () => {
