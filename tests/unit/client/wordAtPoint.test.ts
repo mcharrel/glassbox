@@ -57,13 +57,17 @@ describe('getWordAtPoint', () => {
   it.each([
     [['ret', 'urn', ' value'], 1, 1],
     [['12', '34', ';'], 1, 1],
-    [['a;'], 0, 0],
     [['   '], 0, 1],
     [[''], 0, 0],
     [['createSession'], 0, 13],
-  ] as const)('ignores keywords, numbers, short/empty words and end-of-line carets (%j)', (parts, part, offset) => {
+  ] as const)('ignores keywords, numbers, empty words and end-of-line carets (%j)', (parts, part, offset) => {
     pointAt([...parts], part, offset);
     expect(getWordAtPoint(10, 20)).toBeNull();
+  });
+
+  it('accepts single-letter variable names', () => {
+    pointAt(['a;'], 0, 0);
+    expect(getWordAtPoint(10, 20)).toBe('a');
   });
 
   it('ignores text outside a code cell', () => {
