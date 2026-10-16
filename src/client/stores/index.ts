@@ -3,6 +3,7 @@ import { computed, defineStore, signal } from 'kerfjs';
 import type { GroundTruthMeta } from '../../api/files.js';
 import { buildFolderTree, walkTreeFiles } from '../sidebar/folderTree.js';
 import { buildGroundTruthSourceList, groundTruthFileOrder } from '../sidebar/groundTruthGroups.js';
+import { readingOrder } from '../sidebar/readingOrder.js';
 import type {
   AnalysisModeState,
   DragAnnotation,
@@ -118,7 +119,7 @@ interface AiState {
 
 export const aiStore = defineStore({
   initial: (): AiState => ({
-    sortMode: 'folder',
+    sortMode: 'narrative',
     riskScores: null,
     narrativeOrder: null,
     riskAnalysis: defaultAnalysisModeState(),
@@ -244,12 +245,8 @@ export function sortedRiskScores(): RiskFileScore[] {
   return filtered.slice().sort((a, b) => getRiskScoreForDimension(b, dim) - getRiskScoreForDimension(a, dim));
 }
 
-export function sortedNarrativeOrder(): NarrativeFileOrder[] {
-  const ai = aiStore.state.value;
-  const order = ai.narrativeOrder ?? [];
-  const q = reviewStore.state.value.filterText.toLowerCase();
-  const filtered = q === '' ? order : order.filter(o => o.filePath.toLowerCase().includes(q));
-  return filtered.slice().sort((a, b) => a.position - b.position);
+export function readingOrderFiles(): ReviewFile[] {
+  return readingOrder(filteredFiles.value, aiStore.state.value.narrativeOrder);
 }
 
 export function unscoredFiles(scoredFileIds: Set<string>): ReviewFile[] {
@@ -268,10 +265,7 @@ export const visibleFileOrder = computed<string[]>(() => {
     return [...scored.map(s => s.reviewFileId), ...tail.map(f => f.id)];
   }
   if (ai.sortMode === 'narrative') {
-    const ordered = sortedNarrativeOrder();
-    const orderedIds = new Set((ai.narrativeOrder ?? []).map(o => o.reviewFileId));
-    const tail = unscoredFiles(orderedIds);
-    return [...ordered.map(o => o.reviewFileId), ...tail.map(f => f.id)];
+    return readingOrderFiles().map(file => file.id);
   }
   return folderViewFileOrder();
 });

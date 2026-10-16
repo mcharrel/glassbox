@@ -10,12 +10,12 @@ Requirements for the browser-based UI and user interaction patterns.
 - The sidebar shall be resizable via drag handle.
 - This personal fork hides the file-name navigation bar, sticky file-name header, and bottom diff toolbar. Their DOM nodes remain available to client hooks; they take no layout space.
 - The class/function outline breadcrumb stays visible and sticky at the top of the code viewport, without a gap for the hidden file-name header.
-- The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and action buttons (Complete Review, Review History).
+- The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and a separately scrollable guidance section at the bottom, with GUIDE above LEARN. The guidance section uses at most 45% of the sidebar height and disappears when empty. The Complete Review / Review History footer is hidden in this personal fork.
 - Reveal in file manager remains available from the sidebar right-click context menu ("Reveal in Finder" on macOS, "Reveal in File Explorer" on Windows — see doc 21).
 
 ### 8.2 File Navigation
 
-- Files shall be displayed in a collapsible folder tree by default.
+- Code reviews shall open in Reading order, using the priority groups in §7.3. Ground-truth image comparisons retain their ordered sets and hide-identical controls.
 - Users shall be able to filter files by typing in the file filter input.
 - Keyboard navigation shall be supported: `j`/`k` to move between files.
 - Clicking a file shall load its diff in the main content area.
@@ -26,10 +26,10 @@ Requirements for the browser-based UI and user interaction patterns.
 ### 8.3 Sort Modes
 
 - The sidebar shall support three sort modes via a segmented control:
-  - Folder — default alphabetical tree view
+  - Folder — alphabetical tree view
   - Risk — sorted by AI risk score (highest first) with score badges
-  - Narrative — sorted by AI reading order with position numbers
-- Switching to an AI sort mode without a configured API key shall prompt the settings dialog.
+  - Narrative (Reading order) — default; priority groups with source files sorted by AI reading order and position numbers
+- Explicitly switching to an AI sort mode without a configured API key shall prompt the settings dialog. Initial Reading order remains usable without AI, using alphabetical source order within the priority groups.
 
 ### 8.4 Progress Tracking
 

@@ -1,27 +1,8 @@
-/**
- * Regression coverage for GB-913 and GB-914 — two facets of one root cause.
- *
- * GB-913: inline AI notes (risk / narrative) must redraw when the sidebar sort
- * mode changes. GB-914: they must also appear automatically when the analysis
- * *completes* while you stay in a mode — not only after you "force switch
- * views". Both stem from `renderAINotes` running only from `runPostRender`,
- * which fires on a diff-generation bump (file / split-unified / whitespace /
- * SVG switch). Neither a sort-mode flip nor an analysis completing bumps the
- * generation, so the inline notes never re-rendered until the user toggled a
- * view to force a diff refetch. The fix made inline-AI-note rendering a
- * dedicated reactive effect over the AI store (`setupAINotesEffect` in
- * `client/diff/index.tsx`), clearing the prior set before drawing the current
- * one so a stale set can't linger across modes.
- *
- * The analysis endpoints are stubbed so the poll completes on its first tick
- * and the notes are keyed to the file actually open in the diff — deterministic
- * and fast, independent of the mock-analysis timing. Each "switch to X →
- * note appears" step is itself a GB-914 case: the note shows up on analysis
- * completion with no further view switch.
- */
+/** Regression coverage for GB-913/914: sidebar guidance reacts to mode changes
+ *  and completed analysis without requiring a diff remount. */
 import { test, expect } from '@playwright/test';
 
-test.describe('GB-913 / GB-914: inline AI notes redraw on sort-mode switch and on analysis completion', () => {
+test.describe('GB-913 / GB-914: sidebar AI notes redraw on sort-mode switch and on analysis completion', () => {
   test('risk → narrative → folder redraws notes without a split/unified toggle', async ({ page }) => {
     // Captured after selecting a file so the stubbed scores anchor to the open file.
     let selectedFileId = '';
@@ -56,10 +37,10 @@ test.describe('GB-913 / GB-914: inline AI notes redraw on sort-mode switch and o
     expect(selectedFileId).not.toBe('');
 
     await firstFile.click();
-    await expect(page.locator('#diff-container .diff-header').first()).toBeVisible();
+    await expect(page.locator('#diff-container .diff-view').first()).toBeVisible();
 
-    const riskNote = page.locator('.ai-note-overview.ai-note-risk');
-    const narrativeNote = page.locator('.ai-note-overview.ai-note-narrative');
+    const riskNote = page.locator('#sidebar-ai-notes .sidebar-ai-note.ai-note-risk');
+    const narrativeNote = page.locator('#sidebar-ai-notes .sidebar-ai-note.ai-note-narrative');
 
     // Normalize to folder mode (the persisted sort mode may be anything) — no
     // sort-mode overview notes should show. Guided-review notes, if enabled in
