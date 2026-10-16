@@ -320,12 +320,18 @@ can sort by individual dimensions.
 **Narrative** — determines an optimal reading order (types → utils →
 business logic → integration → config/build → tests). Each file gets a
 rationale and walkthrough notes explaining connections. Sidebar shows
-position numbers.
+position numbers. This fork opens code reviews in Reading order: source, YAML,
+tests, dependencies, then generated protobufs. Only source files use the AI
+order; unanalysed sources and other categories sort by path. The sidebar and
+keyboard navigation share that order.
 
 **Guided review** — educational annotations for learning a new language,
 this codebase, or programming concepts. Topics include "Programming,"
 "This codebase," and 28+ languages. Runs independently of risk/narrative
-and, when enabled, also adjusts their output to be more educational.
+and, when enabled, also adjusts their output to be more educational. GUIDE
+(or RISK) and LEARN appear in a scrollable bottom sidebar section, GUIDE
+above LEARN, following the selected file and live analysis updates. Line
+references navigate to code; generated explanations no longer interrupt the diff.
 
 Processing: batches sized to model context windows (~3 chars/token
 heuristic), multi-turn context loops when AI requests more context,
@@ -345,16 +351,19 @@ reported; parse errors are handled gracefully.
 
 Layout: sidebar + main diff pane, sidebar resizable via drag handle. The
 sidebar contains repo name, review mode, file filter, sort-mode
-segmented control, file list, and action buttons (Complete Review,
-Review History). Diff header has a "Reveal in Finder" button. The nav bar
+segmented control, file list, and bottom guidance section (up to 45% height,
+hidden when empty). The Complete Review / Review History footer is hidden. Diff header has a "Reveal in Finder" button. The nav bar
 has a hide/show **sidebar toggle** (panel icon, before the back/forward
 arrows; per-session, not persisted across reload — GB-955).
 
-Navigation: collapsible folder tree; type-to-filter; `j`/`k` between
+Navigation: Reading order by default for code, optional collapsible folder tree; type-to-filter; `j`/`k` between
 files; click to load. Annotation-count and stale-count badges per file.
 
 Sort modes: **Folder** (alphabetical), **Risk** (AI-sorted with badges),
-**Narrative** (AI-sorted with positions). Switching to an AI mode without
+**Narrative** (default priority groups with AI source order and positions).
+Ground-truth image comparisons retain their ordered sets and hide-identical
+controls. Initial Reading order works without AI using path order. Explicitly
+switching to an AI mode without
 a configured key prompts the settings dialog.
 
 Progress bar shows reviewed/total; summary line shows "X of Y files

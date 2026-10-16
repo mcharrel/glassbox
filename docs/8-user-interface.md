@@ -9,12 +9,12 @@ Requirements for the browser-based UI and user interaction patterns.
 - The UI shall consist of a sidebar (file list) and a main content area (diff viewer).
 - The sidebar shall be resizable via drag handle.
 - The navigation bar (shown once a file is open) shall include a **hide/show sidebar** toggle (a lucide panel icon, placed before the back/forward arrows). Collapsing hides the sidebar and its resize handle so the diff fills the width; the button shows a pressed state while collapsed. The state is per-session (not persisted across a full reload), so a fresh load always starts with the sidebar visible and the toggle reachable (GB-955).
-- The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and action buttons (Complete Review, Review History).
+- The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and a separately scrollable guidance section at the bottom, with GUIDE above LEARN. The guidance section uses at most 45% of the sidebar height and disappears when empty. The Complete Review / Review History footer is hidden in this personal fork.
 - The diff header shall include a "Reveal in file manager" button that opens the file's parent directory in the OS file manager. (The sidebar right-click context menu uses the OS-specific label — "Reveal in Finder" on macOS, "Reveal in File Explorer" on Windows — see doc 21.)
 
 ### 8.2 File Navigation
 
-- Files shall be displayed in a collapsible folder tree by default.
+- Code reviews shall open in Reading order, using the priority groups in §7.3. Ground-truth image comparisons retain their ordered sets and hide-identical controls.
 - Users shall be able to filter files by typing in the file filter input.
 - Keyboard navigation shall be supported: `j`/`k` to move between files.
 - Clicking a file shall load its diff in the main content area.
@@ -25,10 +25,10 @@ Requirements for the browser-based UI and user interaction patterns.
 ### 8.3 Sort Modes
 
 - The sidebar shall support three sort modes via a segmented control:
-  - Folder — default alphabetical tree view
+  - Folder — alphabetical tree view
   - Risk — sorted by AI risk score (highest first) with score badges
-  - Narrative — sorted by AI reading order with position numbers
-- Switching to an AI sort mode without a configured API key shall prompt the settings dialog.
+  - Narrative (Reading order) — default; priority groups with source files sorted by AI reading order and position numbers
+- Explicitly switching to an AI sort mode without a configured API key shall prompt the settings dialog. Initial Reading order remains usable without AI, using alphabetical source order within the priority groups.
 
 ### 8.4 Progress Tracking
 

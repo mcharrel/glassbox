@@ -3,12 +3,14 @@ import { delegateActions } from 'kerfjs/actions';
 import { debounce } from 'kerfjs/timing';
 
 import { RiskDimensionSchema, saveAIPreferences } from '../../api/index.js';
+import { navigateToLocation } from '../diff/goToDefinition.js';
 import { selectFile } from '../diff/selection.js';
 import { asEl, asElement, asInput, asSelect, toElement } from '../dom.js';
 import type { SortMode } from '../state.js';
 import { aiStore, diffViewStore, folderModeFiles, reviewStore, visibleFileOrder } from '../stores/index.js';
 import { FILTER_DEBOUNCE_MS } from '../timing.js';
 import { ACTIONS } from './actions.js';
+import { sidebarNotesJsx } from './aiNotes.js';
 import { bindFileContextMenu } from './contextMenu.js';
 import { fileListJsx } from './fileListView.js';
 import { noteStorageFolderKeys } from './folderTree.js';
@@ -24,6 +26,8 @@ export function initSidebar(): void {
   restoreCollapsedFolders();
   mountSortControl(sidebar);
   mountFileList(sidebar);
+  const notes = sidebar.querySelector<HTMLElement>('#sidebar-ai-notes');
+  if (notes) mount(notes, () => sidebarNotesJsx());
   bindDelegatedEvents(sidebar);
   bindFileContextMenu(sidebar);
   bindSidebarResize();
@@ -62,6 +66,11 @@ function mountFileList(sidebar: HTMLElement): void {
 }
 
 function bindDelegatedEvents(sidebar: HTMLElement): void {
+  void delegate(sidebar, 'click', '[data-note-path]', (_event, button) => {
+    const { notePath, noteLine } = asEl(button).dataset;
+    const line = Number(noteLine);
+    if (notePath !== undefined && notePath !== '' && Number.isInteger(line) && line > 0) void navigateToLocation(notePath, line);
+  });
   void delegate(sidebar, 'click', '[data-sort-mode]', (_e, btn) => {
     const mode = asEl(btn).dataset.sortMode as SortMode;
     if (mode === aiStore.state.value.sortMode) return;

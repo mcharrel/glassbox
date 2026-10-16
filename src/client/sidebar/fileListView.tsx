@@ -13,8 +13,8 @@ import {
   groundTruthMeta,
   hasIdenticalFiles,
   isGroundTruthReview,
+  readingOrderFiles,
   reviewStore,
-  sortedNarrativeOrder,
   sortedRiskScores,
   unscoredFiles,
 } from '../stores/index.js';
@@ -173,17 +173,11 @@ function riskRowJsx(
 function narrativeListJsx(): SafeHtml {
   const ai = aiStore.state.value;
   const review = reviewStore.state.value;
-  const ordered = sortedNarrativeOrder();
-  const orderedIds = new Set((ai.narrativeOrder ?? []).map(o => o.reviewFileId));
-  const tail = unscoredFiles(orderedIds);
-
-  // `.map()`, not `each()`. See note on `riskListJsx` for Rule 13 rationale.
-  return (
-    <>
-      {ordered.map(item => narrativeRowJsx(item, review))}
-      {tail.map(file => flatRowJsx(file, review))}
-    </>
-  );
+  const notes = new Map((ai.narrativeOrder ?? []).map(item => [item.reviewFileId, item]));
+  return <>{readingOrderFiles().map((file, index) => narrativeRowJsx({
+    reviewFileId: file.id, filePath: file.file_path, position: index + 1,
+    rationale: notes.get(file.id)?.rationale ?? '',
+  }, review))}</>;
 }
 
 function narrativeRowJsx(item: NarrativeFileOrder, review: typeof reviewStore.state.value): SafeHtml {
