@@ -50,6 +50,7 @@ export function ReviewShell({ reviewId, review, files, annotationCounts, staleCo
             {/* Plugin UI extensions (doc 30 FR-30.2): sidebar-footer location. */}
             <div className="plugin-ui-slot" id="plugin-ui-sidebar-footer"></div>
           </div>
+          <div id="sidebar-notes-resize" className="sidebar-notes-resize" role="separator" aria-orientation="horizontal" aria-label="Resize review guidance" aria-controls="sidebar-ai-notes" tabIndex={0}></div>
           <section className="sidebar-ai-notes" id="sidebar-ai-notes" aria-label="Review guidance"></section>
         </aside>
         <div className="sidebar-resize" id="sidebar-resize"></div>

@@ -1298,3 +1298,5 @@ Also keep `CLAUDE.md`'s requirements index in sync with `docs/`.
 - `docs/tauri-setup.md` — signing / certificates / GitHub secrets
 - `docs/ai/code-summary.md` — the companion code map
 - `CLAUDE.md` — project rules and conventions
+
+Personal sidebar guidance supports persistent height resizing, with no visible GUIDE/LEARN title badges.

@@ -938,3 +938,5 @@ two documents intentionally overlap.
 - `docs/tauri-setup.md` — certificates, signing keys, GitHub secrets.
 - `docs/1-review-workflow.md` … `docs/31-plugin-lifecycle-hooks.md` — numbered
   functional / non-functional requirements.
+
+sidebar/notesResize.ts binds the persistent, bounded vertical guidance divider. The divider sits outside the notes mount; note sections retain accessible labels without visible title badges.

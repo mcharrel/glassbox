@@ -90,3 +90,5 @@ Requirements for the browser-based UI and user interaction patterns.
 
 - The UI shall support light and dark color schemes via the theme system (see `15-themes.md`).
 - The layout shall function at minimum window dimensions of 800x500 pixels.
+
+Personal fork: drag the divider above sidebar guidance to resize its height, or focus it and use Up/Down. The height persists locally and is clamped on window resize to preserve file-list space. Empty guidance hides the divider. GUIDE/LEARN title badges are omitted; their text and order remain.
