@@ -36,7 +36,7 @@ Requirements for optional AI-powered code analysis features.
 - Each file shall include walkthrough notes explaining changes and connections to other files in the diff.
 - In this personal fork, Reading order is the default for code reviews. From top to bottom, group ordinary source files, YAML, tests, dependency changes, and generated protobufs. Source files retain the AI reading order; other groups sort by path. Unanalysed source files follow analysed source files, ahead of lower-priority groups. Without analysis, sort source files by path. Authored `.proto` schemas remain source files; generated output is recognized by protobuf filenames, explicit generated-proto directories, or compiler headers present in the diff.
 - Position numbers shall reflect the displayed file order, shared with keyboard navigation.
-- Walkthrough notes (GUIDE), including line-level explanations, shall appear in the bottom sidebar section for the selected file; line references navigate to the code. Risk notes occupy the same section in Risk mode.
+- Line-level walkthrough notes (GUIDE) shall appear in the bottom sidebar section only while their new-side anchor lines intersect the visible code viewport, excluding code covered by sticky headers. File-wide summaries have no line anchor and are omitted. Line references navigate to the code. Risk notes occupy the same section in Risk mode.
 
 ### 7.4 Guided Review
 
@@ -44,7 +44,7 @@ Requirements for optional AI-powered code analysis features.
 - Users shall be able to select learning topics: "Programming," "This codebase," and 28+ specific programming languages.
 - Guided review shall run independently of risk/narrative analysis (can be active alongside either).
 - When guided review is enabled, risk and narrative analyses shall also adjust their output to be more educational.
-- Guided notes (LEARN) shall appear below GUIDE in the bottom sidebar section, with clickable line references. Notes update when the selected file, analysis, or guided-review setting changes. These generated explanations do not interrupt the code; committed review notes and human annotations remain inline.
+- Guided notes (LEARN) shall appear below GUIDE in the bottom sidebar section, with clickable line references. Notes update on scroll, resize, code reflow, diff replacement, selected-file changes, new analysis, and guided-review changes. Partially visible lines count; off-screen lines, old-side duplicates, loading panes, and raw files do not. These generated explanations do not interrupt the code; committed review notes and human annotations remain inline.
 
 ### 7.5 Analysis Processing
 

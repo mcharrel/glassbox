@@ -10,7 +10,7 @@ Requirements for the browser-based UI and user interaction patterns.
 - The sidebar shall be resizable via drag handle.
 - This personal fork hides the file-name navigation bar, sticky file-name header, and bottom diff toolbar. Their DOM nodes remain available to client hooks; they take no layout space.
 - The class/function outline breadcrumb stays visible and sticky at the top of the code viewport, without a gap for the hidden file-name header.
-- The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and a separately scrollable guidance section at the bottom, with GUIDE above LEARN. The guidance section uses at most 45% of the sidebar height and disappears when empty. The Complete Review / Review History footer is hidden in this personal fork.
+- The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and a separately scrollable guidance section at the bottom, with GUIDE above LEARN. The guidance section uses at most 45% of the sidebar height and disappears when empty. The Complete Review / Review History footer is hidden in this personal fork. Guidance follows visible code lines, uses the same font size as code, and retains its existing colors.
 - Reveal in file manager remains available from the sidebar right-click context menu ("Reveal in Finder" on macOS, "Reveal in File Explorer" on Windows — see doc 21).
 
 ### 8.2 File Navigation
@@ -20,6 +20,7 @@ Requirements for the browser-based UI and user interaction patterns.
 - Keyboard navigation shall be supported: `j`/`k` to move between files.
 - Clicking a file shall load its diff in the main content area.
 - When the selected file changes (via keyboard navigation, click, or any other means), the sidebar shall auto-scroll (without animation) the minimum amount needed to keep the selected file visible.
+- File rows in Reading order and Risk mode shall show only the filename; the full path remains in the hover title for disambiguation.
 - The sidebar shall display annotation count badges per file.
 - The sidebar shall display stale annotation count indicators per file.
 

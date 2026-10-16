@@ -6,6 +6,7 @@ test.describe('GB-913 / GB-914: sidebar AI notes redraw on sort-mode switch and 
   test('risk → narrative → folder redraws notes without a split/unified toggle', async ({ page }) => {
     // Captured after selecting a file so the stubbed scores anchor to the open file.
     let selectedFileId = '';
+    let selectedLine = 1;
 
     // The request URLs carry a `?reviewId=…` query string, so each glob ends in
     // `**`. The `/status` route is registered LAST so it wins over the
@@ -17,13 +18,13 @@ test.describe('GB-913 / GB-914: sidebar AI notes redraw on sort-mode switch and 
     await page.route('**/api/ai/analysis/risk**', async (route) => {
       await route.fulfill({ json: {
         status: 'completed',
-        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, aggregateScore: 0.8, rationale: 'r', dimensionScores: { aggregate: 0.8 }, notes: { overview: 'RISKOVERVIEWMARKER', lines: [] } }],
+        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, aggregateScore: 0.8, rationale: 'r', dimensionScores: { aggregate: 0.8 }, notes: { overview: 'Hidden file-wide summary', lines: [{ line: selectedLine, content: 'RISKNOTEMARKER' }] } }],
       } });
     });
     await page.route('**/api/ai/analysis/narrative**', async (route) => {
       await route.fulfill({ json: {
         status: 'completed',
-        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, rationale: 'r', notes: { overview: 'NARRATIVEOVERVIEWMARKER', lines: [] } }],
+        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, rationale: 'r', notes: { overview: 'Hidden file-wide summary', lines: [{ line: selectedLine, content: 'NARRATIVENOTEMARKER' }] } }],
       } });
     });
     await page.route('**/api/ai/analysis/*/status**', async (route) => {
@@ -38,6 +39,9 @@ test.describe('GB-913 / GB-914: sidebar AI notes redraw on sort-mode switch and 
 
     await firstFile.click();
     await expect(page.locator('#diff-container .diff-view').first()).toBeVisible();
+    const firstLine = page.locator('.diff-line[data-side="new"][data-line]').first();
+    selectedLine = Number(await firstLine.getAttribute('data-line'));
+    await firstLine.scrollIntoViewIfNeeded();
 
     const riskNote = page.locator('#sidebar-ai-notes .sidebar-ai-note.ai-note-risk');
     const narrativeNote = page.locator('#sidebar-ai-notes .sidebar-ai-note.ai-note-narrative');
@@ -53,12 +57,12 @@ test.describe('GB-913 / GB-914: sidebar AI notes redraw on sort-mode switch and 
     // stayed empty until a split/unified toggle forced a diff refetch.
     await page.locator('[data-sort-mode="risk"]').click();
     await expect(riskNote).toHaveCount(1, { timeout: 8000 });
-    await expect(riskNote).toContainText('RISKOVERVIEWMARKER');
+    await expect(riskNote).toContainText('RISKNOTEMARKER');
 
     // Switch to narrative → the stale risk note is cleared and the narrative
     // note appears, again with no diff refetch.
     await page.locator('[data-sort-mode="narrative"]').click();
-    await expect(narrativeNote).toContainText('NARRATIVEOVERVIEWMARKER', { timeout: 8000 });
+    await expect(narrativeNote).toContainText('NARRATIVENOTEMARKER', { timeout: 8000 });
     await expect(riskNote).toHaveCount(0);
 
     // Back to folder → the sort-mode overview notes clear.

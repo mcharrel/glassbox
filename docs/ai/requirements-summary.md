@@ -330,8 +330,11 @@ this codebase, or programming concepts. Topics include "Programming,"
 "This codebase," and 28+ languages. Runs independently of risk/narrative
 and, when enabled, also adjusts their output to be more educational. GUIDE
 (or RISK) and LEARN appear in a scrollable bottom sidebar section, GUIDE
-above LEARN, following the selected file and live analysis updates. Line
-references navigate to code; generated explanations no longer interrupt the diff.
+above LEARN, restricted to new-side note anchors currently visible below sticky
+chrome. Scroll, resize, reflow, file changes, and analysis updates refresh the
+notes; unanchored summaries are omitted. Guidance uses the code font size with
+its existing colors. Line references navigate to code; generated explanations
+no longer interrupt the diff.
 
 Processing: batches sized to model context windows (~3 chars/token
 heuristic), multi-turn context loops when AI requests more context,
@@ -359,7 +362,8 @@ the code viewport; hidden bars reserve no space. Reveal in file manager remains
 available from the sidebar context menu.
 
 Navigation: Reading order by default for code, optional collapsible folder tree; type-to-filter; `j`/`k` between
-files; click to load. Annotation-count and stale-count badges per file.
+files; click to load. Reading order and Risk rows show filenames alone, with full
+paths in hover titles. Annotation-count and stale-count badges per file.
 
 Sort modes: **Folder** (alphabetical), **Risk** (AI-sorted with badges),
 **Narrative** (default priority groups with AI source order and positions).
