@@ -6,8 +6,8 @@ Requirements for displaying file diffs and navigating changes.
 
 ### 4.1 Diff Display
 
-- **Split mode** — The system shall render diffs in split mode (side-by-side old/new columns) by default.
-- **Unified mode** — The system shall support unified mode (single-column traditional diff format).
+- **Split mode** — The system shall support split mode (side-by-side old/new columns).
+- **Unified mode** — The system shall open each session in unified mode (single-column traditional diff format). Split mode remains available during the session.
 - **Added/deleted override** — Added and deleted files shall always render in unified mode regardless of the selected diff mode.
 - **Line numbers** — Each diff line shall display its line number (old-side and/or new-side as applicable). Line numbers are rendered via CSS pseudo-elements so they are excluded from text selection and clipboard copies.
 - **Visual distinction** — Lines shall be visually distinguished by type: added (green), removed (red), context (neutral).

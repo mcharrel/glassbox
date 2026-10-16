@@ -72,7 +72,7 @@ pageRoutes.get('/', async (c) => {
 
 pageRoutes.get('/file/:fileId', async (c) => {
   const fileId = c.req.param('fileId');
-  const mode = (c.req.query('mode') === 'unified' ? 'unified' : 'split');
+  const mode = (c.req.query('mode') === 'split' ? 'split' : 'unified');
   const ignoreWhitespace = c.req.query('ignoreWhitespace') === '1';
   const view = c.req.query('view');
   const file = await getReviewFile(fileId);
