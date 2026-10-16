@@ -14,6 +14,7 @@ import { sidebarNotesJsx } from './aiNotes.js';
 import { bindFileContextMenu } from './contextMenu.js';
 import { fileListJsx } from './fileListView.js';
 import { noteStorageFolderKeys } from './folderTree.js';
+import { bindNotesResize } from './notesResize.js';
 import { bindNoteVisibility } from './noteVisibility.js';
 import { showRiskPopover } from './riskPopover.js';
 import { sortControlJsx } from './sortControl.js';
@@ -30,6 +31,7 @@ export function initSidebar(): void {
   const notes = sidebar.querySelector<HTMLElement>('#sidebar-ai-notes');
   if (notes) {
     mount(notes, () => sidebarNotesJsx());
+    bindNotesResize(sidebar, notes);
     effect(() => { void visibleNoteLines.value; notes.scrollTop = 0; });
     const diff = document.getElementById('diff-container');
     if (diff) bindNoteVisibility(diff);

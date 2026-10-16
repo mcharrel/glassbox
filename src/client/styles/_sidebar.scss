@@ -84,7 +84,6 @@
   flex: 0 1 45%;
   min-height: 0;
   overflow-y: auto;
-  border-top: 1px solid var(--border);
   font-size: var(--font-code-size);
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -95,7 +94,6 @@
 .sidebar-ai-note {
   padding: 12px 16px;
   & + & { border-top: 1px solid var(--border); }
-  h3 { display: inline-block; margin-bottom: 8px; font-size: inherit; }
 }
 
 .sidebar-note-line { margin-top: 12px; }
@@ -396,4 +394,13 @@
 @keyframes toast-fade {
   0%, 80% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+.sidebar-notes-resize {
+  height: 5px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: var(--border);
+  &:hover, &:focus-visible, &.dragging { background: var(--accent); }
+  &:has(+ .sidebar-ai-notes:empty) { display: none; }
 }

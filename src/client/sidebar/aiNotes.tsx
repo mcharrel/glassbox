@@ -25,7 +25,6 @@ function noteSection(notes: FileNotes | undefined, kind: 'risk' | 'narrative' | 
   const label = kind === 'narrative' ? 'Guide' : kind === 'guided' ? 'Learn' : 'Risk';
   return (
     <section className={`sidebar-ai-note ai-note-${kind}`} aria-label={label}>
-      <h3 className={`ai-note-label ai-note-label-${kind}`}>{label}</h3>
       {lines.map(note => (
         <div className="sidebar-note-line">
           <button className="sidebar-note-location" data-note-path={filePath} data-note-line={note.line}>

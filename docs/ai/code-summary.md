@@ -943,3 +943,5 @@ two documents intentionally overlap.
 Diff line styling keeps +/- markers outside the text flow and animates navigation outlines without replacing diff backgrounds.
 
 Personal review controls: diff/reviewKeys.ts binds gg and n/N; localDeclaration.ts handles local variable declarations; find.tsx reapplies symbol queries after mounts. Annotation rows retain metadata while exposing click-to-edit and delete/keep only.
+
+sidebar/notesResize.ts binds the persistent, bounded vertical guidance divider. The divider sits outside the notes mount; note sections retain accessible labels without visible title badges.
