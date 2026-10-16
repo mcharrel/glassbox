@@ -221,7 +221,7 @@
 .diff-table-split {
   width: 100%;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-code-size);
   line-height: 20px;
 
   .hunk-separator { grid-column: 1 / -1; }
@@ -371,7 +371,7 @@
 .diff-table-unified {
   width: 100%;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-code-size);
   line-height: 20px;
 
   .diff-line {

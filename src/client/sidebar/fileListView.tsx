@@ -13,13 +13,13 @@ import {
   groundTruthMeta,
   hasIdenticalFiles,
   isGroundTruthReview,
+  readingOrderFiles,
   reviewStore,
-  sortedNarrativeOrder,
   sortedRiskScores,
   unscoredFiles,
 } from '../stores/index.js';
 import { ACTIONS } from './actions.js';
-import { baseName, buildFolderTree, dirName, sortFilesByScore, type TreeNode } from './folderTree.js';
+import { baseName, buildFolderTree, sortFilesByScore, type TreeNode } from './folderTree.js';
 import { buildGroundTruthSourceList, type GroundTruthSetItem } from './groundTruthGroups.js';
 import { riskClass, riskColor } from './riskScore.js';
 
@@ -147,7 +147,6 @@ function riskRowJsx(
   const fileName = baseName(score.filePath);
   const count = review.annotationCounts[score.reviewFileId] ?? 0;
   const staleCount = review.staleCounts[score.reviewFileId] ?? 0;
-  const dir = dirName(score.filePath);
   return (
     <div data-key={score.reviewFileId}
       className={`file-item${score.reviewFileId === review.currentFileId ? ' active' : ''}`}
@@ -161,7 +160,6 @@ function riskRowJsx(
         </span>
       )}
       <span className="file-name" title={score.filePath}>{fileName}</span>
-      <span className="file-path-dim" title={score.filePath}>{dir}</span>
       {noteIconJsx(score.reviewFileId)}
       <FileRowBadges count={count} staleCount={staleCount} />
     </div>
@@ -173,31 +171,23 @@ function riskRowJsx(
 function narrativeListJsx(): SafeHtml {
   const ai = aiStore.state.value;
   const review = reviewStore.state.value;
-  const ordered = sortedNarrativeOrder();
-  const orderedIds = new Set((ai.narrativeOrder ?? []).map(o => o.reviewFileId));
-  const tail = unscoredFiles(orderedIds);
-
-  // `.map()`, not `each()`. See note on `riskListJsx` for Rule 13 rationale.
-  return (
-    <>
-      {ordered.map(item => narrativeRowJsx(item, review))}
-      {tail.map(file => flatRowJsx(file, review))}
-    </>
-  );
+  const notes = new Map((ai.narrativeOrder ?? []).map(item => [item.reviewFileId, item]));
+  return <>{readingOrderFiles().map((file, index) => narrativeRowJsx({
+    reviewFileId: file.id, filePath: file.file_path, position: index + 1,
+    rationale: notes.get(file.id)?.rationale ?? '',
+  }, review))}</>;
 }
 
 function narrativeRowJsx(item: NarrativeFileOrder, review: typeof reviewStore.state.value): SafeHtml {
   const fileName = baseName(item.filePath);
   const count = review.annotationCounts[item.reviewFileId] ?? 0;
   const staleCount = review.staleCounts[item.reviewFileId] ?? 0;
-  const dir = dirName(item.filePath);
   return (
     <div data-key={item.reviewFileId}
       className={`file-item${item.reviewFileId === review.currentFileId ? ' active' : ''}`}
       {...ACTIONS.selectFile.attrs} data-file-id={item.reviewFileId} style="padding-left: 16px">
       <span className="narrative-position" title={item.rationale}>{item.position}</span>
       <span className="file-name" title={item.filePath}>{fileName}</span>
-      <span className="file-path-dim" title={item.filePath}>{dir}</span>
       {noteIconJsx(item.reviewFileId)}
       <FileRowBadges count={count} staleCount={staleCount} />
     </div>
@@ -208,13 +198,11 @@ function flatRowJsx(file: typeof reviewStore.state.value['files'][number], revie
   const fileName = baseName(file.file_path);
   const count = review.annotationCounts[file.id] ?? 0;
   const staleCount = review.staleCounts[file.id] ?? 0;
-  const dir = dirName(file.file_path);
   return (
     <div data-key={file.id}
       className={`file-item${file.id === review.currentFileId ? ' active' : ''}`}
       {...ACTIONS.selectFile.attrs} data-file-id={file.id} style="padding-left: 16px">
       <span className="file-name" title={file.file_path}>{fileName}</span>
-      <span className="file-path-dim" title={file.file_path}>{dir}</span>
       {noteIconJsx(file.id)}
       <FileRowBadges count={count} staleCount={staleCount} />
     </div>

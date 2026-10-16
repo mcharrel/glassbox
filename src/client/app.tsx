@@ -3,7 +3,6 @@ import {
   getAIPreferences,
   getCurrentReview,
   refreshReview,
-  SortModeSchema,
   SvgViewModeSchema,
   SxsOrientationSchema,
 } from "../api/index.js";
@@ -26,7 +25,7 @@ import { initSharePrompt } from "./share.js";
 import { loadFiles } from "./sidebar/fileTree.js";
 import { initSidebar } from "./sidebar/index.js";
 import { loadAnalysisResults, triggerAnalysis } from "./sidebar/sortMode.js";
-import { aiStore, diffViewStore, dragStore, reviewStore, visibleFileOrder } from "./stores/index.js";
+import { aiStore, diffViewStore, dragStore, isGroundTruthReview, reviewStore, visibleFileOrder } from "./stores/index.js";
 // --- Tauri update notification ---
 import { getTauriInvoke, showUpdateBanner } from "./tauri.js";
 import { SCROLL_SAVE_DEBOUNCE_MS, UPDATE_POLL_DELAYS_MS } from './timing.js';
@@ -39,9 +38,6 @@ async function initAISorting() {
     // permits any string for forward-compat (an older config row may
     // hold a value we don't recognize), so we narrow back to the
     // expected enum and fall back to the default on mismatch.
-    const sortMode = SortModeSchema.safeParse(prefs.sort_mode).success
-      ? SortModeSchema.parse(prefs.sort_mode)
-      : 'folder';
     const svgViewMode = SvgViewModeSchema.safeParse(prefs.svg_view_mode).success
       ? SvgViewModeSchema.parse(prefs.svg_view_mode)
       : 'code';
@@ -49,7 +45,7 @@ async function initAISorting() {
       ? SxsOrientationSchema.parse(prefs.image_sxs_orientation)
       : 'left-right';
     aiStore.actions.update({
-      sortMode,
+      sortMode: "narrative",
       riskSortDimension: prefs.risk_sort_dimension ?? 'aggregate',
       showRiskScores: prefs.show_risk_scores ?? true,
     });
@@ -67,19 +63,10 @@ async function initAISorting() {
       guidedReviewEnabled: config.guidedReview.enabled,
     });
 
-    // If in an AI mode, load cached results
-    const aiNow = aiStore.state.value;
-    if (aiNow.sortMode === "risk" || aiNow.sortMode === "narrative") {
-      if (aiNow.aiConfigured) {
-        await loadAnalysisResults(aiNow.sortMode);
-      } else {
-        // Fall back to folder mode if not configured
-        aiStore.actions.update({ sortMode: "folder" });
-      }
-    }
+    // Cached reading order remains useful even without an active AI configuration.
+    await loadAnalysisResults('narrative');
   } catch {
-    // AI features unavailable, fall back to folder
-    aiStore.actions.update({ sortMode: "folder" });
+    // Keep the priority-grouped reading view while AI is unavailable.
   }
 
 }
@@ -201,6 +188,8 @@ async function init() {
   await initAISorting();
   bindSidebarHeaderButtons();
   await loadFiles();
+  // Image comparisons retain their ordered sets and hide-identical controls.
+  if (isGroundTruthReview()) aiStore.actions.update({ sortMode: 'folder' });
   initSidebar();
 
   // A `?file=&line=` deep-link (doc 34, GB-1144) jumps to a specific file+line

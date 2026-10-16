@@ -1,30 +1,12 @@
-/**
- * Regression coverage for GB-913 and GB-914 — two facets of one root cause.
- *
- * GB-913: inline AI notes (risk / narrative) must redraw when the sidebar sort
- * mode changes. GB-914: they must also appear automatically when the analysis
- * *completes* while you stay in a mode — not only after you "force switch
- * views". Both stem from `renderAINotes` running only from `runPostRender`,
- * which fires on a diff-generation bump (file / split-unified / whitespace /
- * SVG switch). Neither a sort-mode flip nor an analysis completing bumps the
- * generation, so the inline notes never re-rendered until the user toggled a
- * view to force a diff refetch. The fix made inline-AI-note rendering a
- * dedicated reactive effect over the AI store (`setupAINotesEffect` in
- * `client/diff/index.tsx`), clearing the prior set before drawing the current
- * one so a stale set can't linger across modes.
- *
- * The analysis endpoints are stubbed so the poll completes on its first tick
- * and the notes are keyed to the file actually open in the diff — deterministic
- * and fast, independent of the mock-analysis timing. Each "switch to X →
- * note appears" step is itself a GB-914 case: the note shows up on analysis
- * completion with no further view switch.
- */
+/** Regression coverage for GB-913/914: sidebar guidance reacts to mode changes
+ *  and completed analysis without requiring a diff remount. */
 import { test, expect } from '@playwright/test';
 
-test.describe('GB-913 / GB-914: inline AI notes redraw on sort-mode switch and on analysis completion', () => {
+test.describe('GB-913 / GB-914: sidebar AI notes redraw on sort-mode switch and on analysis completion', () => {
   test('risk → narrative → folder redraws notes without a split/unified toggle', async ({ page }) => {
     // Captured after selecting a file so the stubbed scores anchor to the open file.
     let selectedFileId = '';
+    let selectedLine = 1;
 
     // The request URLs carry a `?reviewId=…` query string, so each glob ends in
     // `**`. The `/status` route is registered LAST so it wins over the
@@ -36,13 +18,13 @@ test.describe('GB-913 / GB-914: inline AI notes redraw on sort-mode switch and o
     await page.route('**/api/ai/analysis/risk**', async (route) => {
       await route.fulfill({ json: {
         status: 'completed',
-        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, aggregateScore: 0.8, rationale: 'r', dimensionScores: { aggregate: 0.8 }, notes: { overview: 'RISKOVERVIEWMARKER', lines: [] } }],
+        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, aggregateScore: 0.8, rationale: 'r', dimensionScores: { aggregate: 0.8 }, notes: { overview: 'Hidden file-wide summary', lines: [{ line: selectedLine, content: 'RISKNOTEMARKER' }] } }],
       } });
     });
     await page.route('**/api/ai/analysis/narrative**', async (route) => {
       await route.fulfill({ json: {
         status: 'completed',
-        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, rationale: 'r', notes: { overview: 'NARRATIVEOVERVIEWMARKER', lines: [] } }],
+        scores: [{ reviewFileId: selectedFileId, filePath: 'x', sortOrder: 0, rationale: 'r', notes: { overview: 'Hidden file-wide summary', lines: [{ line: selectedLine, content: 'NARRATIVENOTEMARKER' }] } }],
       } });
     });
     await page.route('**/api/ai/analysis/*/status**', async (route) => {
@@ -56,10 +38,13 @@ test.describe('GB-913 / GB-914: inline AI notes redraw on sort-mode switch and o
     expect(selectedFileId).not.toBe('');
 
     await firstFile.click();
-    await expect(page.locator('#diff-container .diff-header').first()).toBeVisible();
+    await expect(page.locator('#diff-container .diff-view').first()).toBeVisible();
+    const firstLine = page.locator('.diff-line[data-side="new"][data-line]').first();
+    selectedLine = Number(await firstLine.getAttribute('data-line'));
+    await firstLine.scrollIntoViewIfNeeded();
 
-    const riskNote = page.locator('.ai-note-overview.ai-note-risk');
-    const narrativeNote = page.locator('.ai-note-overview.ai-note-narrative');
+    const riskNote = page.locator('#sidebar-ai-notes .sidebar-ai-note.ai-note-risk');
+    const narrativeNote = page.locator('#sidebar-ai-notes .sidebar-ai-note.ai-note-narrative');
 
     // Normalize to folder mode (the persisted sort mode may be anything) — no
     // sort-mode overview notes should show. Guided-review notes, if enabled in
@@ -72,12 +57,12 @@ test.describe('GB-913 / GB-914: inline AI notes redraw on sort-mode switch and o
     // stayed empty until a split/unified toggle forced a diff refetch.
     await page.locator('[data-sort-mode="risk"]').click();
     await expect(riskNote).toHaveCount(1, { timeout: 8000 });
-    await expect(riskNote).toContainText('RISKOVERVIEWMARKER');
+    await expect(riskNote).toContainText('RISKNOTEMARKER');
 
     // Switch to narrative → the stale risk note is cleared and the narrative
     // note appears, again with no diff refetch.
     await page.locator('[data-sort-mode="narrative"]').click();
-    await expect(narrativeNote).toContainText('NARRATIVEOVERVIEWMARKER', { timeout: 8000 });
+    await expect(narrativeNote).toContainText('NARRATIVENOTEMARKER', { timeout: 8000 });
     await expect(riskNote).toHaveCount(0);
 
     // Back to folder → the sort-mode overview notes clear.
