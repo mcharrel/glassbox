@@ -134,6 +134,13 @@ describe('navStack transitions', () => {
     expect(nav.navForward()).toMatchObject({ fileId: 'B' });
   });
 
+  it('preserves diff and full-file entries even when their paths are equal', () => {
+    nav.navPush({ fileId: 'A', filePath: 'src/a.ts', scrollLine: 20 });
+    nav.navPush(raw('src/a.ts', 90));
+    expect(nav.navBack()).toEqual({ fileId: 'A', filePath: 'src/a.ts', scrollLine: 20 });
+    expect(nav.navForward()).toEqual({ fileId: null, filePath: 'src/a.ts', scrollLine: 90 });
+  });
+
   it('navUpdateScroll mutates the current entry only', () => {
     nav.navPush(file('A', 1));
     nav.navPush(file('B', 1));

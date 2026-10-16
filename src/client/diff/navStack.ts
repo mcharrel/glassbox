@@ -63,7 +63,9 @@ export function canGoForward(): boolean { return cursor < stack.length - 1; }
 export function setNavigating(v: boolean) { navigating = v; }
 
 function isSameFile(a: NavEntry, b: NavEntry): boolean {
-  if (a.fileId !== null && b.fileId !== null) return a.fileId === b.fileId;
+  if (a.fileId !== null || b.fileId !== null) {
+    return a.fileId !== null && b.fileId !== null && a.fileId === b.fileId;
+  }
   if (a.filePath !== null && b.filePath !== null) return a.filePath === b.filePath;
   return false;
 }

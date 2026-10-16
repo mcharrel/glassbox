@@ -59,14 +59,41 @@ async function navigateToDefinition(symbolName: string) {
  * it's elsewhere in the review, else open it read-only.
  */
 async function goToTarget(fileId: string | null, filePath: string, line: number, currentFileId: string) {
-  if (fileId !== null && fileId === currentFileId) {
-    scrollToLine(line);
-  } else if (fileId !== null) {
-    await selectFile(fileId);
-    requestAnimationFrame(() => { scrollToLine(line); });
-  } else {
+  if (fileId === null) {
     await loadRawFile(filePath, line);
+    return;
   }
+  if (fileId !== currentFileId) {
+    await selectFile(fileId);
+    // Selection starts an asynchronous fetch; wait for the requested diff to mount.
+    const mounted = await new Promise<boolean>(resolve => {
+      const pane = document.getElementById('diff-container');
+      if (!pane) { resolve(false); return; }
+      const finish = (found: boolean) => {
+        observer.disconnect();
+        clearTimeout(timer);
+        resolve(found);
+      };
+      const check = () => {
+        if (reviewStore.state.value.currentFileId !== fileId) {
+          finish(false);
+          return;
+        }
+        if (pane.querySelector<HTMLElement>('.diff-view')?.dataset.fileId === fileId) finish(true);
+      };
+      const observer = new MutationObserver(check);
+      const timer = setTimeout(() => { finish(false); }, 10000);
+      observer.observe(pane, { childList: true, subtree: true });
+      check();
+    });
+    if (reviewStore.state.value.currentFileId !== fileId) return;
+    if (!mounted) {
+      showToast("Could not load the definition's file. Please try again.");
+      return;
+    }
+  }
+  // Unchanged definitions may be outside the rendered diff hunks.
+  if (!scrollToLine(line)) await loadRawFile(filePath, line);
 }
 
 /**
@@ -107,10 +134,10 @@ function scrollToLine(lineNumber: number) {
     `.diff-line[data-line="${lineNumber}"][data-side="new"]`
   );
 
-  if (lineEl) {
-    lineEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    // Brief highlight to show where we jumped to
-    lineEl.classList.add('jump-highlight');
-    setTimeout(() => { lineEl.classList.remove('jump-highlight'); }, JUMP_HIGHLIGHT_DURATION_MS);
-  }
+  if (!lineEl) return false;
+  lineEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // Brief highlight to show where we jumped to
+  lineEl.classList.add('jump-highlight');
+  setTimeout(() => { lineEl.classList.remove('jump-highlight'); }, JUMP_HIGHLIGHT_DURATION_MS);
+  return true;
 }

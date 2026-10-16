@@ -23,7 +23,7 @@ export const outlineRoutes = new Hono<AppEnv>();
  * other request. Capping trades completeness on huge repos for responsiveness;
  * the scan already stops at the first match, so this only bites the miss case.
  */
-const MAX_REPO_SCAN_FILES = 2000;
+const MAX_REPO_SCAN_FILES = 50000;
 
 outlineRoutes.get('/outline/:fileId', async (c) => {
   const repoRoot = c.get('repoRoot');
@@ -80,7 +80,7 @@ outlineRoutes.get('/symbol-definition', async (c) => {
   // Second pass: if no match found, search all tracked files in the repo
   if (definitions.length === 0) {
     try {
-      const allFiles = spawnSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf-8' })
+      const allFiles = spawnSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024 })
         .stdout.trim().split('\n').filter(Boolean);
       let scanned = 0;
       for (const filePath of allFiles) {

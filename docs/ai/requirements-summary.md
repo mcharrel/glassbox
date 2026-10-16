@@ -545,13 +545,15 @@ reviews.
 
 **Go-to-definition** (`Cmd+Click` / `Ctrl+Click`): searches via the
 regex-based outline parser — current file first, then other review
-files, then all tracked files. Same-file scrolls with highlight
+files, then up to 50,000 supported tracked files. Same-file scrolls with highlight
 animation; other review files switch + scroll; repo files outside the
 review open as read-only (`/file-raw`) and don't appear in the sidebar.
 Common keywords (if/for/return/function/class/etc.) don't trigger.
 Unknown symbols get a toast. Cursor turns to pointer when Cmd/Ctrl is
 held over code spans. Search and syntax highlighting do not split the clicked
-identifier: lookup uses the complete word within the code line.
+identifier: lookup uses the complete word within the code line. Targets outside
+rendered hunks open full source, with distinct diff/full-source history entries.
+Cross-file jumps wait for the requested diff to mount.
 
 **Navigation stack**: tracks file visits and scroll positions; scroll
 updates the current entry (debounced) instead of pushing new ones; any
