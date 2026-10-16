@@ -42,6 +42,23 @@ function makeHunk(lines: DiffLine[], start = 1): DiffHunk {
 }
 
 describe('DiffView', () => {
+  it.each(['split', 'unified'] as const)('renders full context without fold controls and marks each changed block once in %s', mode => {
+    const lines = [
+      makeLine('context', 1), makeLine('add', 2), makeLine('context', 3),
+      makeLine('remove', 4), makeLine('add', 4), makeLine('context', 5),
+      makeLine('remove', 6),
+    ];
+    const html = DiffView({
+      file: makeFile(), diff: makeDiff({ hunks: [makeHunk(lines)] }), mode,
+      fullContext: true, annotations: [makeAnnotation({ side: 'old', line_number: 4 })],
+    }).toString();
+    expect(html).not.toContain('hunk-separator');
+    expect(html).not.toContain('Show remaining lines');
+    const starts = [...html.matchAll(/data-change-start="(\d+)"/g)].map(match => Number(match[1]));
+    expect(starts.sort()).toEqual([0, 1, 2]);
+    expect(html).toContain('Fix this');
+  });
+
   it('renders diff header with file path and status', () => {
     const html = DiffView({
       file: makeFile(), diff: makeDiff(), annotations: [], mode: 'split',

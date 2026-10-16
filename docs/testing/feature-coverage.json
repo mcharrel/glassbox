@@ -725,9 +725,11 @@
       "tests": [
         "tests/e2e/annotations.test.ts",
         "tests/e2e/review-workflow.test.ts",
-        "tests/e2e/find.test.ts"
+        "tests/e2e/find.test.ts",
+        "tests/unit/client/changeNavigation.test.ts",
+        "tests/unit/components/diffView.test.ts"
       ],
-      "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar."
+      "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar; bounded Tab/Shift+Tab change navigation with edit/dialog exceptions."
     },
     "8.7": {
       "tests": [
@@ -815,9 +817,14 @@
     },
     "4.5": {
       "tests": [
-        "tests/integration/api/routes.test.ts"
+        "tests/integration/api/routes.test.ts",
+        "tests/unit/git/fullContext.test.ts",
+        "tests/integration/git/diff.test.ts",
+        "tests/unit/git/diff-raw.test.ts",
+        "tests/unit/routes/pages.test.ts",
+        "tests/unit/components/diffView.test.ts"
       ],
-      "note": "GET /api/context/:fileId range read from disk + 404. (client expander UI is a sub-gap)."
+      "note": "Full-file rendering from reviewed content without fold controls, preserved anchors, difftool snapshots, and missing-context fallback; legacy context route."
     },
     "4.6": {
       "tests": [

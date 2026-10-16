@@ -15,7 +15,7 @@ vi.mock('../../../src/db/queries.js', () => ({
 // Mock git operations
 vi.mock('../../../src/git/diff.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/git/diff.js')>();
-  return { ...actual, getSingleFileDiff: vi.fn() };
+  return { ...actual, getSingleFileDiff: vi.fn(), getModeFileContent: vi.fn(() => 'hello\n') };
 });
 vi.mock('../../../src/git/image.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/git/image.js')>();
@@ -23,6 +23,7 @@ vi.mock('../../../src/git/image.js', async (importOriginal) => {
 });
 
 import { getAnnotationCountsForReview, getAnnotationsForFile, getReview, getReviewFile, getReviewFiles, listReviews } from '../../../src/db/queries.js';
+import { getModeFileContent } from '../../../src/git/diff.js';
 import { pageRoutes } from '../../../src/routes/pages.js';
 
 function createApp() {
@@ -93,6 +94,35 @@ describe('pageRoutes', () => {
   });
 
   describe('GET /file/:fileId', () => {
+    it('explains missing full content while keeping saved changes available without fold controls', async () => {
+      vi.mocked(getModeFileContent).mockReturnValueOnce('');
+      const html = await (await app.request('/file/f1')).text();
+      expect(html).toContain('Full file content is unavailable');
+      expect(html).toContain('hello');
+      expect(html).not.toContain('hunk-separator');
+    });
+
+    it.each(['split', 'unified'])('renders every reviewed line in %s without modifying the stored diff', async mode => {
+      vi.mocked(getModeFileContent).mockReturnValueOnce('prefix\nhello\ntail\n');
+      vi.mocked(getReview).mockResolvedValueOnce({ ...mockReview, mode: 'range:base..reviewed' } as any);
+      const stored = JSON.stringify({ filePath: 'src/app.ts', oldPath: null, status: 'modified', isBinary: false,
+        hunks: [{ oldStart: 2, oldCount: 1, newStart: 2, newCount: 1, lines: [
+          { type: 'remove', oldNum: 2, newNum: null, content: 'before' },
+          { type: 'add', oldNum: null, newNum: 2, content: 'hello' },
+        ] }],
+      });
+      const reviewFile = { ...mockFile, diff_data: stored };
+      vi.mocked(getReviewFile).mockResolvedValueOnce(reviewFile as any);
+      const response = await app.request(`/file/f1?mode=${mode}`);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html).toContain('prefix'); expect(html).toContain('tail');
+      expect(html).toContain('data-change-start="0"');
+      expect(html).not.toContain('hunk-separator');
+      expect(reviewFile.diff_data).toBe(stored);
+      expect(getModeFileContent).toHaveBeenLastCalledWith({ type: 'range', from: 'base', to: 'reviewed' }, 'src/app.ts', 'new', '/fake/repo');
+    });
+
     it('renders file diff in split mode by default', async () => {
       const res = await app.request('/file/f1');
       expect(res.status).toBe(200);

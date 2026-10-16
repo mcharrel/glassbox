@@ -11,6 +11,7 @@ import { openLightbox } from '../lightbox.js';
 import { aiStore, diffViewStore, dragStore, reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
 import { renderAINotes } from './aiNotes.js';
+import { bindChangeNavigation } from './changeNavigation.js';
 import { navigateToLocation } from './goToDefinition.js';
 import { applyHighlighting, detectLanguage } from './highlight.js';
 import { handleHunkExpand } from './hunkExpander.js';
@@ -56,6 +57,7 @@ export function initDiffView(): void {
   setupImageModeEffect();
   setupWrapClassEffect(container);
   setupDelegatedHandlers(container);
+  bindChangeNavigation();
   bindAnnotationEvents(container);
   bindCreateFormEvents(container);
   bindNoteArtifactRegions(container);
