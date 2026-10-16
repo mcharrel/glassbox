@@ -59,6 +59,11 @@ export const reviewStore = defineStore({
   }),
 });
 
+export const visibleNoteLines = signal<{ fileId: string | null; lines: ReadonlySet<number> }>({
+  fileId: null,
+  lines: new Set(),
+});
+
 interface DiffViewState {
   diffMode: 'split' | 'unified';
   wrapLines: boolean;
