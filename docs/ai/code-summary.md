@@ -938,3 +938,5 @@ two documents intentionally overlap.
 - `docs/tauri-setup.md` — certificates, signing keys, GitHub secrets.
 - `docs/1-review-workflow.md` … `docs/31-plugin-lifecycle-hooks.md` — numbered
   functional / non-functional requirements.
+
+Personal review controls: diff/reviewKeys.ts binds gg and n/N; localDeclaration.ts handles local variable declarations; find.tsx reapplies symbol queries after mounts. Annotation rows retain metadata while exposing click-to-edit and delete/keep only.

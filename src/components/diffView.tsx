@@ -5,10 +5,9 @@ import type { Annotation,ReviewFile } from '../db/queries.js';
 import type { DiffHunk, DiffLine,FileDiff } from '../git/diff.js';
 import { isImageFile, isSvgFile } from '../git/image.js';
 import type { GroundTruthStepNav } from '../ground-truth/presentation.js';
-import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronsUpDown, IconCornerDownRight, IconEdit, IconExternalLink, IconGripVertical, IconPaperclip, IconReveal, IconTrash } from '../icons.js';
+import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronsUpDown, IconCornerDownRight, IconExternalLink, IconPaperclip, IconReveal, IconTrash } from '../icons.js';
 import type { NoteOrigin, ReviewNoteArtifact, ReviewNoteView } from '../review-notes/view.js';
 import { REVIEW_NOTE_LABELS } from '../review-notes/view.js';
-import { charDiff, type DiffSegment } from '../utils/charDiff.js';
 import { formatDiffPct } from '../utils/diffScore.js';
 import { truncateDiffLine } from '../utils/lineTruncate.js';
 import { renderNoteMarkdown } from '../utils/noteMarkdown.js';
@@ -253,11 +252,6 @@ function renderSplitColumn(
   );
 }
 
-/** Render content with optional character-level diff highlighting. */
-function renderSegments(segments: DiffSegment[]): SafeHtml {
-  return <>{segments.map(s => s.changed ? <span className="char-change">{s.text}</span> : <>{s.text}</>)}</>;
-}
-
 /** Render a plain (non-char-diffed) line's content, truncating pathologically
  *  long lines so the DOM never holds a multi-hundred-KB text node — see
  *  `truncateDiffLine`. The elided remainder stays in the stored diff. */
@@ -275,17 +269,10 @@ function renderLineContent(content: string): SafeHtml | string {
   );
 }
 
-/** Get character-highlighted content for a paired remove+add line, or plain content. */
+/** Render paired lines with the same truncation rules as context lines. */
 function renderPairContent(pair: LinePair, side: 'left' | 'right'): SafeHtml | string {
   const line = side === 'left' ? pair.left : pair.right;
   if (!line) return '';
-  // Only compute char diff for paired remove+add lines
-  if (pair.left && pair.right && pair.left.type === 'remove' && pair.right.type === 'add') {
-    const diff = charDiff(pair.left.content, pair.right.content);
-    if (diff) {
-      return renderSegments(side === 'left' ? diff.oldSegments : diff.newSegments);
-    }
-  }
   return renderLineContent(line.content);
 }
 
@@ -329,31 +316,6 @@ function pairLines(lines: DiffLine[]): LinePair[] {
   return pairs;
 }
 
-/** Pre-compute char diffs for paired remove/add lines in a hunk for unified view. */
-function buildUnifiedCharDiffs(lines: DiffLine[]): Map<DiffLine, DiffSegment[]> {
-  const result = new Map<DiffLine, DiffSegment[]>();
-  let i = 0;
-  while (i < lines.length) {
-    if (lines[i].type === 'remove') {
-      const removes: DiffLine[] = [];
-      while (i < lines.length && lines[i].type === 'remove') { removes.push(lines[i]); i++; }
-      const adds: DiffLine[] = [];
-      while (i < lines.length && lines[i].type === 'add') { adds.push(lines[i]); i++; }
-      const pairCount = Math.min(removes.length, adds.length);
-      for (let j = 0; j < pairCount; j++) {
-        const diff = charDiff(removes[j].content, adds[j].content);
-        if (diff) {
-          result.set(removes[j], diff.oldSegments);
-          result.set(adds[j], diff.newSegments);
-        }
-      }
-    } else {
-      i++;
-    }
-  }
-  return result;
-}
-
 function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNote, filePath }: {
   hunks: DiffHunk[]; annotationsByLine: Record<string, Annotation[]>; reviewNotesByLine: Record<string, ReviewNoteView[]>; repliesByNote: Record<string, Annotation[]>; filePath: string;
 }) {
@@ -363,7 +325,6 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
   return (
     <div className="diff-table-unified">
       {hunks.map((hunk, hunkIdx) => {
-        const charDiffs = buildUnifiedCharDiffs(hunk.lines);
         return (
         <div className="hunk-block">
           <div className="hunk-separator" data-hunk-idx={hunkIdx}
@@ -376,7 +337,6 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
             const side = line.type === 'remove' ? 'old' : 'new';
             const anns = annotationsByLine[`${lineNum}:${side}`] ?? [];
             const notes = reviewNotesByLine[`${lineNum}:${side}`] ?? [];
-            const segments = charDiffs.get(line);
             return (
               <div>
                 <div
@@ -386,7 +346,7 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
                 >
                   <span className="gutter-old" data-line-number={line.oldNum ?? ''}></span>
                   <span className="gutter-new" data-line-number={line.newNum ?? ''}></span>
-                  <span className="code">{segments ? renderSegments(segments) : renderLineContent(line.content)}</span>
+                  <span className="code">{renderLineContent(line.content)}</span>
                 </div>
                 {anns.length > 0 ? <AnnotationRows annotations={anns} /> : null}
                 {notes.length > 0 ? <ReviewNoteRows notes={notes} repliesByNote={repliesByNote} filePath={filePath} /> : null}
@@ -548,16 +508,13 @@ function AnnotationItem({ annotation: a }: { annotation: Annotation }) {
   return (
     <div className={`annotation-item${a.is_stale ? ' annotation-stale' : ''}`}
       data-key={a.id} data-annotation-id={a.id} data-is-stale={a.is_stale ? 'true' : undefined}
-      data-region-data={a.region_data ?? undefined}>
-      <span className="annotation-drag-handle" draggable="true" title="Drag to move"><IconGripVertical /></span>
-      <span className={`annotation-category category-${a.category}`} data-action="reclassify">{a.category}</span>
+      data-category={a.category} data-reply-to-note-id={a.reply_to_note_id ?? undefined}
+         tabIndex={0} aria-label="Edit comment" data-region-data={a.region_data ?? undefined}>
       {a.reply_to_note_id !== null ? <span className="annotation-reply-tag" title="Reply to an AI review note"><IconCornerDownRight /> reply</span> : null}
       <span className="annotation-text">{a.content}</span>
       {ReviewNoteRegionThumb({ regionData: a.region_data })}
       <div className="annotation-actions">
         {a.is_stale ? <button className="btn btn-xs btn-keep" data-action="keep">Keep</button> : null}
-        <button className="btn btn-xs btn-icon" data-action="attach" title="Attach a file"><IconPaperclip /></button>
-        <button className="btn btn-xs btn-icon" data-action="edit" title="Edit"><IconEdit /></button>
         <button className="btn btn-xs btn-icon btn-danger" data-action="delete" title="Delete"><IconTrash /></button>
       </div>
       <div className="annotation-attachments" data-att-list={a.id} data-morph-skip></div>

@@ -11,6 +11,7 @@ import { openLightbox } from '../lightbox.js';
 import { aiStore, diffViewStore, dragStore, reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
 import { renderAINotes } from './aiNotes.js';
+import { refreshFind } from './find.js';
 import { navigateToLocation } from './goToDefinition.js';
 import { applyHighlighting, detectLanguage } from './highlight.js';
 import { handleHunkExpand } from './hunkExpander.js';
@@ -272,6 +273,7 @@ function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fi
     ...(diffViewStore.state.value.highlightAuto ? { highlightLang: detectedLang } : {}),
   });
   applyHighlighting();
+  refreshFind();
   updateToolbarLanguage();
   syncSplitColumnHeights();
   // Outline keys off a real review file; skip for raw views.

@@ -58,3 +58,5 @@ The system shall support seven annotation categories, each with specific semanti
 
 - **Immediate persistence** — All annotations shall be persisted to the database immediately on creation or modification.
 - **Survive restarts** — Annotations shall survive application restarts.
+
+Personal fork: code comments use a purple accent background and click-to-edit (Enter when focused). Delete and Keep remain available; category, drag, attachment and edit controls are omitted. New comments are notes; edits preserve existing categories, note replies, regions and attachments.

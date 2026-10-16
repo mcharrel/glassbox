@@ -20,10 +20,13 @@
 
 .annotation-row {
   padding: 8px 16px 8px 76px;
-  background: rgba(137,180,250,0.05);
+  background: var(--accent);
+  color: var(--bg);
   border-left: 3px solid var(--accent);
   font-family: var(--font-sans);
   font-size: 13px;
+
+  .annotation-text, .annotation-reply-tag { color: inherit; }
 
   .annotation-item {
     display: flex;
@@ -31,11 +34,12 @@
     gap: 8px;
     align-items: flex-start;
     padding: 4px 0;
+    cursor: text;
   }
 
   &:has(.annotation-stale) {
     border-left-color: var(--orange);
-    background: rgba(250,179,135,0.05);
+
   }
 }
 

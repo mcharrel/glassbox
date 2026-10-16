@@ -97,3 +97,5 @@ The user's Code/Rendered choice is remembered across file selections.
 ### 4.9 Binary Detection
 
 - **Detection method** — For tracked files, binary status comes from git's own indicator (the `Binary files … differ` diff header). The first-8KB null-byte scan is **only** applied to **untracked/new** files (which have no git diff header to read); it is not a universal second check on tracked diffs. See doc 3 §3.4.
+
+Personal fork: changed lines retain their whole-line colors without character-level overlays. In-page Find accepts single characters; n / Shift+N move between occurrences outside text fields and dialogs. Escape leaves the Find input while preserving matches.
