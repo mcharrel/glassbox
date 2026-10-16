@@ -355,10 +355,6 @@
     user-select: none;
   }
 
-  // Character-level change highlighting within partially modified lines
-  &.add .char-change { background: rgba(166,227,161,0.25); border-radius: 2px; }
-  &.remove .char-change { background: rgba(243,139,168,0.25); border-radius: 2px; }
-
   // Go-to-definition jump highlight
   &.jump-highlight {
     animation: jump-flash 1.5s ease-out;

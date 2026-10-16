@@ -6,6 +6,7 @@
 import { IconChevronDown, IconChevronUp, IconX } from '../../icons.js';
 import { toElement } from '../dom.js';
 import { getTauriGlobal } from '../tauri.js';
+import { bindReviewKeys } from './reviewKeys.js';
 
 /** The lazily-created find widget. All mutable widget state (elements, query,
  *  match cursor) lives inside the controller closure — not at module scope
@@ -15,6 +16,8 @@ interface FindController {
   hide(): void;
   goToMatch(direction: number): void;
   isOpen(): boolean;
+  search(query: string, line: number, side: string): void;
+  refresh(): void;
 }
 let controller: FindController | null = null;
 
@@ -23,7 +26,8 @@ const ACTIVE_HIGHLIGHT_CLASS = 'find-highlight-active';
 const MATCH_INDEX_ATTR = 'data-match-index';
 
 export function bindFind() {
-  // Only activate in Tauri — browsers have their own find
+  bindReviewKeys(direction => { controller?.goToMatch(direction); });
+  // Only intercept native Find in Tauri — browsers have their own find.
   const tauri = getTauriGlobal();
   if (tauri === undefined) return;
 
@@ -36,7 +40,7 @@ export function bindFind() {
     }
     if (controller === null || !controller.isOpen()) return;
     // Escape: close find bar
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !e.defaultPrevented) {
       controller.hide();
       return;
     }
@@ -55,11 +59,30 @@ export function bindFind() {
   });
 }
 
+/** Highlight a clicked symbol without taking focus or moving away from its definition. */
+export function searchSymbol(query: string, line: number, side = 'new'): void {
+  (controller ??= createFindController()).search(query, line, side);
+}
+
+/** Reapply the current query after a file or diff mode has finished mounting. */
+export function refreshFind(): void {
+  controller?.refresh();
+}
+
+function focusDiff(): void {
+  const pane = document.getElementById('diff-container');
+  if (!pane) return;
+  pane.tabIndex = -1;
+  pane.focus({ preventScroll: true });
+}
+
 /** Build the find-bar DOM once and return its controller. The bar is a
  *  Tauri-only, imperative widget outside every kerf mount tree, so direct
  *  listeners are stable here. */
 function createFindController(): FindController {
   let currentQuery = '';
+  let anchorLine = 0;
+  let anchorSide = 'new';
   let matchCount = 0;
   let currentMatch = -1;
 
@@ -81,7 +104,7 @@ function createFindController(): FindController {
 
   function updateLabel(): void {
     if (matchLabel === null) return;
-    if (currentQuery.length < 2) {
+    if (currentQuery.length === 0) {
       matchLabel.textContent = '';
     } else if (matchCount === 0) {
       matchLabel.textContent = 'No matches';
@@ -90,13 +113,13 @@ function createFindController(): FindController {
     }
   }
 
-  function runSearch(query: string): void {
+  function runSearch(query: string, scroll = true): void {
     clearHighlights();
     matchCount = 0;
     currentMatch = -1;
     currentQuery = query;
 
-    if (query.length < 2) {
+    if (query.length === 0) {
       updateLabel();
       return;
     }
@@ -121,7 +144,11 @@ function createFindController(): FindController {
     matchCount = spans.length;
     if (matchCount > 0) {
       currentMatch = 0;
-      activateMatch(0);
+      if (!scroll && anchorLine > 0) {
+        const match = container.querySelector<HTMLElement>(`.diff-line[data-side="${anchorSide}"][data-line="${String(anchorLine)}"] .${HIGHLIGHT_CLASS}`);
+        currentMatch = Number(match?.dataset.matchIndex ?? 0);
+      }
+      activateMatch(currentMatch, scroll);
     }
 
     updateLabel();
@@ -140,14 +167,19 @@ function createFindController(): FindController {
     findBar.style.display = 'none';
     clearHighlights();
     currentQuery = '';
+    anchorLine = 0;
     matchCount = 0;
     currentMatch = -1;
   }
 
   // `findInput` is a const — TS narrows it through the `?.` for the whole closure.
-  findInput?.addEventListener('input', () => { runSearch(findInput.value); });
+  findInput?.addEventListener('input', () => { anchorLine = 0; runSearch(findInput.value); });
   findInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      focusDiff();
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       goToMatch(e.shiftKey ? -1 : 1);
     }
@@ -173,6 +205,15 @@ function createFindController(): FindController {
       findInput?.select();
     },
     hide,
+    search(query, line, side): void {
+      anchorLine = line;
+      anchorSide = side;
+      findBar.style.display = 'flex';
+      if (findInput) findInput.value = query;
+      runSearch(query, false);
+      focusDiff();
+    },
+    refresh(): void { runSearch(currentQuery, false); },
     goToMatch,
     isOpen: () => findBar.style.display !== 'none',
   };
@@ -205,17 +246,22 @@ export interface SegmentInfo { start: number; length: number }
  * right after it.
  */
 function buildTextIndex(container: HTMLElement): { text: string; segments: TextSegment[] } {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   const segments: TextSegment[] = [];
   const parts: string[] = [];
   let pos = 0;
-  let node: Text | null;
-  while ((node = walker.nextNode() as Text | null)) {
-    const content = node.data;
-    if (content.length === 0) continue;
-    segments.push({ node, start: pos, length: content.length });
-    parts.push(content);
-    pos += content.length;
+  // Search code cells independently: never join unrelated lines or include comments/chrome.
+  for (const code of container.querySelectorAll('.code')) {
+    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const content = node.data;
+      if (content.length === 0) continue;
+      segments.push({ node, start: pos, length: content.length });
+      parts.push(content);
+      pos += content.length;
+    }
+    parts.push('\n');
+    pos++;
   }
   return { text: parts.join(''), segments };
 }
@@ -293,7 +339,7 @@ function marksForMatch(index: number): NodeListOf<Element> {
   return document.querySelectorAll(`.${HIGHLIGHT_CLASS}[${MATCH_INDEX_ATTR}="${String(index)}"]`);
 }
 
-function activateMatch(index: number) {
+function activateMatch(index: number, scroll = true) {
   // Remove previous active class from every fragment of the prior match.
   document.querySelectorAll(`.${ACTIVE_HIGHLIGHT_CLASS}`).forEach(el => { el.classList.remove(ACTIVE_HIGHLIGHT_CLASS); });
 
@@ -303,6 +349,6 @@ function activateMatch(index: number) {
   // (one per text node it crosses). Mark all of them active so styling
   // applies to the whole highlight, and scroll the first into view.
   marks.forEach(el => { el.classList.add(ACTIVE_HIGHLIGHT_CLASS); });
-  marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (scroll) marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 

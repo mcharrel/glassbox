@@ -1310,3 +1310,5 @@ Also keep `CLAUDE.md`'s requirements index in sync with `docs/`.
 - `CLAUDE.md` — project rules and conventions
 
 Diff lines preserve aligned indentation and stable addition/deletion colors during navigation.
+
+Personal fork: simple purple click-to-edit comments; whole-line diffs without character overlays; gg to file top; n/N through Find results; symbol navigation also populates Find, with local variable lookup for common declarations.

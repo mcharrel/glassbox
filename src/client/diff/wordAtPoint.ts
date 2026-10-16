@@ -29,8 +29,8 @@ export function getWordAtPoint(x: number, y: number): string | null {
   while (end < text.length && /[\w$]/.test(text[end])) end++;
 
   const word = text.slice(start, end);
-  // Skip pure numbers and very short words
-  if (!word || word.length < 2 || /^\d+$/.test(word)) return null;
+  // Skip pure numbers
+  if (!word || /^\d+$/.test(word)) return null;
   // Skip common keywords
   if (SKIP_WORDS.has(word)) return null;
 

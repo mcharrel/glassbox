@@ -941,3 +941,5 @@ two documents intentionally overlap.
   functional / non-functional requirements.
 
 Diff line styling keeps +/- markers outside the text flow and animates navigation outlines without replacing diff backgrounds.
+
+Personal review controls: diff/reviewKeys.ts binds gg and n/N; localDeclaration.ts handles local variable declarations; find.tsx reapplies symbol queries after mounts. Annotation rows retain metadata while exposing click-to-edit and delete/keep only.

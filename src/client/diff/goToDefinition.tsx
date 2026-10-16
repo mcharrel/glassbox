@@ -7,7 +7,9 @@ import { asElement } from '../dom.js';
 import { reviewStore } from '../stores/index.js';
 import { JUMP_HIGHLIGHT_DURATION_MS } from '../timing.js';
 import { showToast } from '../toast.js';
+import { searchSymbol } from './find.js';
 import { setRawDiffContent } from './index.js';
+import { localDeclaration } from './localDeclaration.js';
 import { navPush } from './navStack.js';
 import { selectFile, updateNavFilePath } from './selection.js';
 import { getWordAtPoint } from './wordAtPoint.js';
@@ -24,11 +26,20 @@ export function bindGoToDefinition() {
     if (asElement(e.target).closest('button, a, .annotation-row, .annotation-form-container')) return;
 
     const word = getWordAtPoint(e.clientX, e.clientY);
-    if (word === null || word.length < 2) return;
+    if (word === null || word.length === 0) return;
 
     e.preventDefault();
     e.stopPropagation();
-    void navigateToDefinition(word);
+    const clicked = asElement(e.target).closest<HTMLElement>('.diff-line');
+    if (!clicked) return;
+    const side = clicked.dataset.side ?? 'new';
+    const lines = [...container.querySelectorAll<HTMLElement>(`.diff-line[data-side="${side}"]`)]
+      .map(row => ({ line: Number(row.dataset.line), content: row.querySelector('.code')?.textContent ?? '' }));
+    const declaration = localDeclaration(lines, word, Number(clicked.dataset.line));
+    if (declaration !== null) {
+      searchSymbol(word, declaration, side);
+      container.querySelector(`.diff-line[data-side="${side}"][data-line="${String(declaration)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else void navigateToDefinition(word);
   });
 
   // Show pointer cursor when Cmd/Ctrl is held over identifiers
@@ -46,11 +57,13 @@ async function navigateToDefinition(symbolName: string) {
   const data = await findSymbolDefinition({ name: symbolName, currentFileId });
 
   if (data.definitions.length === 0) {
+    searchSymbol(symbolName, 0);
     showToast(`No definition found for "${symbolName}"`);
     return;
   }
 
   const def = data.definitions[0];
+  searchSymbol(symbolName, def.line);
   await goToTarget(def.fileId, def.filePath, def.line, currentFileId);
 }
 

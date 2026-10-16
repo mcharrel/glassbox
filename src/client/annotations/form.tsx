@@ -6,9 +6,7 @@ import { IconCornerDownRight } from '../../icons.js';
 import { clearPendingArtifactRegions, takePendingArtifactRegions } from '../diff/noteArtifactRegions.js';
 import { asTextarea, toElement } from '../dom.js';
 import { asCategory } from '../narrow.js';
-import { CATEGORIES } from '../state.js';
 import { editFormSignal, reviewStore, setEditForm } from '../stores/index.js';
-import { buildCategoryBadge } from './categories.js';
 import { renderAnnotationInline } from './render.js';
 
 /** Register the create-form delegates on the diff container. Called once
@@ -51,7 +49,7 @@ export function showAnnotationForm(afterEl: HTMLElement, lineNumber: number, sid
   // Dismiss any existing create-form (only one open at a time).
   document.querySelectorAll('.annotation-form-container[data-form-key]').forEach(el => { el.remove(); });
 
-  const defaultCategory = CATEGORIES[0].value;
+  const defaultCategory = 'note';
   const formKey = `${String(lineNumber)}:${side}`;
 
   setEditForm({
@@ -68,7 +66,6 @@ export function showAnnotationForm(afterEl: HTMLElement, lineNumber: number, sid
         {replyToNoteId !== undefined
           ? <span className="annotation-reply-tag"><IconCornerDownRight /> replying to AI note</span>
           : <span className="annotation-form-anchor">Line {String(lineNumber)}</span>}
-        {buildCategoryBadge(defaultCategory)}
         <textarea placeholder={replyToNoteId !== undefined ? 'Reply to this note…' : "Describe the issue and what you'd expect instead…"} autoFocus></textarea>
         <div className="annotation-form-actions">
           <span className="annotation-form-hint">Cmd/Ctrl+Enter to save · Esc to cancel</span>
