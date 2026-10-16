@@ -36,7 +36,7 @@
 // --- Navigation Bar ---
 
 .diff-nav-bar {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 2px;
   padding: 4px 12px;
@@ -76,7 +76,8 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
+  // Keep the hidden node as the insertion anchor for the outline and AI notes.
+  display: none;
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
@@ -123,7 +124,7 @@
 
 .outline-bar {
   position: sticky;
-  top: 41px; // below the diff-header
+  top: 0;
   z-index: 9;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
@@ -505,7 +506,7 @@
 // --- Bottom Toolbar ---
 
 .diff-toolbar {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;

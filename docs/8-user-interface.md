@@ -8,9 +8,10 @@ Requirements for the browser-based UI and user interaction patterns.
 
 - The UI shall consist of a sidebar (file list) and a main content area (diff viewer).
 - The sidebar shall be resizable via drag handle.
-- The navigation bar (shown once a file is open) shall include a **hide/show sidebar** toggle (a lucide panel icon, placed before the back/forward arrows). Collapsing hides the sidebar and its resize handle so the diff fills the width; the button shows a pressed state while collapsed. The state is per-session (not persisted across a full reload), so a fresh load always starts with the sidebar visible and the toggle reachable (GB-955).
+- This personal fork hides the file-name navigation bar, sticky file-name header, and bottom diff toolbar. Their DOM nodes remain available to client hooks; they take no layout space.
+- The class/function outline breadcrumb stays visible and sticky at the top of the code viewport, without a gap for the hidden file-name header.
 - The sidebar shall contain: repository name, review mode, file filter, sort mode control, file list, and action buttons (Complete Review, Review History).
-- The diff header shall include a "Reveal in file manager" button that opens the file's parent directory in the OS file manager. (The sidebar right-click context menu uses the OS-specific label — "Reveal in Finder" on macOS, "Reveal in File Explorer" on Windows — see doc 21.)
+- Reveal in file manager remains available from the sidebar right-click context menu ("Reveal in Finder" on macOS, "Reveal in File Explorer" on Windows — see doc 21).
 
 ### 8.2 File Navigation
 
