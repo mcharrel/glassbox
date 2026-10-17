@@ -203,10 +203,10 @@ fn resolve_app_name(project_dir: &str) -> String {
 
     // Fall back to the project folder name
     if let Some(name) = project_path.file_name() {
-        return format!("Glassbox — {}", name.to_string_lossy());
+        return format!("MyReview — {}", name.to_string_lossy());
     }
 
-    "Glassbox".to_string()
+    "MyReview".to_string()
 }
 
 #[derive(Serialize)]
@@ -561,7 +561,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             let menu = MenuBuilder::new(app_handle)
                 .item(
-                    &SubmenuBuilder::new(app_handle, "Glassbox")
+                    &SubmenuBuilder::new(app_handle, "MyReview")
                         .about(None)
                         .separator()
                         .services()

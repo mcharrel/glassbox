@@ -11,7 +11,7 @@ import { toElement } from './dom.js';
 import { openExternalUrl } from './tauri.js';
 import { showToast } from './toast.js';
 
-const SHARE_URL = 'https://www.npmjs.com/package/glassbox';
+const SHARE_URL = 'https://github.com/mcharrel/MyReview';
 const SPONSOR_URL = 'https://github.com/sponsors/brianwestphal';
 const SESSION_THRESHOLD_MS = 60_000;    // 1 minute in current session
 const TOTAL_THRESHOLD_MS = 300_000;     // 5 minutes cumulative
@@ -26,7 +26,7 @@ export async function triggerShare(): Promise<void> {
   if (typeof navigator.share === 'function') {
     try {
       await navigator.share({
-        title: 'Glassbox',
+        title: 'MyReview',
         text: 'A local code review tool for AI-generated code.',
         url: SHARE_URL,
       });
@@ -52,7 +52,7 @@ function dismissPrompt(): void {
 
 /**
  * Show the share section once the trigger thresholds are met (see
- * {@link initSharePrompt}). Renders the "Love Glassbox?" Share + Sponsor
+ * {@link initSharePrompt}). Renders the "Love MyReview?" Share + Sponsor
  * section into the `#sidebar-share` container near the sidebar footer.
  *
  * This is the single share banner: it is time-gated (so it never nags on first
@@ -68,7 +68,7 @@ function showPrompt() {
   const section = toElement(
     <div className="sidebar-share-section">
       <button className="sidebar-share-dismiss" id="share-dismiss-btn" title="Dismiss"><IconX /></button>
-      <p className="sidebar-share-label">Love Glassbox?</p>
+      <p className="sidebar-share-label">Love MyReview?</p>
       <div className="sidebar-share-actions">
         <button className="btn btn-share" id="share-glassbox-btn">Share</button>
         <a className="btn btn-sponsor" id="sponsor-glassbox-btn" href={SPONSOR_URL} target="_blank" rel="noopener noreferrer"><IconHeart />Sponsor</a>

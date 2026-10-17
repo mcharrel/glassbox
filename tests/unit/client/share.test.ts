@@ -11,7 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const SHARE_URL = 'https://www.npmjs.com/package/glassbox';
+const SHARE_URL = 'https://github.com/mcharrel/MyReview';
 
 interface FakeEl {
   className: string;

@@ -1,5 +1,5 @@
 @echo off
-REM CLI launcher for Glassbox desktop app (Windows).
+REM CLI launcher for MyReview desktop app (Windows).
 REM The desktop app's "Install CLI" copies this file to
 REM %LOCALAPPDATA%\Programs\glassbox\ and adds that folder to PATH.
 REM
@@ -15,11 +15,11 @@ REM copy) the shim checks the standard per-user and per-machine install dirs.
 
 set "GLASSBOX_APP_DIR=%~dp0.."
 REM @@GLASSBOX_APP_DIR@@
-if not exist "%GLASSBOX_APP_DIR%\glassbox.exe" if exist "%LOCALAPPDATA%\Glassbox\glassbox.exe" set "GLASSBOX_APP_DIR=%LOCALAPPDATA%\Glassbox"
-if not exist "%GLASSBOX_APP_DIR%\glassbox.exe" if exist "%ProgramFiles%\Glassbox\glassbox.exe" set "GLASSBOX_APP_DIR=%ProgramFiles%\Glassbox"
+if not exist "%GLASSBOX_APP_DIR%\glassbox.exe" if exist "%LOCALAPPDATA%\MyReview\glassbox.exe" set "GLASSBOX_APP_DIR=%LOCALAPPDATA%\MyReview"
+if not exist "%GLASSBOX_APP_DIR%\glassbox.exe" if exist "%ProgramFiles%\MyReview\glassbox.exe" set "GLASSBOX_APP_DIR=%ProgramFiles%\MyReview"
 if not exist "%GLASSBOX_APP_DIR%\glassbox.exe" (
-    echo Glassbox: the desktop app was not found ^(looked in "%GLASSBOX_APP_DIR%"^). 1>&2
-    echo Reinstall the CLI from the Glassbox app's welcome screen. 1>&2
+    echo MyReview: the desktop app was not found ^(looked in "%GLASSBOX_APP_DIR%"^). 1>&2
+    echo Reinstall the CLI from the MyReview app's welcome screen. 1>&2
     exit /b 1
 )
 

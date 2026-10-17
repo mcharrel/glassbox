@@ -492,7 +492,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   }
   if (input.op === 'edit') {
     if (input.title !== undefined && (!tab.info || tab.info.author.login !== tab.viewer))
-      throw new Error('Only the PR author can edit its title in Glassbox');
+      throw new Error('Only the PR author can edit its title in MyReview');
     await github(tab.ref, `${repoApi(tab.ref)}/pulls/${tab.ref.number}`, 'PATCH', {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.body !== undefined ? { body: input.body } : {}),

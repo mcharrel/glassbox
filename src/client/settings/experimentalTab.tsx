@@ -193,7 +193,7 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
       <div className="settings-section">
         <label className="settings-label">Fallback model</label>
         <p className="settings-hint">
-          The on-device model has a small context window and can’t analyze large diffs. When a file is too big (or on-device analysis otherwise fails), Glassbox uses this model for that file instead.
+          The on-device model has a small context window and can’t analyze large diffs. When a file is too big (or on-device analysis otherwise fails), MyReview uses this model for that file instead.
         </p>
         <select className="settings-select" id="settings-fallback-platform">
           <option value="" selected={!hasFallback}>None — skip files too large for on-device</option>

@@ -1,6 +1,6 @@
-# My Glassbox
+# MyReview
 
-This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork's `main` follows upstream; the installed customizations live on `mc/local-customizations`. Upstream bug fixes can be merged or cherry-picked without giving up these preferences.
+[MyReview](https://github.com/mcharrel/MyReview) is my personal review workspace, based on upstream Glassbox 1.2.3. The fork's `main` follows upstream; the installed customizations live on `mc/local-customizations`. Upstream bug fixes can be merged or cherry-picked without giving up these preferences.
 
 ## Workspace and PR tabs
 
@@ -11,6 +11,8 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 - Each PR initially opens its Main view and remembers its last selected view. `r` switches Main and File views.
 - New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; there is no idle GitHub polling. Cmd/Ctrl+R refreshes the selected PR, including source changes.
 - Closing a tab only removes it from the tab list. Pending comments keep syncing, and reopening restores the PR.
+
+The desktop app, native menu, loading screens, and share link use the MyReview name. Existing `.glassbox` data, settings, bundle identity, and `glassbox` commands remain compatible; the local `myreview` command opens the saved PR workspace.
 
 ## Shared header and Main view
 
@@ -62,7 +64,7 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 
 - Changed and unchanged code lines share the same text alignment. Added/removed markers do not shift code indentation.
 - Disable character-level change highlighting, retaining whole-line diff colors. Navigation uses an outline effect instead of replacing the red/green background.
-- All contributions, including bug fixes and personal customizations, stay in `mcharrel/glassbox`. Do not open or update upstream contribution PRs. The earlier upstream PRs (#73–77) are closed; their fixes remain in this fork. Reading and pulling upstream updates is still allowed.
+- All contributions, including bug fixes and personal customizations, stay in `mcharrel/MyReview`. Do not open or update upstream contribution PRs. The earlier upstream PRs (#73–77) are closed; their fixes remain in this fork. Reading and pulling upstream updates is still allowed.
 
 ## Local data
 

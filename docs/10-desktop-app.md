@@ -6,12 +6,14 @@ Requirements for the Tauri desktop application and platform distribution.
 
 ### 10.1 Native Window
 
+The personal app is named MyReview, from the `mcharrel/MyReview` fork. Native menu/window names, loading screens, settings copy and sharing use this name. Existing bundle/storage identifiers and CLI entrypoints remain unchanged to retain saved settings and integrations.
+
 The personal fork exposes a View menu with Zoom In, Zoom Out, and Actual Size, using native webview zoom for the entire interface. The local frontend may invoke `set_app_zoom` with a finite scale between 0.5 and 2.0.
 
 The personal fork's desktop icon uses the supplied portrait with rounded corners and transparent margins. Legacy ICNS packaging includes this silhouette in the image itself. `scripts/build-personal-icon.swift` creates the padded source PNG from the unchanged original artwork; Tauri generates the packaged icon sizes from it.
 
 - The desktop app shall wrap the Node.js server in a native window using Tauri v2.
-- The window title shall display the project name, configurable via `.glassbox/settings.json` (`appName` field), defaulting to "Glassbox — {folder name}."
+- The window title shall display the project name, configurable via `.glassbox/settings.json` (`appName` field), defaulting to "MyReview — {folder name}."
 - On macOS, each project shall get its own Dock/Cmd+Tab identity via a stub `.app` bundle.
 - The app shall provide a native application menu bar, including an **Edit ▸ Find** item bound to `Cmd/Ctrl+F` — it emits a `menu-find` event that opens the in-diff find bar (`src-tauri/src/lib.rs`).
 

@@ -1,6 +1,8 @@
 <div align="center">
 
-# Glassbox
+# MyReview
+
+**MyReview** is Martin’s personal fork of [Glassbox](https://github.com/brianwestphal/glassbox). The customized app lives on [`mc/local-customizations`](https://github.com/mcharrel/MyReview/tree/mc/local-customizations); `main` follows upstream. See [MY_GLASSBOX.md](MY_GLASSBOX.md) for the personal workflow. The documentation and upstream downloads below describe the original Glassbox project.
 
 ### Stop hoping your AI got it right. Review the diff, leave precise feedback, and let AI fix it — in one loop.
 

@@ -338,8 +338,8 @@ function availableSection(): SafeHtml | null {
     <div className="plugin-available">
       <h4 className="settings-subheading">Available to install</h4>
       <p className="settings-hint">
-        These plugins ship with Glassbox but aren't installed (they need a system dependency or a
-        download). Click Install — Glassbox checks what's needed, provisions what it can, and tells
+        These plugins ship with MyReview but aren't installed (they need a system dependency or a
+        download). Click Install — MyReview checks what's needed, provisions what it can, and tells
         you how to finish the rest.
       </p>
       <div className="plugin-available-list">{list.map((a) => availableRow(a))}</div>
