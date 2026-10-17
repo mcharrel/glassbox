@@ -36,7 +36,7 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 
 ## Search and definitions
 
-- Cmd/Ctrl+F searches all files in the PR and their comments, including GitHub conversations and AI thread replies. Matches in the current view are highlighted. `n` advances; `m` or Shift+N goes backward.
+- Cmd/Ctrl+F focuses search; pressing it again returns focus to the file while retaining the query, highlights, and current match, so `n` works immediately. Search covers all files in the PR and their comments, including GitHub conversations and AI thread replies. Matches in the current view are highlighted. `n` advances; `m` or Shift+N goes backward.
 - One Escape closes search and clears highlights, even with the search field focused. It consumes the key so fullscreen remains active.
 - Cmd/Ctrl+click navigates to a definition and searches the symbol name, highlighting occurrences for subsequent navigation. Local variables are resolved in their enclosing scope before the repository lookup.
 - Identifier extraction reads across highlight spans, including one-letter identifiers. The repository definition scan allows up to 50,000 tracked files, with raw-file fallback and correct navigation history.
@@ -73,3 +73,9 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 - All panel widths and section heights persist. Temporary hiding or limited space does not overwrite the chosen size. The title section cannot shrink below its content, including wrapped titles and action buttons.
 - PR tabs switch within the same page. Files, AI guidance, loaded diff DOM, inline drafts, scroll positions, remaining-file lists, and navigation history remain in memory per PR. The first load stays asynchronous; background GitHub synchronization continues. Explicit refresh or a changed reviewed revision invalidates the affected cached content.
 - Remote inline comments appear only at a valid current source line, including old-side coordinates on unified context lines. Threads without a matching current line are hidden, with no fallback at the file top.
+
+## Loading and input fixes
+
+- The PR tab rail shrinks to the width of the longest compact PR ID, with only the status dot and small padding around it. Longer IDs increase that minimum so they remain readable.
+- Newly opened PRs show a pending indicator until their own file list is available. Their file view, file names, and GUIDE/LEARN never display the previous PR. A cold file also shows a loading indicator instead of the previous file. Failed file-list loads offer Retry.
+- Model selections discovered from the provider, including `gpt-5.5-pro`, persist across settings opens and app restarts. The fallback model catalog no longer silently substitutes GPT-4o. This fix is also contributed upstream.

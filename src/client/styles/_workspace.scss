@@ -1,6 +1,6 @@
 .pr-tabs {
-  width: 100px;
-  min-width: 100px;
+  width: 40px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -37,14 +37,22 @@
   white-space: nowrap;
 }
 .pr-tab-number {
-  display: none;
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+}
+.compact .pr-tab {
+  padding-inline: 4px;
+  gap: 4px;
 }
 .compact .pr-tab-title {
   display: none;
 }
 .compact .pr-tab-number {
-  display: inline;
+  position: static;
+  visibility: visible;
 }
 .pr-tab.dragging {
   opacity: 0.5;
@@ -373,4 +381,30 @@ body[data-workspace-view='file'] .pr-description {
 .diff-unified .line-num-old,
 .diff-line .line-num.old {
   display: none;
+}
+
+.pr-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  padding: 24px;
+  color: var(--text-dim);
+}
+.pr-review-loading {
+  display: none;
+}
+body[data-review-pending='true'] {
+  .file-list,
+  #sidebar-ai-notes,
+  #sidebar-notes-resize,
+  #diff-container,
+  .welcome-message {
+    // Diff widgets set an inline display mode when mounting text or images.
+    display: none !important;
+  }
+  &[data-workspace-view='file'] .pr-review-loading {
+    display: flex;
+  }
 }

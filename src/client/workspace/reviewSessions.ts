@@ -10,9 +10,11 @@ import { loadAnalysisResults } from '../sidebar/sortMode.js';
 import { defaultAnalysisModeState } from '../state.js';
 import { aiStore, diffViewStore, editFormSignal, reviewStore, visibleFileOrder } from '../stores/index.js';
 import { showToast } from '../toast.js';
-import { activeTab, workspace } from './state.js';
+import { activeTab, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 
 interface Session {
+  status: 'loading' | 'ready' | 'error';
+  error: string | null;
   review: typeof reviewStore.state.value;
   ai: typeof aiStore.state.value;
   diff: typeof diffViewStore.state.value;
@@ -21,7 +23,7 @@ interface Session {
   comment: string;
 }
 const scrollSelectors = ['.file-list', '.pr-description', '.pr-reviewers', '.pr-checks', '.pr-conversation'];
-const sessionKey = (tab: PullTab) => `${tab.reviewId ?? ''}:${tab.reviewedBase}:${tab.reviewedHead}`;
+const sessionKey = reviewSessionKey;
 
 /** Keep each PR's loaded review in memory; tab selection never navigates the page. */
 export function initReviewSessions(): () => void {
@@ -29,13 +31,17 @@ export function initReviewSessions(): () => void {
   const sessions = new Map<string, Session>();
   let current = '';
   let usedInitial = false;
+  let lastRetry = reviewRetry.peek();
   const capture = (): Session => ({
+    status: reviewLoadState.value.status, error: reviewLoadState.value.error,
     review: reviewStore.state.value, ai: aiStore.state.value, diff: diffViewStore.state.value,
     edit: editFormSignal.value,
     scroll: scrollSelectors.map(selector => document.querySelector(selector)?.scrollTop ?? 0),
     comment: document.querySelector<HTMLTextAreaElement>('.pr-comment-input')?.value ?? '',
   });
   const initial = capture();
+  initial.status = 'ready';
+  initial.error = null;
   const restore = (session: Session) => {
     document.body.dataset.reviewId = session.review.reviewId;
     batch(() => {
@@ -43,6 +49,7 @@ export function initReviewSessions(): () => void {
       aiStore.actions.update(session.ai);
       diffViewStore.actions.update(session.diff);
       editFormSignal.value = session.edit;
+      reviewLoadState.value = { key: current, status: session.status, error: session.error };
     });
     if (session.review.currentFileId === null && session.review.files.length > 0) {
       let last: string | null = null;
@@ -62,13 +69,14 @@ export function initReviewSessions(): () => void {
     const existing = sessions.get(key);
     if (existing) return existing;
     const reviewId = tab.reviewId ?? '';
-    if ([...sessions.values()].some(value => value.review.reviewId === reviewId)) invalidateDiffCache(reviewId);
-    if (reviewId === initial.review.reviewId && !usedInitial) {
+    if (reviewId !== '' && [...sessions.values()].some(value => value.review.reviewId === reviewId)) invalidateDiffCache(reviewId);
+    if (reviewId !== '' && reviewId === initial.review.reviewId && !usedInitial) {
       usedInitial = true;
       sessions.set(key, initial);
       return initial;
     }
     const session: Session = {
+      status: 'loading', error: null,
       review: { ...initial.review, reviewId, currentFileId: null, files: [], annotationCounts: {}, staleCounts: {},
         filterText: '', hiddenFileIds: new Set(), groundTruth: {}, pluginRendered: new Set(), notedFileIds: new Set() },
       ai: { ...initial.ai, fileNotes: {}, guidedNotes: {}, riskScores: null, narrativeOrder: null,
@@ -80,20 +88,31 @@ export function initReviewSessions(): () => void {
       if (Array.isArray(hidden) && hidden.every(id => typeof id === 'string')) session.review.hiddenFileIds = new Set(hidden);
     } catch { /* optional persistence */ }
     sessions.set(key, session);
+    // Importing tabs have no review yet. Never fetch against the prior/default review.
+    if (tab.reviewId === null) return session;
+    const isCurrent = () => live && current === key && sessions.get(key) === session;
     const publish = (kind: 'files' | 'ai') => {
-      if (!live || current !== key) return;
+      if (!isCurrent()) return;
       if (kind === 'files') {
-        const selected = reviewStore.state.value.currentFileId;
+        const selected = session.review.files.find(file => file.id === reviewStore.state.value.currentFileId)?.id ?? null;
         reviewStore.actions.update({ ...session.review, currentFileId: selected });
         if (selected === null) reviewStore.actions.update({ currentFileId: visibleFileOrder.value.at(0) ?? session.review.files.at(-1)?.id ?? null });
+        reviewLoadState.value = { key, status: session.status, error: session.error };
       } else aiStore.actions.update({ fileNotes: session.ai.fileNotes, guidedNotes: session.ai.guidedNotes, narrativeOrder: session.ai.narrativeOrder, narrativeAnalysis: session.ai.narrativeAnalysis, guidedAnalysis: session.ai.guidedAnalysis });
     };
     void apiCall(ListFilesRespSchema, '/files', { reviewId }).then(data => {
       Object.assign(session.review, data, {
         pluginRendered: new Set(data.pluginRendered ?? []), notedFileIds: new Set(data.notedFileIds ?? []),
       });
+      session.status = 'ready';
       publish('files');
-    }).catch((error: unknown) => { sessions.delete(key); if (current === key) showToast(String(error)); });
+    }).catch((error: unknown) => {
+      session.status = 'error'; session.error = String(error);
+      if (isCurrent()) {
+        reviewLoadState.value = { key, status: 'error', error: session.error };
+        showToast(session.error);
+      }
+    });
     for (const mode of ['narrative', 'guided'] as const) {
       void apiCall(GetAnalysisRespSchema, `/ai/analysis/${mode}`, { reviewId }).then(data => {
         const status = data.status === 'running' || data.status === 'completed' || data.status === 'failed' ? data.status : 'idle';
@@ -106,7 +125,7 @@ export function initReviewSessions(): () => void {
             filePath: score.filePath, position: score.sortOrder, rationale: score.rationale ?? '' }));
         }
         publish('ai');
-        if (live && current === key && status === 'running') resumePolling(mode, {
+        if (isCurrent() && status === 'running') resumePolling(mode, {
           loadResults: mode === 'guided' ? loadGuidedResults : partial => loadAnalysisResults('narrative', partial),
         });
       }).catch(() => { /* Guidance can be absent while the review is first imported. */ });
@@ -115,11 +134,19 @@ export function initReviewSessions(): () => void {
   };
   const stop = effect(() => {
     void workspace.value;
+    const retry = reviewRetry.value;
     queueMicrotask(() => {
       if (!live) return;
       const tab = activeTab();
-      if (tab?.reviewId === null || tab === undefined) return;
+      if (tab === undefined) return;
       const key = sessionKey(tab);
+      if (retry !== lastRetry) {
+        lastRetry = retry;
+        if (sessions.get(key)?.status === 'error') {
+          sessions.delete(key);
+          if (current === key) current = '';
+        }
+      }
       if (key !== current) {
         if (current) {
           const previous = sessions.get(current);
@@ -137,7 +164,7 @@ export function initReviewSessions(): () => void {
           }
           if (session.ai.guidedAnalysis.status === 'running') resumePolling('guided', { loadResults: loadGuidedResults });
         }
-        window.history.replaceState(null, '', `/?reviewId=${encodeURIComponent(tab.reviewId)}`);
+        window.history.replaceState(null, '', tab.reviewId === null ? '/' : `/?reviewId=${encodeURIComponent(tab.reviewId)}`);
         document.dispatchEvent(new Event('glassbox-review-selected'));
       }
       for (const other of workspace.value.tabs) if (other.reviewId !== null) prepare(other);

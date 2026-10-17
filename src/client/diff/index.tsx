@@ -29,7 +29,7 @@ interface DiffContent {
   fileId: string | null;
   filePath: string | null;
   html: string;
-  kind: 'text' | 'image' | 'empty' | 'raw' | 'error';
+  kind: 'text' | 'image' | 'empty' | 'raw' | 'error' | 'loading';
 }
 
 // Shown in the diff pane when a `/file/:id` fetch fails outright (server down /
@@ -129,7 +129,9 @@ function setupFetchEffect(): void {
       return;
     }
 
-    let params = '?reviewId=' + encodeURIComponent(document.body.dataset.reviewId ?? '') + '&mode=' + diffMode + (ignoreWhitespace ? '&ignoreWhitespace=1' : '');
+    diffContentSignal.value = { generation: ++fetchGen, fileId: null, filePath: null,
+      html: '', kind: 'loading' };
+    let params = '?reviewId=' + encodeURIComponent(reviewId) + '&mode=' + diffMode + (ignoreWhitespace ? '&ignoreWhitespace=1' : '');
     if (svgRendered) params += '&view=rendered';
 
     // kerf's resource owns the stale-response guard: only the latest run
@@ -187,6 +189,7 @@ function setupMount(container: HTMLElement, onDiffRendered: (fileId: string | nu
     () => {
       const { html, kind } = diffContentSignal.value;
       if (kind === 'empty') return raw('');
+      if (kind === 'loading') return <div className="pr-loading-state" role="status"><span className="analysis-spinner"></span> Loading file…</div>;
       // eslint-disable-next-line kerfjs/no-raw-with-dynamic-arg -- server-rendered HTML from /file/:id or /file-raw; trusted source
       return <div className="diff-content">{raw(html)}</div>;
     },
@@ -201,6 +204,7 @@ function setupMount(container: HTMLElement, onDiffRendered: (fileId: string | nu
       // depends on.
       onMount: () => {
         const content = diffContentSignal.value;
+        if (content.kind === 'loading') { container.style.display = 'flex'; return; }
         if (content.kind === 'empty') return;
         if (content.kind !== 'raw' && content.fileId === null) return;
         const cached = content.cacheKey === undefined ? undefined : diffCache.get(content.cacheKey);

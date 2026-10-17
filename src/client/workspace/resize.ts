@@ -24,7 +24,7 @@ export function bindDivider(
     panel.style.flexBasis = `${value}px`;
     panel.style.flexGrow = '0';
     panel.style.flexShrink = '0';
-    panel.classList.toggle('compact', axis === 'width' && value <= min + 30);
+    panel.classList.toggle('compact', axis === 'width' && value <= minimum + 30);
     handle.setAttribute('aria-valuenow', String(Math.round(value)));
     handle.setAttribute('aria-valuemin', String(Math.ceil(minimum)));
   };

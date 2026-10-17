@@ -14,7 +14,7 @@ import { openExternalUrl } from '../tauri.js';
 import { showToast } from '../toast.js';
 import { createCommentNavigator } from './commentNavigation.js';
 import { bindDivider } from './resize.js';
-import { activeTab, addingPull, mutate, refreshWorkspace, workspace } from './state.js';
+import { activeReviewReady, activeTab, addingPull, mutate, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads, threadHtml } from './threads.js';
 
 function lifecycle(tab: PullTab): string {
@@ -41,10 +41,9 @@ function tabList() {
             data-key={tab.key}
             title={title(tab)}
           >
-            <span className="pr-status-dot"></span>
+            <span className={`pr-status-dot ${tab.loading ? 'analysis-spinner' : ''}`}></span>
             <span className="pr-tab-number">#{tab.ref.number}</span>
             <span className="pr-tab-title">{title(tab)}</span>
-            {tab.loading && <span className="pr-loading">…</span>}
           </button>
         ))}
       </div>
@@ -203,7 +202,9 @@ export function initWorkspace(): void {
   );
   body.prepend(rail, railDivider);
   mount(rail, tabList);
-  bindDivider(railDivider, rail, 'width', 'glassbox.tabsWidth', 100, 100);
+  // Hidden absolute labels remain measurable when the rail shows full titles.
+  bindDivider(railDivider, rail, 'width', 'glassbox.tabsWidth', 40, 40, () =>
+    Math.ceil(Math.max(0, ...[...rail.querySelectorAll('.pr-tab-number')].map(label => label.getBoundingClientRect().width))) + 27);
   const headerDivider = toElement(
     <div
       className="workspace-divider"
@@ -279,12 +280,24 @@ export function initWorkspace(): void {
     </section>,
   );
   main.append(description);
+  const loading = toElement(<section className="pr-review-loading pr-loading-state" role="status" aria-live="polite"></section>);
+  main.append(loading);
+  mount(loading, () => {
+    const tab = activeTab();
+    const load = reviewLoadState.value;
+    const error = tab?.error ?? (tab && load.key === reviewSessionKey(tab) && load.status === 'error' ? load.error : null);
+    return error !== null
+      ? <span>Couldn’t load this review: {error} <button className="btn" data-workspace="retry">Retry</button></span>
+      : <><span className="analysis-spinner"></span> Loading PR #{tab?.ref.number}…</>;
+  });
   body.append(add);
   let mountedHeader = false;
   effect(() => {
     const tab = activeTab();
     const adding = addingPull.value || workspace.value.tabs.length === 0;
     saveDiffScroll();
+    // Gate visibility synchronously, before the selected session is restored.
+    document.body.dataset.reviewPending = String(tab !== undefined && !activeReviewReady());
     document.body.dataset.workspaceView = adding ? 'add' : (tab?.view ?? 'file');
     if (tab?.view === 'file' && !adding) restoreDiffScroll();
     if (tab && !mountedHeader) {
@@ -431,6 +444,10 @@ export function initWorkspace(): void {
       addingPull.value = true;
       add.querySelector('input')?.focus();
     } else if (action === 'load') void loadPullInput(add);
+    else if (action === 'retry' && tab) {
+      reviewRetry.value++;
+      if (tab.reviewId === null) void mutate({ op: 'refresh', key: tab.key });
+    }
     else if (action === 'settings')
       void import('../settings/dialog.js').then((m) => {
         m.showSettingsDialog();
@@ -588,15 +605,18 @@ function bindWorkspaceKeys(): void {
       event.preventDefault();
       if (tab)
         void mutate({ op: 'refresh', key: tab.key })
-          .then(() => activeTab()?.key === tab.key ? loadFiles() : undefined)
+          .then(() => activeTab()?.key === tab.key && activeReviewReady() ? loadFiles() : undefined)
           .then(() => {
-            if (activeTab()?.key === tab.key) invalidateDiffCache();
+            if (activeTab()?.key === tab.key) {
+              reviewRetry.value++;
+              if (activeReviewReady()) invalidateDiffCache();
+            }
           });
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (!tab?.info) return;
+      if (!tab?.info || !activeReviewReady()) return;
       const line = hovered?.closest<HTMLElement>('.diff-line');
       const row = hovered?.closest<HTMLElement>('.file-item');
       const file = row
@@ -632,7 +652,7 @@ function bindWorkspaceKeys(): void {
       workspace.value = { ...workspace.value };
       void mutate({ op: 'view', key: tab.key, view: tab.view });
     }
-    if ((event.key === 'c' || event.key === 'v' || event.key === 'C') && tab?.view === 'file') {
+    if ((event.key === 'c' || event.key === 'v' || event.key === 'C') && tab?.view === 'file' && activeReviewReady()) {
       event.preventDefault();
       const direction = event.key === 'c' ? 1 : -1;
       void navigateComment(direction);

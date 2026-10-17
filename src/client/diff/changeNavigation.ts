@@ -68,7 +68,7 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
   }
 
   document.addEventListener('keydown', event => {
-    if (!['Tab', 'f', 'g'].includes(event.key) || document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add' || event.defaultPrevented || event.isComposing
+    if (!['Tab', 'f', 'g'].includes(event.key) || document.body.dataset.reviewPending === 'true' || document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add' || event.defaultPrevented || event.isComposing
       || event.ctrlKey || event.metaKey || event.altKey) return;
     if (document.activeElement?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
     if ([...document.querySelectorAll<HTMLElement>('.modal, [role="dialog"]')]

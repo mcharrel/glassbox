@@ -11,6 +11,16 @@ import { showToast } from '../toast.js';
 
 export const workspace = signal<Workspace>({ tabs: [], active: null });
 export const addingPull = signal(false);
+export const reviewRetry = signal(0);
+export const reviewSessionKey = (tab: PullTab): string => `${tab.key}:${tab.reviewId ?? ''}:${tab.reviewedBase}:${tab.reviewedHead}`;
+export const reviewLoadState = signal<{ key: string; status: 'loading' | 'ready' | 'error'; error: string | null }>({
+  key: '', status: 'loading', error: null,
+});
+export function activeReviewReady(): boolean {
+  const tab = activeTab();
+  return tab !== undefined && tab.reviewId !== null && reviewLoadState.value.key === reviewSessionKey(tab)
+    && reviewLoadState.value.status === 'ready';
+}
 let mutationVersion = 0;
 function receive(state: Workspace, preserveSelection: boolean): void {
   const local = workspace.value;

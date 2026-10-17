@@ -17,6 +17,7 @@ import { selectFile } from './selection.js';
  *  (GB-1087) — so the module carries no live UI state of its own. */
 interface FindController {
   show(): void;
+  toggleFocus(): void;
   hide(): void;
   goToMatch(direction: number): void;
   isOpen(): boolean;
@@ -40,7 +41,7 @@ export function bindFind() {
     // Cmd/Ctrl+F: open find bar
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
       e.preventDefault();
-      (controller ??= createFindController()).show();
+      (controller ??= createFindController()).toggleFocus();
       return;
     }
     if (controller === null || !controller.isOpen()) return;
@@ -194,7 +195,7 @@ function createFindController(): FindController {
     const version = ++searchVersion;
     clearTimeout(searchTimer);
     globalHits = []; globalMatch = -1; pendingHit = null;
-    if (!currentQuery) return;
+    if (!currentQuery || document.body.dataset.reviewPending === 'true') return;
     const query = currentQuery;
     searchTimer = setTimeout(() => {
       void searchReview(query).then(hits => {
@@ -267,6 +268,14 @@ function createFindController(): FindController {
   }
 
   return {
+    toggleFocus(): void {
+      if (document.activeElement === findInput) focusDiff();
+      else {
+        findBar.style.display = 'flex';
+        findInput?.focus();
+        findInput?.select();
+      }
+    },
     show(): void {
       findBar.style.display = 'flex';
       findInput?.focus();
@@ -424,4 +433,3 @@ function activateMatch(index: number, scroll = true) {
   marks.forEach(el => { el.classList.add(ACTIVE_HIGHLIGHT_CLASS); });
   if (scroll) marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
-
