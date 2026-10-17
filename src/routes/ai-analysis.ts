@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { executeAnalysis, markAnalysisCanceled } from '../ai/analysis-pipeline.js';
 import { loadAIConfig, loadGuidedReviewConfig } from '../ai/config.js';
+import { freshReview } from '../ai/fresh-review.js';
 import { KEYLESS_PLATFORMS } from '../ai/models.js';
 import {
   AnalysisTypeSchema,
@@ -25,6 +26,10 @@ import { errorResponse, parseBody } from '../utils/parseBody.js';
 import { resolveReviewId } from '../utils/resolveReviewId.js';
 
 export const aiAnalysisRoutes = new Hono<AppEnv>();
+aiAnalysisRoutes.post('/fresh-review', async c => {
+  try { return c.json(await freshReview(resolveReviewId(c), c.get('repoRoot'))); }
+  catch (error) { return errorResponse(c, error instanceof Error ? error.message : 'Unable to start review', 400); }
+});
 
 /** How long a still-`running` analysis row is reused before it's treated as
  *  stale (the worker presumably died) and a fresh run is started. */

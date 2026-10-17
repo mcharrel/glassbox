@@ -22,7 +22,7 @@ Requirements for the browser-based UI and user interaction patterns.
 - When the selected file changes (via keyboard navigation, click, or any other means), the sidebar shall auto-scroll (without animation) the minimum amount needed to keep the selected file visible.
 - File rows in Reading order and Risk mode shall show only the filename; the full path remains in the hover title for disambiguation.
 - The sidebar shall display annotation count badges per file.
-- Beside the annotation count, a diff-icon badge shows the number of distinct text change blocks, using the same grouping as change navigation. Adjacent removals and additions count together; context and hunk boundaries separate blocks. Files with no known text changes omit the badge.
+- Beside the annotation count, a number-only badge shows the number of distinct text change blocks, using the same grouping as change navigation. Adjacent removals and additions count together; context and hunk boundaries separate blocks. Files with no known text changes omit the badge.
 - The sidebar shall display stale annotation count indicators per file.
 
 ### 8.3 Sort Modes
@@ -71,7 +71,7 @@ Requirements for the browser-based UI and user interaction patterns.
 - `Escape` shall close modals and annotation forms.
 - `j`/`k` shall navigate between files in the sidebar.
 - `Tab` / `Shift+Tab` shall reveal the next / previous change not yet fully visible in that direction, using the code viewport below sticky headers. Fully visible changes are skipped. Jumps show ideally five lines of context before the change (after it when moving backward), reduced when needed to fit the whole change. Changes taller than the viewport are read a page at a time with ten lines of overlap; very small windows reduce overlap enough to keep advancing. After the final page, navigation continues to the next / previous file in the complete Reading order, including previously hidden files when going backward, stopping at the ends of the review. It waits for the destination to render; repeated Tab presses during loading do not skip files. Files without changed blocks are visited once. Geometry is remeasured after manual scrolling, resizing, or changing diff mode. Inputs, editable content, and visible dialogs retain normal Tab behavior; modified Tab shortcuts are untouched.
-- `Cmd/Ctrl+F` shall open the find-in-diff bar (see FR-4.7 in `4-diff-viewing.md`) — **Tauri desktop app only**. In a regular browser, `Cmd/Ctrl+F` is left to the browser's own native find so the bar is not bound there.
+- `Cmd/Ctrl+F` shall toggle focus between the review search bar and code while preserving matches. Desktop menu and keyboard events are deduplicated; a failed native listener cannot disable the shortcut.
 - `Cmd+Click` (macOS) / `Ctrl+Click` (Windows/Linux) on a symbol in the diff shall navigate to its definition — same file (scrolls) or different file in the review (switches file and scrolls). Uses the existing regex-based outline parser to build a cross-file symbol index.
 
 ### 8.7 Completion Modal
@@ -100,4 +100,6 @@ The personal fork adds a PR tab rail, a Main view with description/reviewers/che
 
 The personal workspace retains loaded reviews and rendered files in memory across PR tab switches, without page navigation or refetching unchanged data. Divider preferences survive both switches and hidden sections; header resizing respects the full content height. GUIDE and LEARN share one scroll area without an internal divider.
 
-The compact PR rail's minimum follows the rendered ID text plus its status dot and padding. A second Cmd/Ctrl+F returns focus to the file without closing search or resetting the match. A pending PR import clears the previous session and hides file content, file names, and guidance until the selected PR's own file list loads; an explicit indicator is shown in File view. Cold file loads also replace the previous diff with an indicator. Failed file lists offer Retry without discarding other cached PR sessions.
+The compact PR rail's minimum follows the rendered ID text plus small padding, without a hashtag or status dot. A second Cmd/Ctrl+F returns focus to the file without closing search or resetting the match. A pending PR import clears the previous session and hides file content, file names, and guidance until the selected PR's own file list loads; an explicit indicator is shown in File view. Cold file loads also replace the previous diff with an indicator. Failed file lists offer Retry without discarding other cached PR sessions.
+
+Personal workflow polish: place + directly after the PR tabs; use thin dividers that widen on hover/focus. Only own PR titles can be edited, with the same font and immediate exit on blur. Show “You reviewed all the files, congrats!” after every file is hidden by review navigation. Desktop notifications are suppressed while any Glassbox client is visible and focused.

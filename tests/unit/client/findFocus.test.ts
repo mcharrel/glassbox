@@ -11,9 +11,9 @@ afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => vi.resetModules());
 
 describe('find focus shortcut', () => {
-  it.each([['metaKey', false], ['ctrlKey', false], ['metaKey', true], ['ctrlKey', true]] as const)('toggles %s+F (native menu: %s) without clearing the query', async (modifier, desktop) => {
+  it.each([['metaKey', 'browser'], ['ctrlKey', 'browser'], ['metaKey', 'paired'], ['ctrlKey', 'paired'], ['metaKey', 'menu-first'], ['metaKey', 'menu-only'], ['metaKey', 'listener-failed']] as const)('toggles %s+F (native menu: %s) without clearing the query', async (modifier, desktop) => {
     let menuFind: (() => void) | undefined;
-    native.get.mockReturnValue(desktop ? { event: { listen: (_name: string, callback: () => void) => { menuFind = callback; } } } : undefined);
+    native.get.mockReturnValue(desktop !== 'browser' ? { event: { listen: (_name: string, callback: () => void) => { menuFind = callback; return desktop === 'listener-failed' ? Promise.reject(new Error('IPC unavailable')) : undefined; } } } : undefined);
     const listeners = new Map<string, (event: unknown) => void>();
     const page = { activeElement: null as unknown, body: { dataset: {} },
       addEventListener: (name: string, fn: (event: unknown) => void) => listeners.set(name, fn),
@@ -28,9 +28,9 @@ describe('find focus shortcut', () => {
     const { bindFind } = await import('../../../src/client/diff/find.js');
     bindFind();
     const key = () => {
-      const before = page.activeElement;
-      listeners.get('keydown')?.({ key: 'f', [modifier]: true, preventDefault() {} });
-      if (desktop) { expect(page.activeElement).toBe(before); menuFind?.(); }
+      if (desktop === 'menu-first' || desktop === 'menu-only') menuFind?.();
+      if (desktop !== 'menu-only') listeners.get('keydown')?.({ key: 'f', [modifier]: true, preventDefault() {} });
+      if (desktop === 'paired') menuFind?.();
     };
     key(); expect(page.activeElement).toBe(input);
     input.value = 'rewriteFragmentIdKeys';

@@ -5,7 +5,7 @@
  */
 import { getAnalysis } from '../api/index.js';
 import type { AnalysisHooks } from './analysisEngine.js';
-import { stopPolling, triggerAnalysisFor } from './analysisEngine.js';
+import { pollingGeneration, stopPolling, triggerAnalysisFor } from './analysisEngine.js';
 import { clientLog } from './api.js';
 import { aiStore, reviewStore } from './stores/index.js';
 
@@ -21,8 +21,9 @@ export function triggerGuidedAnalysis(invalidateCache: boolean = false) {
 
 export async function loadGuidedResults(partial: boolean) {
   const reviewId = reviewStore.state.value.reviewId;
+  const generation = pollingGeneration('guided');
   const data = await getAnalysis({ type: 'guided' });
-  if (reviewStore.state.value.reviewId !== reviewId) return;
+  if (reviewStore.state.value.reviewId !== reviewId || generation !== pollingGeneration('guided')) return;
 
   clientLog(`loadGuidedResults(partial=${String(partial)}): ${String(data.scores.length)} entries`);
 

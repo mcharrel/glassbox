@@ -12,14 +12,26 @@ import { githubToken } from './github.js';
 import { workspaceData } from './storage.js';
 
 const exec = promisify(execFile);
+const fetches = new Map<string, Promise<string>>();
+export async function gitAuthEnv(tab: Pick<PullTab, 'ref'>): Promise<NodeJS.ProcessEnv> {
+  const token = await githubToken(tab.ref);
+  return { ...process.env, GIT_TERMINAL_PROMPT: '0',
+    GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}` };
+}
 export async function gitAsync(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
-  const { stdout } = await exec('git', args, {
-    cwd,
-    env: env ?? process.env,
-    timeout: 180000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return stdout;
+  const run = async () => {
+    const { stdout } = await exec('git', args, {
+      cwd, env: env ?? process.env, timeout: 180000, maxBuffer: 64 * 1024 * 1024,
+    });
+    return stdout;
+  };
+  if (args[0] !== 'fetch') return run();
+  // Imports sharing an object store must not race Git's shallow/FETCH_HEAD locks.
+  const pending = (fetches.get(cwd) ?? Promise.resolve()).catch(() => {}).then(run);
+  fetches.set(cwd, pending);
+  try { return await pending; }
+  finally { if (fetches.get(cwd) === pending) fetches.delete(cwd); }
 }
 /** Import into a dedicated checkout; never switch the user's existing working tree. */
 export async function importPull(tab: PullTab): Promise<void> {
@@ -50,27 +62,28 @@ export async function importPull(tab: PullTab): Promise<void> {
     ).trim();
     await writeFile(join(root, '.git', 'objects', 'info', 'alternates'), `${await realpath(objects)}\n`);
   }
-  const token = await githubToken(tab.ref);
-  // Credentials remain in the child environment, never in args, remotes or persisted config.
-  const env = {
-    ...process.env,
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
-  };
-  await gitAsync(
+  const env = await gitAuthEnv(tab);
+  const available = await Promise.all([info.baseRefOid, info.headRefOid].map(sha =>
+    gitAsync(['cat-file', '-e', `${sha}^{commit}`], root).then(() => true, () => false)));
+  // Fetch through an existing checkout so Git can negotiate its known history.
+  const fetchRoot = source ?? root;
+  if (!available.every(Boolean)) await gitAsync(
     [
       'fetch',
       '--no-tags',
-      '--depth=100',
+      ...(fetchRoot === root ? ['--depth=100'] : []),
       `https://github.com/${tab.ref.owner}/${tab.ref.repo}.git`,
-      info.baseRefOid,
-      info.headRefOid,
+      // Keep borrowed commits reachable when the shared object store runs GC.
+      ...[...new Set([info.baseRefOid, info.headRefOid])].map(sha => `${sha}:refs/glassbox/cache/${sha}`),
     ],
-    root,
+    fetchRoot,
     env,
   );
+  if (fetchRoot !== root) {
+    const shallow = (await gitAsync(['rev-parse', '--path-format=absolute', '--git-path', 'shallow'], fetchRoot)).trim();
+    try { await writeFile(join(root, '.git', 'shallow'), await readFile(shallow)); }
+    catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+  }
   const dirty = await gitAsync(['status', '--porcelain'], root);
   if (dirty.trim()) throw new Error('The managed checkout has local changes; they were preserved.');
   await gitAsync(['checkout', '--detach', info.headRefOid], root);

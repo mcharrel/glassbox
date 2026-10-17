@@ -16,6 +16,7 @@ vi.stubGlobal('document', { body: { dataset: {} } });
 
 vi.mock('../../../src/client/analysisEngine.js', () => ({
   stopPolling: vi.fn(() => 0),
+  pollingGeneration: vi.fn(() => 0),
   resumePolling: vi.fn(),
   triggerAnalysisFor: vi.fn(),
 }));

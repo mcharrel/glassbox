@@ -1,4 +1,5 @@
 import { batch, effect } from 'kerfjs';
+import { z } from 'zod';
 
 import { apiCall } from '../../api/_runner.js';
 import { GetAnalysisRespSchema, ListFilesRespSchema } from '../../api/index.js';
@@ -29,6 +30,19 @@ const sessionKey = reviewSessionKey;
 export function initReviewSessions(): () => void {
   let live = true;
   const sessions = new Map<string, Session>();
+  const analysisVersions = new Map<string, number>();
+  const resetAnalysis = (event: Event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const parsed = z.object({ reviewId: z.string(), types: z.array(z.enum(['narrative', 'guided'])) }).safeParse(event.detail);
+    if (!parsed.success) return;
+    analysisVersions.set(parsed.data.reviewId, (analysisVersions.get(parsed.data.reviewId) ?? 0) + 1);
+    for (const session of sessions.values()) if (session.review.reviewId === parsed.data.reviewId) {
+      session.ai = { ...session.ai, fileNotes: {}, guidedNotes: {}, narrativeOrder: null, riskScores: null,
+        riskAnalysis: defaultAnalysisModeState(), narrativeAnalysis: defaultAnalysisModeState(), guidedAnalysis: defaultAnalysisModeState() };
+      for (const mode of parsed.data.types) session.ai[mode === 'guided' ? 'guidedAnalysis' : 'narrativeAnalysis'].status = 'running';
+    }
+  };
+  document.addEventListener('glassbox-analysis-reset', resetAnalysis);
   let current = '';
   let usedInitial = false;
   let lastRetry = reviewRetry.peek();
@@ -113,8 +127,10 @@ export function initReviewSessions(): () => void {
         showToast(session.error);
       }
     });
+    const analysisVersion = analysisVersions.get(reviewId) ?? 0;
     for (const mode of ['narrative', 'guided'] as const) {
       void apiCall(GetAnalysisRespSchema, `/ai/analysis/${mode}`, { reviewId }).then(data => {
+        if (!live || analysisVersion !== (analysisVersions.get(reviewId) ?? 0)) return;
         const status = data.status === 'running' || data.status === 'completed' || data.status === 'failed' ? data.status : 'idle';
         session.ai[mode === 'guided' ? 'guidedAnalysis' : 'narrativeAnalysis'] = { ...defaultAnalysisModeState(), status };
         const notes = Object.fromEntries(data.scores.flatMap(score => score.notes === null ? [] : [[score.reviewFileId, score.notes]]));
@@ -170,5 +186,5 @@ export function initReviewSessions(): () => void {
       for (const other of workspace.value.tabs) if (other.reviewId !== null) prepare(other);
     });
   });
-  return () => { live = false; stop(); };
+  return () => { live = false; stop(); document.removeEventListener('glassbox-analysis-reset', resetAnalysis); };
 }

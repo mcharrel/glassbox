@@ -5,6 +5,7 @@ import { runAppleFoundationInfer } from './apple-foundation.js';
 import type { AIConfig } from './config.js';
 import { DEFAULT_LOCAL_ENDPOINT } from './config.js';
 import { KEYLESS_PLATFORMS } from './models.js';
+import { type ReasoningEffort, selectedReasoning } from './options.js';
 import { CHARS_PER_TOKEN } from './token-budget.js';
 
 export interface AIMessage {
@@ -108,7 +109,7 @@ export async function sendAIRequest(
       response = await sendAnthropicRequest(requireKey(config), config.model, systemPrompt, messages);
       break;
     case 'openai':
-      response = await sendOpenAIRequest(requireKey(config), config.model, systemPrompt, messages);
+      response = await sendOpenAIRequest(requireKey(config), config.model, systemPrompt, messages, config.reasoningEffort);
       break;
     case 'google':
       response = await sendGoogleRequest(requireKey(config), config.model, systemPrompt, messages);
@@ -172,10 +173,11 @@ async function sendOpenAIRequest(
   model: string,
   systemPrompt: string,
   messages: AIMessage[],
+  reasoningEffort: ReasoningEffort = 'default',
 ): Promise<AIResponse> {
   // GPT-5.5 Pro and its snapshots require Responses rather than Chat Completions.
-  if (/^gpt-5\.5-pro(?:-\d{4}-\d{2}-\d{2})?$/.test(model)) {
-    return sendOpenAIResponsesRequest(apiKey, model, systemPrompt, messages);
+  if (/^gpt-5\.5(?:-pro)?(?:-\d{4}-\d{2}-\d{2})?$/.test(model)) {
+    return sendOpenAIResponsesRequest(apiKey, model, systemPrompt, messages, reasoningEffort);
   }
   const oaiMessages = [
     { role: 'system' as const, content: systemPrompt },
@@ -212,11 +214,14 @@ async function sendOpenAIResponsesRequest(
   model: string,
   systemPrompt: string,
   messages: AIMessage[],
+  reasoningEffort: ReasoningEffort,
 ): Promise<AIResponse> {
+  const effort = selectedReasoning('openai', model, reasoningEffort);
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({ model, instructions: systemPrompt, input: messages,
+      ...(effort === 'default' ? {} : { reasoning: { effort } }),
       max_output_tokens: MAX_OUTPUT_TOKENS, store: false }),
   });
   await throwIfNotOk(response, 'OpenAI API error');

@@ -6,6 +6,7 @@
 import { z } from 'zod';
 
 import { AIModelSchema, AIPlatformSchema } from '../ai/models.js';
+import { AgentAccessSchema, ReasoningEffortSchema } from '../ai/options.js';
 import { apiCall, OkResponseSchema, qs } from './_runner.js';
 
 export { AIModelSchema, AIPlatformSchema };
@@ -26,6 +27,8 @@ export const GuidedReviewConfigShapeSchema = z.object({
 export type GuidedReviewConfigShape = z.infer<typeof GuidedReviewConfigShapeSchema>;
 
 export const AIConfigRespSchema = z.object({
+  reasoningEffort: ReasoningEffortSchema.default('default'),
+  agentAccess: AgentAccessSchema.default('push'),
   platform: AIPlatformSchema,
   model: z.string(),
   keyConfigured: z.boolean(),
@@ -41,6 +44,8 @@ export const AIConfigRespSchema = z.object({
 export type AIConfigResp = z.infer<typeof AIConfigRespSchema>;
 
 export const SaveAIConfigReqSchema = z.object({
+  reasoningEffort: ReasoningEffortSchema.optional(),
+  agentAccess: AgentAccessSchema.optional(),
   platform: AIPlatformSchema,
   model: z.string().min(1),
   localEndpoint: z.string().optional(),

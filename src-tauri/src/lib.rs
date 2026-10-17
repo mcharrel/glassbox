@@ -9,7 +9,7 @@ use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
 // importing it unconditionally trips `-D unused-imports` on Linux/Windows.
 #[cfg(target_os = "macos")]
 use tauri::menu::PredefinedMenuItem;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::process::CommandEvent;
@@ -579,7 +579,10 @@ pub fn run() {
             let handle = app_handle.clone();
             app.on_menu_event(move |_app, event| {
                 if event.id().0 == "find" {
-                    let _ = handle.emit("menu-find", ());
+                    // Deliver directly to the webview, independent of localhost IPC permissions.
+                    if let Some(window) = handle.get_webview_window("main") {
+                        let _ = window.eval("document.dispatchEvent(new Event('glassbox-find'))");
+                    }
                 }
             });
 

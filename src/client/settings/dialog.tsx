@@ -3,6 +3,7 @@ import { delegate, signal } from 'kerfjs';
 import { confirm, overlay } from 'kerfjs/overlay';
 import { debounce } from 'kerfjs/timing';
 
+import { AgentAccessSchema, ReasoningEffortSchema, selectedReasoning } from '../../ai/options.js';
 import type { DatabaseBackup, ListBackupsResp } from '../../api/db-backups.js';
 import { deleteDatabaseBackup as rawDeleteDatabaseBackup, listDatabaseBackups, revealDatabaseBackup } from '../../api/db-backups.js';
 import type { DifftoolStatusResp } from '../../api/index.js';
@@ -49,6 +50,8 @@ interface SettingsUIState {
   activeTab: string;
   currentPlatform: string;
   currentModel: string;
+  reasoningEffort: TabContext['reasoningEffort'];
+  agentAccess: TabContext['agentAccess'];
   // Apple-FM fallback selection (empty string = none).
   fallbackPlatform: string;
   fallbackModel: string;
@@ -255,6 +258,8 @@ function renderSettingsModal(
     activeTab: 'general',
     currentPlatform: configData.platform,
     currentModel: configData.model,
+    reasoningEffort: configData.reasoningEffort,
+    agentAccess: configData.agentAccess,
     fallbackPlatform: configData.fallbackPlatform ?? '',
     fallbackModel: configData.fallbackModel ?? '',
     localEndpoint: configData.localEndpoint,
@@ -405,6 +410,8 @@ function createActions(deps: ActionDeps): Actions {
         await saveAIConfig({
           platform: asPlatform(cur.currentPlatform),
           model: cur.currentModel,
+          reasoningEffort: selectedReasoning(cur.currentPlatform, cur.currentModel, cur.reasoningEffort),
+          agentAccess: cur.agentAccess,
           localEndpoint: cur.localEndpoint,
           guidedReview: { enabled: cur.guidedEnabled, topics: newTopics },
           // Only send the fallback while Apple is the primary — otherwise omit
@@ -611,6 +618,8 @@ function buildContext(args: {
     isTauri: args.isTauri,
     currentPlatform: cur.currentPlatform,
     currentModel: cur.currentModel,
+    reasoningEffort: cur.reasoningEffort,
+    agentAccess: cur.agentAccess,
     fallbackPlatform: cur.fallbackPlatform,
     fallbackModel: cur.fallbackModel,
     localEndpoint: cur.localEndpoint,
@@ -787,6 +796,14 @@ function setupDelegates(args: {
   });
   void delegate(overlay, 'change', '#settings-model', (_e, sel) => {
     setUi({ currentModel: asSelect(sel).value });
+    actions.saveConfig();
+  });
+  void delegate(overlay, 'change', '#settings-reasoning', (_e, sel) => {
+    setUi({ reasoningEffort: ReasoningEffortSchema.parse(asSelect(sel).value) });
+    actions.saveConfig();
+  });
+  void delegate(overlay, 'change', '#settings-agent-access', (_e, sel) => {
+    setUi({ agentAccess: AgentAccessSchema.parse(asSelect(sel).value) });
     actions.saveConfig();
   });
   void delegate(overlay, 'change', '#settings-local-endpoint', (_e, input) => {

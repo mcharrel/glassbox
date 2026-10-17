@@ -89,6 +89,15 @@ describe('sidebar guidance', () => {
 });
 
 describe('sidebar order agrees with keyboard navigation', () => {
+  it('congratulates only after all loaded files are reviewed, not while loading or filtering', () => {
+    reviewStore.actions.update({ hiddenFileIds: new Set(files.map(file => file.id)) });
+    expect(fileListJsx().toString()).toContain('You reviewed all the files, congrats!');
+    reviewStore.actions.update({ hiddenFileIds: new Set([files[0].id]), filterText: 'missing' });
+    expect(fileListJsx().toString()).not.toContain('congrats');
+    reviewStore.actions.update({ files: [] });
+    expect(fileListJsx().toString()).not.toContain('congrats');
+    reviewStore.actions.update({ hiddenFileIds: new Set() });
+  });
   it.each(['narrative', 'risk', 'folder'] as const)('keeps change and comment counts separate in %s, including after a PR switch', sortMode => {
     const diff = parseDiff('diff --git a/z.go b/z.go\n--- a/z.go\n+++ b/z.go\n@@ -1,3 +1,3 @@\n-old\n+new\n same\n-old again\n+new again\n')[0];
     reviewStore.actions.update({ files: files.map(file => ({ ...file, diff_data: JSON.stringify(diff) })), annotationCounts: { 'src/z.go': 7 } });

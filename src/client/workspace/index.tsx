@@ -1,6 +1,6 @@
 import { delegate, effect, mount } from 'kerfjs';
 
-import { type PullTab, reviewerStates } from '../../api/workspace.js';
+import { type PullTab, reportVisibility, reviewerStates } from '../../api/workspace.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
 import { IconGear, IconX } from '../../icons.js';
 import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
@@ -13,6 +13,7 @@ import { reviewStore } from '../stores/index.js';
 import { openExternalUrl } from '../tauri.js';
 import { showToast } from '../toast.js';
 import { createCommentNavigator } from './commentNavigation.js';
+import { startFreshReview } from './freshReview.js';
 import { bindDivider } from './resize.js';
 import { activeReviewReady, activeTab, addingPull, mutate, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads, threadHtml } from './threads.js';
@@ -41,15 +42,14 @@ function tabList() {
             data-key={tab.key}
             title={title(tab)}
           >
-            <span className={`pr-status-dot ${tab.loading ? 'analysis-spinner' : ''}`}></span>
-            <span className="pr-tab-number">#{tab.ref.number}</span>
+            <span className="pr-tab-number">{tab.ref.number}</span>
             <span className="pr-tab-title">{title(tab)}</span>
           </button>
         ))}
-      </div>
       <button className="pr-add" data-workspace="add" title="Add PR">
         +
       </button>
+      </div>
     </>
   );
 }
@@ -85,7 +85,7 @@ function header(tab: PullTab) {
   return (
     <>
       <div className="pr-heading">
-        <h2 data-workspace="title" title="Click to edit PR title">
+        <h2 data-workspace={own ? 'title' : undefined} title={own ? 'Click to edit PR title' : undefined}>
           {title(tab)}
         </h2>
         <button className="btn btn-xs" data-workspace="settings" title="Settings">
@@ -185,6 +185,14 @@ function switchTo(tab: PullTab): void {
   void mutate({ op: 'select', key: tab.key });
 }
 export function initWorkspace(): void {
+  const clientId = crypto.randomUUID();
+  const visibility = () => { void reportVisibility({ id: clientId,
+    visible: document.visibilityState === 'visible' && document.hasFocus() }).catch(() => {}); };
+  document.addEventListener('visibilitychange', visibility);
+  window.addEventListener('focus', visibility);
+  window.addEventListener('blur', visibility);
+  setInterval(visibility, 10000);
+  visibility();
   const body = document.querySelector('.review-body');
   const sidebar = document.querySelector<HTMLElement>('.sidebar');
   const main = document.querySelector('.main-content');
@@ -203,8 +211,8 @@ export function initWorkspace(): void {
   body.prepend(rail, railDivider);
   mount(rail, tabList);
   // Hidden absolute labels remain measurable when the rail shows full titles.
-  bindDivider(railDivider, rail, 'width', 'glassbox.tabsWidth', 40, 40, () =>
-    Math.ceil(Math.max(0, ...[...rail.querySelectorAll('.pr-tab-number')].map(label => label.getBoundingClientRect().width))) + 27);
+  bindDivider(railDivider, rail, 'width', 'glassbox.tabsWidth', 24, 24, () =>
+    Math.ceil(Math.max(0, ...[...rail.querySelectorAll('.pr-tab-number')].map(label => label.getBoundingClientRect().width))) + 16);
   const headerDivider = toElement(
     <div
       className="workspace-divider"
@@ -393,8 +401,9 @@ export function initWorkspace(): void {
     });
   });
   const editTitle = (tab: PullTab, target: Element | null = oldHeader.querySelector('h2')) => {
+    if (!tab.info || tab.info.author.login !== tab.viewer || !target) return;
     const input = asInput(toElement(<input className="pr-title-input" value={title(tab)} />));
-    if (!target) return;
+    input.style.font = getComputedStyle(target).font;
     target.replaceWith(input);
     input.focus();
     input.select();
@@ -402,8 +411,11 @@ export function initWorkspace(): void {
     const save = async () => {
       if (saving) return;
       saving = true;
-      if (input.value.trim() && input.value !== title(tab))
-        await mutate({ op: 'edit', key: tab.key, title: input.value });
+      const value = input.value.trim();
+      input.replaceWith(target);
+      if (value && value !== title(tab))
+        await mutate({ op: 'edit', key: tab.key, title: value });
+      target.textContent = title(workspace.value.tabs.find(t => t.key === tab.key) ?? tab);
       workspace.value = { ...workspace.value };
     };
     input.addEventListener('blur', () => {
@@ -416,6 +428,7 @@ export function initWorkspace(): void {
       } else if (e.key === 'Escape') {
         e.preventDefault();
         saving = true;
+        input.replaceWith(target);
         workspace.value = { ...workspace.value };
       }
     });
@@ -585,6 +598,7 @@ function bindTabReorder(rail: HTMLElement): void {
   window.addEventListener('pointerup', stop);
 }
 function bindWorkspaceKeys(): void {
+  let aiPrefix: { key: string; at: number } | null = null;
   const navigateComment = createCommentNavigator();
   let hovered: Element | null = null;
   document.addEventListener('pointermove', (event) => {
@@ -646,6 +660,12 @@ function bindWorkspaceKeys(): void {
       document.querySelector('dialog[open]')
     )
       return;
+    const fresh = event.key === 'i' && aiPrefix !== null && aiPrefix.key === tab?.key && Date.now() - aiPrefix.at < 1200;
+    aiPrefix = event.key === 'a' && tab && !event.repeat ? { key: tab.key, at: Date.now() } : null;
+    if (fresh && activeReviewReady() && !event.repeat) {
+      event.preventDefault();
+      void startFreshReview();
+    }
     if (event.key === 'r' && tab) {
       event.preventDefault();
       tab.view = tab.view === 'main' ? 'file' : 'main';

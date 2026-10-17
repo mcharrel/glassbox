@@ -6,7 +6,7 @@
  */
 import { getAnalysis, saveAIPreferences } from '../../api/index.js';
 import type { AnalysisHooks } from '../analysisEngine.js';
-import { resumePolling, stopPolling, triggerAnalysisFor } from '../analysisEngine.js';
+import { pollingGeneration, resumePolling, stopPolling, triggerAnalysisFor } from '../analysisEngine.js';
 import { clientLog } from '../api.js';
 import type { SortMode } from '../state.js';
 import { aiStore, getAnalysisModeState,reviewStore } from '../stores/index.js';
@@ -106,8 +106,9 @@ export function invalidateAnalysisCache(): void {
 
 export async function loadAnalysisResults(mode: 'risk' | 'narrative', partial: boolean = false): Promise<void> {
   const reviewId = reviewStore.state.value.reviewId;
+  const generation = pollingGeneration(mode);
   const data = await getAnalysis({ type: mode });
-  if (reviewStore.state.value.reviewId !== reviewId) return;
+  if (reviewStore.state.value.reviewId !== reviewId || generation !== pollingGeneration(mode)) return;
 
   clientLog(`loadAnalysisResults(${mode}, partial=${String(partial)}): status=${data.status}, ${String(data.scores.length)} scores`);
 

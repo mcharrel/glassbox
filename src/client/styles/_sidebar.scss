@@ -407,10 +407,14 @@
 }
 
 .sidebar-notes-resize {
-  height: 5px;
+  position: relative;
+  height: 1px;
   flex-shrink: 0;
   cursor: row-resize;
   background: var(--border);
+  z-index: 2;
+  &::after { content: ''; position: absolute; inset: -2px 0; }
+  &:hover::after, &:focus-visible::after, &.dragging::after { background: var(--accent); }
   &:hover, &:focus-visible, &.dragging { background: var(--accent); }
   &:has(+ .sidebar-ai-notes:empty) { display: none; }
 }

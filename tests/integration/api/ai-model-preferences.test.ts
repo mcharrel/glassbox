@@ -35,3 +35,11 @@ it('preserves the same model when selected as an Apple fallback', async () => {
   expect(saved.status).toBe(200);
   expect(loadAIConfig().fallback).toMatchObject({ platform: 'openai', model: 'gpt-5.5-pro' });
 });
+
+it.each(['read-only', 'local', 'push'])('persists reasoning and %s access across settings reopens and agent loads', async agentAccess => {
+  const saved = await app.request('/api/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ platform: 'openai', model: 'gpt-5.5-pro', reasoningEffort: 'xhigh', agentAccess }) });
+  expect(saved.status).toBe(200);
+  expect(await (await app.request('/api/ai/config')).json()).toMatchObject({ model: 'gpt-5.5-pro', reasoningEffort: 'xhigh', agentAccess });
+  expect(loadAIConfig()).toMatchObject({ model: 'gpt-5.5-pro', reasoningEffort: 'xhigh', agentAccess });
+});

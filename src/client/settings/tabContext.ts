@@ -1,5 +1,6 @@
 import type { SafeHtml } from 'kerfjs';
 
+import type { AgentAccess, ReasoningEffort } from '../../ai/options.js';
 import type { DatabaseBackup } from '../../api/db-backups.js';
 import type {
   DifftoolStatusResp,
@@ -47,6 +48,8 @@ export interface TabContext {
   isTauri: boolean;
   currentPlatform: string;
   currentModel: string;
+  reasoningEffort: ReasoningEffort;
+  agentAccess: AgentAccess;
   // Apple-FM fallback selection (empty string = none). Only surfaced by the
   // Experimental tab when the primary platform is `apple`.
   fallbackPlatform: string;

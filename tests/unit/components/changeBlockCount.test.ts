@@ -37,7 +37,7 @@ describe('file change-block counts', () => {
     expect(anchors.size).toBe(4);
     const list = FileList({ files: [file], annotationCounts: { f: 3 }, staleCounts: {} }).toString();
     expect(list).toContain('class="change-block-count" title="4 change blocks" aria-label="4 change blocks"');
-    expect(list).toContain('</span>4</span>');
+    expect(list).toContain('aria-label="4 change blocks">4</span>');
     expect(list).toContain('class="annotation-count">3</span>');
   });
 

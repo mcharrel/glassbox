@@ -34,13 +34,20 @@ export function bindFind() {
   bindReviewKeys(direction => { controller?.goToMatch(direction); });
   // Use the same review search in desktop and browser windows.
   const nativeFind = getTauriGlobal()?.event;
-
+  let last: { source: 'key' | 'menu'; at: number } | null = null;
+  const toggle = (source: 'key' | 'menu') => {
+    const now = performance.now();
+    // Some webviews deliver both the shortcut and its native menu event.
+    if (last && last.source !== source && now - last.at < 100) { last = null; return; }
+    last = { source, at: now };
+    (controller ??= createFindController()).toggleFocus();
+  };
+  document.addEventListener('glassbox-find', () => { toggle('menu'); });
 
   document.addEventListener('keydown', (e) => {
-    // The desktop menu owns its accelerator; avoid toggling twice for one press.
-    if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
       e.preventDefault();
-      if (nativeFind === undefined) (controller ??= createFindController()).toggleFocus();
+      if (!e.repeat) toggle('key');
       return;
     }
     if (controller === null || !controller.isOpen()) return;
@@ -61,9 +68,8 @@ export function bindFind() {
   }, true);
 
   // Listen for Tauri menu event (Edit > Find)
-  nativeFind?.listen('menu-find', () => {
-    (controller ??= createFindController()).toggleFocus();
-  });
+  // Older shells emit through IPC; a rejected listener must not disable DOM shortcuts.
+  void Promise.resolve(nativeFind?.listen('menu-find', () => { toggle('menu'); })).catch(() => {});
 }
 
 /** Highlight a clicked symbol without taking focus or moving away from its definition. */

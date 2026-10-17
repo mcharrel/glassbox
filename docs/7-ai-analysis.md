@@ -60,7 +60,7 @@ Requirements for optional AI-powered code analysis features.
 ### 7.6 Caching
 
 - Analysis results shall be cached for the duration of the review session.
-- Users shall be able to invalidate the cache and re-run analysis.
+- Users shall be able to invalidate the cache and re-run analysis. In this fork, `a` then `i` replaces GUIDE/LEARN using fresh analysis at most once every five minutes per PR. Old results are removed and late requests cannot restore them; human comments remain.
 - If files are unchanged between analysis runs, previous scores shall be carried forward.
 
 ### 7.7 API Key Management
@@ -85,3 +85,5 @@ Requirements for optional AI-powered code analysis features.
 - The system shall handle AI response parsing errors gracefully (malformed JSON, unexpected schema).
 
 AI prompt context labels each diff row with its original and new source line numbers. Supplemental full-file context also includes explicit new-side line numbers, so deletion rows and summarized gaps do not shift generated note anchors.
+
+Personal comment agents share the guidance model and selected supported reasoning effort. Access modes are Read only, Local edits, and Signed commit & push (default). Publication requires a signed, verified commit, formats touched Go files, checks whitespace, and never force-pushes or overwrites a changed PR head. Failed publication retains local edits. Replies stay brief and readable; project tests are not automatically executed. GPT-5.5 and Pro use Responses with supported reasoning options (Pro: medium/high/xhigh; standard: none/low/medium/high/xhigh).

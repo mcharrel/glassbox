@@ -34,6 +34,8 @@ export const MAX_CONSECUTIVE_POLL_ERRORS = 5;
 // Per-mode poll generation counters — each mode only invalidates its own polls.
 const pollGenerations: Record<AnalysisType, number> = { risk: 0, narrative: 0, guided: 0 };
 
+export function pollingGeneration(type: AnalysisType): number { return pollGenerations[type]; }
+
 /** Invalidate any in-flight poll for the mode (bumps its generation). */
 export function stopPolling(type: AnalysisType): number {
   return ++pollGenerations[type];

@@ -21,6 +21,7 @@ vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
 }));
 import { flushOutbox, insertTab, mutateWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
+import { importPull } from '../../../src/workspace/checkout.js';
 
 function tab(number = 1) {
   return PullTabSchema.parse({
@@ -169,4 +170,24 @@ it('does not delete a comment published while an older remote snapshot is loadin
   resolveComments([]); await sync;
   expect(tab.comments[0].deleted).toBe(false);
   expect(tab.comments[0].body).toBe('New while loading');
+});
+
+it('makes imported files available before slow remote comments finish', async () => {
+  const tab = mocks.data.tabs[0]; tab.reviewId = null;
+  vi.mocked(loadPull).mockResolvedValue({ id: 'pr', author: { login: 'alice' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' } as any);
+  let finish!: (value: any[]) => void;
+  vi.mocked(loadComments).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  vi.mocked(importPull).mockImplementationOnce(async target => { target.reviewId = 'ready'; });
+  const syncing = syncTab(tab);
+  await vi.waitFor(() => expect(tab.reviewId).toBe('ready'));
+  expect(tab.commentsLoaded).toBe(false);
+  expect(mocks.save).toHaveBeenCalled();
+  finish([]); await syncing;
+  expect(tab.commentsLoaded).toBe(true);
+});
+
+it('rejects title edits on another author’s PR before calling GitHub', async () => {
+  const tab = mocks.data.tabs[0]; tab.info = { author: { login: 'bob' } };
+  await expect(mutateWorkspace({ op: 'edit', key: tab.key, title: 'New' }, 'review')).rejects.toThrow('Only the PR author');
+  expect(mocks.github).not.toHaveBeenCalled();
 });

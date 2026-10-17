@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 import { apiCall } from './_runner.js';
 
+export const VisibilitySchema = z.object({ id: z.string().min(1).max(100), visible: z.boolean() });
+export const reportVisibility = (body: z.infer<typeof VisibilitySchema>) =>
+  apiCall(z.object({ ok: z.boolean() }), '/workspace/visibility', { method: 'POST', body });
+
 export const PullRefSchema = z.object({
   owner: z.string(),
   repo: z.string(),

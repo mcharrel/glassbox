@@ -248,6 +248,9 @@ describe('ai-queries', () => {
 
       // Create second analysis (also completed) - should be the one returned
       const a2 = await createAnalysis(review.id, 'risk');
+      await (await getDb()).query("UPDATE ai_analyses SET created_at = created_at - INTERVAL '1 second' WHERE id = $1", [a1.id]);
+      // A fresh run with no results must not resurrect the previous review's notes.
+      expect(await getFileScoresForReview(review.id, 'risk')).toEqual([]);
       await saveFileScores(a2.id, [
         { reviewFileId: file.id, filePath: 'test.ts', sortOrder: 0, aggregateScore: 0.9, rationale: 'new', dimensionScores: null, notes: null },
       ]);

@@ -13,6 +13,11 @@ const completed = {
 };
 
 describe('GPT-5.5 Pro Responses API', () => {
+  it.each([['gpt-5.5-pro', 'medium'], ['gpt-5.5-pro', 'xhigh'], ['gpt-5.5', 'low']] as const)('passes the selected effort to %s', async (model, reasoningEffort) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(completed)));
+    await sendAIRequest({ ...config, model, reasoningEffort }, 'sys', []);
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ model, reasoning: { effort: reasoningEffort } });
+  });
   it.each(['gpt-5.5-pro', 'gpt-5.5-pro-2026-04-23'])('sends %s to Responses and combines text messages after reasoning', async model => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(completed)));
     const messages = [{ role: 'user' as const, content: 'review' }, { role: 'assistant' as const, content: 'previous answer' }, { role: 'user' as const, content: 'repair JSON' }];

@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 import { z } from 'zod';
@@ -33,6 +32,7 @@ import {
   RemoteCommentSchema,
   repoApi,
 } from './github.js';
+import { notify } from './notifications.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 const syncing = new Set<string>();
@@ -68,11 +68,6 @@ export function insertTab(tabs: PullTab[], tab: PullTab): void {
   const index =
     parent >= 0 ? parent + 1 : child >= 0 ? child : own ? 0 : firstOther < 0 ? tabs.length : firstOther;
   tabs.splice(index, 0, tab);
-}
-function notify(title: string, body: string): void {
-  if (process.platform !== 'darwin') return;
-  const script = 'on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run';
-  execFile('osascript', ['-e', script, title, body], { timeout: 5000 }, () => {});
 }
 function notifyChanges(before: PullTab['info'], tab: PullTab): void {
   const after = tab.info;
@@ -118,61 +113,19 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
     tab.error = undefined;
     tab.updatedAt = Date.now();
     saveWorkspace();
-    // Keep comments being published while this remote snapshot is in flight.
-    const pendingIds = new Set(
-      workspaceData()
-        .outbox.filter((item) => item.tab === tab.key)
-        .map((item) => item.message),
-    );
-    const knownRemoteIds = new Set(
-      tab.comments.filter((message) => message.remoteId !== undefined).map((message) => message.remoteId),
-    );
-    const remote = await loadComments(tab);
-    for (const item of workspaceData().outbox) if (item.tab === tab.key) pendingIds.add(item.message);
-    for (const message of tab.comments)
-      if (message.remoteId !== undefined && !knownRemoteIds.has(message.remoteId)) pendingIds.add(message.id);
-    const local = tab.comments.filter(
-      (m) => m.kind === 'ai' || pendingIds.has(m.id) || m.annotationId !== undefined,
-    );
-    tab.comments = [
-      ...local,
-      ...remote.filter((m) => !local.some((l) => l.remoteId === m.remoteId || l.id === m.id)),
-    ];
-    // Reconcile externally edited replies while retaining local annotation identity.
-    for (const message of local) {
-      const match = remote.find((r) => r.remoteId === message.remoteId);
-      if (!pendingIds.has(message.id) && message.remoteId !== undefined) {
-        if (!match) {
-          message.deleted = true;
-          if (message.annotationId !== undefined) await deleteAnnotation(message.annotationId);
-          continue;
-        }
-        const annotationId = message.annotationId;
-        const line = message.line;
-        const side = message.side;
-        const body =
-          message.fileComment === true
-            ? match.body.replace(/^\[Line \d+\]\(https:\/\/github\.com\/[^\n]+\)\n\n/, '')
-            : match.body;
-        if (annotationId !== undefined && message.body !== body) {
-          const annotation = await getAnnotationById(annotationId);
-          if (annotation) await updateAnnotation(annotation.id, body, annotation.category);
-        }
-        Object.assign(message, match, {
-          id: message.id,
-          annotationId,
-          body,
-          ...(annotationId !== undefined ? { line, side } : {}),
-        });
-      }
-    }
-    tab.commentsLoaded = true;
-    if (
-      tab.reviewId === null ||
-      ((refreshDiff || tab.importLocalComments) &&
-        (tab.reviewedHead !== info.headRefOid || tab.reviewedBase !== info.baseRefOid))
-    )
-      await importPull(tab);
+    // Let code become usable independently of slow comment pagination.
+    const results = await Promise.allSettled([
+      syncComments(tab),
+      (async () => {
+        if (
+          tab.reviewId === null ||
+          ((refreshDiff || tab.importLocalComments) &&
+            (tab.reviewedHead !== info.headRefOid || tab.reviewedBase !== info.baseRefOid))
+        ) await importPull(tab);
+        saveWorkspace();
+      })(),
+    ]);
+    for (const result of results) if (result.status === 'rejected') throw result.reason;
     if (tab.importLocalComments && tab.reviewId !== null) {
       for (const annotation of await getAnnotationsForReview(tab.reviewId)) {
         if (!tab.comments.some((message) => message.annotationId === annotation.id))
@@ -188,6 +141,58 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
     saveWorkspace();
     if (pendingRefresh.delete(tab.key) && workspaceData().tabs.includes(tab)) void syncTab(tab, true);
   }
+}
+async function syncComments(tab: PullTab): Promise<void> {
+  // Keep comments being published while this remote snapshot is in flight.
+  const pendingIds = new Set(
+    workspaceData()
+      .outbox.filter((item) => item.tab === tab.key)
+      .map((item) => item.message),
+  );
+  const knownRemoteIds = new Set(
+    tab.comments.filter((message) => message.remoteId !== undefined).map((message) => message.remoteId),
+  );
+  const remote = await loadComments(tab);
+  for (const item of workspaceData().outbox) if (item.tab === tab.key) pendingIds.add(item.message);
+  for (const message of tab.comments)
+    if (message.remoteId !== undefined && !knownRemoteIds.has(message.remoteId)) pendingIds.add(message.id);
+  const local = tab.comments.filter(
+    (m) => m.kind === 'ai' || pendingIds.has(m.id) || m.annotationId !== undefined,
+  );
+  tab.comments = [
+    ...local,
+    ...remote.filter((m) => !local.some((l) => l.remoteId === m.remoteId || l.id === m.id)),
+  ];
+  // Reconcile externally edited replies while retaining local annotation identity.
+  for (const message of local) {
+    const match = remote.find((r) => r.remoteId === message.remoteId);
+    if (!pendingIds.has(message.id) && message.remoteId !== undefined) {
+      if (!match) {
+        message.deleted = true;
+        if (message.annotationId !== undefined) await deleteAnnotation(message.annotationId);
+        continue;
+      }
+      const annotationId = message.annotationId;
+      const line = message.line;
+      const side = message.side;
+      const body =
+        message.fileComment === true
+          ? match.body.replace(/^\[Line \d+\]\(https:\/\/github\.com\/[^\n]+\)\n\n/, '')
+          : match.body;
+      if (annotationId !== undefined && message.body !== body) {
+        const annotation = await getAnnotationById(annotationId);
+        if (annotation) await updateAnnotation(annotation.id, body, annotation.category);
+      }
+      Object.assign(message, match, {
+        id: message.id,
+        annotationId,
+        body,
+        ...(annotationId !== undefined ? { line, side } : {}),
+      });
+    }
+  }
+  tab.commentsLoaded = true;
+  saveWorkspace();
 }
 export function startWorkspace(): () => void {
   const data = workspaceData();
@@ -461,6 +466,8 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     void syncTab(tab, true);
   }
   if (input.op === 'edit') {
+    if (input.title !== undefined && (!tab.info || tab.info.author.login !== tab.viewer))
+      throw new Error('Only the PR author can edit its title in Glassbox');
     await github(tab.ref, `${repoApi(tab.ref)}/pulls/${tab.ref.number}`, 'PATCH', {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.body !== undefined ? { body: input.body } : {}),

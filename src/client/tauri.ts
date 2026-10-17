@@ -5,7 +5,7 @@ import { asButton } from './dom.js';
 
 interface TauriGlobal {
   core?: { invoke: (cmd: string) => Promise<unknown> };
-  event?: { listen: (name: string, cb: () => void) => void };
+  event?: { listen: (name: string, cb: () => void) => Promise<() => void> | undefined };
 }
 
 /** Read the `window.__TAURI__` global (defined when running inside the

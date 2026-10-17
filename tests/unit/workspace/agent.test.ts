@@ -4,13 +4,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PullTabSchema, ThreadMessageSchema } from '../../../src/api/workspace.js';
-const mocks = vi.hoisted(() => ({ dataDir: '', request: vi.fn() }));
+const mocks = vi.hoisted(() => ({ dataDir: '', request: vi.fn(), access: 'local' }));
 vi.mock('../../../src/ai/config.js', () => ({
   loadAIConfig: () => ({
     platform: 'openai',
     model: 'chosen-guidance-model',
     apiKey: 'fixture',
     keySource: 'config',
+    agentAccess: mocks.access,
   }),
 }));
 vi.mock('../../../src/ai/client.js', () => ({ sendAIRequest: mocks.request }));
@@ -22,6 +23,7 @@ let head: string;
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'glassbox-agent-test-'));
   mocks.dataDir = root;
+  mocks.access = 'local';
   execFileSync('git', ['init', '-q', root]);
   writeFileSync(join(root, 'example.ts'), 'export const count = 1;\n');
   execFileSync('git', ['add', '.'], { cwd: root });
@@ -93,4 +95,14 @@ it('rejects edits outside the checkout and reports the blocker in the thread', a
   startCommentAgent(tab, comment);
   await vi.waitFor(() => expect(tab.comments[0].status).toBe('error'), { timeout: 5000 });
   expect(tab.comments[0].error).toContain('Not a tracked file');
+});
+
+it('enforces read-only access even if the model requests an edit', async () => {
+  mocks.access = 'read-only';
+  mocks.request.mockResolvedValue({ content: JSON.stringify({ edits: [{ path: 'example.ts', before: 'count = 1', after: 'count = 2' }], done: true }) });
+  const { tab, comment } = fixture();
+  startCommentAgent(tab, comment);
+  await vi.waitFor(() => expect(tab.comments[0].status).toBe('error'), { timeout: 5000 });
+  expect(tab.comments[0].error).toContain('Read-only');
+  expect(readFileSync(join(root, 'agents', tab.comments[0].id, 'example.ts'), 'utf8')).toContain('count = 1');
 });

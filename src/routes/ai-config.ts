@@ -36,6 +36,8 @@ aiConfigRoutes.get('/config', async (c) => {
   return c.json({
     platform: config.platform,
     model: config.model,
+    reasoningEffort: config.reasoningEffort ?? 'default',
+    agentAccess: config.agentAccess ?? 'push',
     keyConfigured: config.apiKey !== null || config.platform === 'local' || appleReady || isAIServiceTest() || getDemoMode() !== null,
     keySource: config.keySource,
     localEndpoint: resolveLocalEndpoint(),
@@ -53,6 +55,8 @@ aiConfigRoutes.post('/config', async (c) => {
   const body = parsed.data;
 
   saveAIConfigPreferences(body.platform, body.model, {
+    reasoningEffort: body.reasoningEffort,
+    agentAccess: body.agentAccess,
     localEndpoint: body.localEndpoint,
     fallbackPlatform: body.fallbackPlatform,
     fallbackModel: body.fallbackModel,

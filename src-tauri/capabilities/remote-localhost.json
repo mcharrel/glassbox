@@ -3,7 +3,7 @@
   "description": "Allow IPC from the localhost origin so the Node-served frontend can call Tauri core APIs AND the app's own commands. Tauri 2.11 stopped auto-allowing app commands for remote-origin webviews, so each command (generated as allow-<cmd> via build.rs AppManifest) is granted explicitly here.",
   "windows": ["main"],
   "remote": {
-    "urls": ["http://localhost:*", "http://localhost:*/*"]
+    "urls": ["http://localhost:*", "http://localhost:*/*", "http://127.0.0.1:*", "http://127.0.0.1:*/*"]
   },
   "permissions": [
     "core:default",

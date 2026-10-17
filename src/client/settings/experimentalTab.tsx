@@ -1,5 +1,6 @@
 import type { SafeHtml } from 'kerfjs';
 
+import { reasoningOptions, selectedReasoning } from '../../ai/options.js';
 import type { AIKeyStatusEntry } from '../../api/index.js';
 import { IconCheck, IconFlask } from '../../icons.js';
 import { asPlatform } from '../narrow.js';
@@ -160,6 +161,25 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
         {isApple && (
           <p className="settings-hint">Runs fully on-device via Apple Intelligence (macOS 26+). No API key or network — free and private.</p>
         )}
+      </div>
+
+      <div className="settings-section">
+        <label className="settings-label" htmlFor="settings-reasoning">Reasoning</label>
+        <select className="settings-select" id="settings-reasoning" disabled={reasoningOptions(currentPlatform, currentModel).length === 1}>
+          {reasoningOptions(currentPlatform, currentModel).map(value => <option value={value}
+            selected={value === selectedReasoning(currentPlatform, currentModel, ctx.reasoningEffort)}>
+            {{ default: 'Model default', none: 'None', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high' }[value]}
+          </option>)}
+        </select>
+      </div>
+      <div className="settings-section">
+        <label className="settings-label" htmlFor="settings-agent-access">Comment agent access</label>
+        <select className="settings-select" id="settings-agent-access">
+          <option value="read-only" selected={ctx.agentAccess === 'read-only'}>Read only</option>
+          <option value="local" selected={ctx.agentAccess === 'local'}>Local edits</option>
+          <option value="push" selected={ctx.agentAccess === 'push'}>Signed commit &amp; push</option>
+        </select>
+        <p className="settings-hint">Applies to new comments. Pushes require a verified signature and never overwrite newer PR commits.</p>
       </div>
 
       {!isApple && (

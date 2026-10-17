@@ -136,6 +136,7 @@ export async function getFileScoresForReview(reviewId: string, analysisType: str
     `SELECT s.* FROM ai_file_scores s
      JOIN ai_analyses a ON s.analysis_id = a.id
      WHERE a.review_id = $1 AND a.analysis_type = $2 AND a.status IN ('completed', 'running')
+       AND a.id = (SELECT id FROM ai_analyses WHERE review_id = $1 AND analysis_type = $2 ORDER BY created_at DESC LIMIT 1)
      ORDER BY a.created_at DESC, s.sort_order
      LIMIT 1000`,
     [reviewId, analysisType]

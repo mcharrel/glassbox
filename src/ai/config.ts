@@ -4,12 +4,15 @@ import { GLOBAL_CONFIG_DIR, GLOBAL_CONFIG_PATH, readGlobalConfig, updateGlobalCo
 import { resolveAPIKey as _resolveAPIKey } from './api-keys.js';
 import type { AIPlatform } from './models.js';
 import { AIPlatformSchema, APPLE_FM_ANALYSIS_ENABLED, getDefaultModel, KEYLESS_PLATFORMS, resolveModelId } from './models.js';
+import { type AgentAccess, AgentAccessSchema, type ReasoningEffort, ReasoningEffortSchema, selectedReasoning } from './options.js';
 
 export interface AIConfig {
   platform: AIPlatform;
   model: string;
   apiKey: string | null;
   keySource: 'env' | 'keychain' | 'config' | null;
+  reasoningEffort?: ReasoningEffort;
+  agentAccess?: AgentAccess;
   /** Base URL for the `local` (OpenAI-compatible) platform. */
   baseUrl?: string;
   /**
@@ -50,6 +53,8 @@ export const ConfigFileSchema = z.object({
   ai: z.object({
     platform: z.string().optional(),
     model: z.string().optional(),
+    reasoningEffort: ReasoningEffortSchema.optional(),
+    agentAccess: AgentAccessSchema.optional(),
     keys: z.record(z.string(), z.string()).optional(),
     localEndpoint: z.string().optional(),
     // Secondary model used when the primary (Apple FM) fails a batch.
@@ -97,6 +102,8 @@ export function loadAIConfig(): AIConfig {
   if (platform === 'apple' && !APPLE_FM_ANALYSIS_ENABLED) platform = 'anthropic';
 
   const primary = resolvePlatformConfig(platform, config.ai?.model);
+  primary.reasoningEffort = selectedReasoning(platform, primary.model, config.ai?.reasoningEffort);
+  primary.agentAccess = config.ai?.agentAccess ?? 'push';
 
   // When the primary is Apple FM (whose 4096-token window can't fit larger
   // diffs), attach the user-chosen secondary model. Batches that the on-device
@@ -139,7 +146,7 @@ function resolveFallbackConfig(config: ConfigFile): AIConfig | null {
 export function saveAIConfigPreferences(
   platform: AIPlatform,
   model: string,
-  opts: { localEndpoint?: string; fallbackPlatform?: string; fallbackModel?: string } = {},
+  opts: { localEndpoint?: string; fallbackPlatform?: string; fallbackModel?: string; reasoningEffort?: ReasoningEffort; agentAccess?: AgentAccess } = {},
 ): void {
   updateGlobalConfig((config) => {
     const parsed = ConfigFileSchema.safeParse(config);
@@ -147,6 +154,8 @@ export function saveAIConfigPreferences(
     cfg.ai ??= {};
     cfg.ai.platform = platform;
     cfg.ai.model = model;
+    if (opts.reasoningEffort !== undefined) cfg.ai.reasoningEffort = selectedReasoning(platform, model, opts.reasoningEffort);
+    if (opts.agentAccess !== undefined) cfg.ai.agentAccess = opts.agentAccess;
     if (opts.localEndpoint !== undefined) {
       const trimmed = opts.localEndpoint.trim();
       cfg.ai.localEndpoint = trimmed === '' ? undefined : trimmed;

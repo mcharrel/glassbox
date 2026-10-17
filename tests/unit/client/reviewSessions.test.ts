@@ -3,7 +3,7 @@ import { PullTabSchema } from '../../../src/api/workspace.js';
 
 const api = vi.hoisted(() => vi.fn());
 vi.mock('../../../src/api/_runner.js', () => ({ apiCall: api, OkResponseSchema: {} }));
-vi.mock('../../../src/client/analysisEngine.js', () => ({ stopPolling: vi.fn() }));
+vi.mock('../../../src/client/analysisEngine.js', () => ({ stopPolling: vi.fn(), resumePolling: vi.fn(), pollingGeneration: vi.fn(() => 0) }));
 vi.mock('../../../src/client/diff/index.js', () => ({ invalidateDiffCache: vi.fn() }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
 vi.stubGlobal('document', { body: { dataset: { reviewId: 'a' } } });
@@ -19,7 +19,9 @@ let scroll: { scrollTop: number; value: string };
 beforeEach(() => {
   reviewLoadState.value = { key: '', status: 'loading', error: null };
   scroll = { scrollTop: 0, value: '' };
-  vi.stubGlobal('document', { body: { dataset: { reviewId: 'a' } }, querySelector: () => scroll, dispatchEvent: vi.fn() });
+  const events = new EventTarget();
+  vi.stubGlobal('document', { body: { dataset: { reviewId: 'a' } }, querySelector: () => scroll,
+    addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) });
   vi.stubGlobal('window', { history: { replaceState: vi.fn() } });
   vi.stubGlobal('localStorage', { getItem: vi.fn(() => null) });
   reviewStore.actions.update({ reviewId: 'a', files: [file('a1'), file('a2')], currentFileId: 'a1', hiddenFileIds: new Set() });
@@ -33,6 +35,27 @@ beforeEach(() => {
 afterEach(() => { dispose?.(); vi.unstubAllGlobals(); });
 
 describe('in-memory PR sessions', () => {
+  it('discards a background PR’s cached notes when its fresh review starts', async () => {
+    dispose = initReviewSessions(); await tick();
+    document.dispatchEvent(new CustomEvent('glassbox-analysis-reset', { detail: { reviewId: 'b', types: ['narrative', 'guided'] } }));
+    workspace.value = { ...workspace.value, active: 'b' }; await tick();
+    expect(aiStore.state.value.fileNotes).toEqual({});
+    expect(aiStore.state.value.guidedNotes).toEqual({});
+    expect(aiStore.state.value.narrativeAnalysis.status).toBe('running');
+  });
+  it('ignores old guidance responses that arrive after a fresh review reset', async () => {
+    const replies: (() => void)[] = [];
+    api.mockImplementation((_schema, path) => path === '/files'
+      ? Promise.resolve({ files: [file('b1')], annotationCounts: {}, staleCounts: {} })
+      : new Promise(resolve => replies.push(() => resolve({ status: 'completed', scores: [{ reviewFileId: 'b1', notes: { overview: 'Old guidance', lines: [] } }] }))));
+    dispose = initReviewSessions(); await tick();
+    document.dispatchEvent(new CustomEvent('glassbox-analysis-reset', { detail: { reviewId: 'b', types: ['narrative', 'guided'] } }));
+    replies.forEach(resolve => resolve()); await tick();
+    workspace.value = { ...workspace.value, active: 'b' }; await tick();
+    expect(aiStore.state.value.fileNotes).toEqual({});
+    expect(aiStore.state.value.guidedNotes).toEqual({});
+    expect(aiStore.state.value.narrativeAnalysis.status).toBe('running');
+  });
   it('preloads once and restores files, guidance, hidden files, drafts and section scroll without fetching again', async () => {
     dispose = initReviewSessions(); await tick();
     expect(api).toHaveBeenCalledTimes(3);

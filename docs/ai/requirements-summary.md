@@ -1308,7 +1308,7 @@ Also keep `CLAUDE.md`'s requirements index in sync with `docs/`.
 
 Diff lines preserve aligned indentation and stable addition/deletion colors during navigation.
 
-Personal fork: simple purple click-to-edit comments; whole-line diffs without character overlays; gg to file top; n/N through Find results; symbol navigation also populates Find, with local variable lookup for common declarations.
+Personal fork: simple purple click-to-edit comments; whole-line diffs without character overlays; Shift+G to file bottom; n/m/Shift+N through Find results; symbol navigation also populates Find, with local variable lookup for common declarations.
 
 Personal sidebar guidance supports persistent height resizing, with no visible GUIDE/LEARN title badges.
 AI prompt context labels each diff row with its original and new source line numbers. Supplemental full-file context also includes explicit new-side line numbers, so deletion rows and summarized gaps do not shift generated note anchors.
@@ -1323,3 +1323,5 @@ Workspace stability: `workspace/reviewSessions.ts` caches review and AI state pe
 **GPT-5.5 Pro analysis — Shipped:** the model and dated snapshots use Responses with storage disabled; unfinished, refused, or empty responses fail clearly instead of becoming analysis results.
 
 Personal file lists show a diff-icon count of distinct text change blocks beside the comment count. Replacements count once; context separates blocks. Files without known text changes omit the badge.
+
+Personal workflow polish: number-only change badges; bare compact PR IDs; + follows tabs; thin hover-expanding dividers; own-only title editing with stable font and blur exit; all-files-reviewed message. Native Find dispatches a DOM event with a keyboard fallback. `ai/options.ts` defines reasoning/access settings; `workspace/publish.ts` signs, verifies, and pushes agent edits without force. `ai/fresh-review.ts` replaces guidance with a persistent five-minute per-PR limit; client generations reject stale guidance. `workspace/notifications.ts` suppresses notifications for focused visible clients using expiring visibility heartbeats. Imports reuse Git objects and publish file readiness independently of remote comments. The supplied portrait is the desktop icon.

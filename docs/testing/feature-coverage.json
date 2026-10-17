@@ -687,7 +687,9 @@
       "tests": [
         "tests/e2e/review-workflow.test.ts",
         "tests/e2e/sidebar.test.ts",
-        "tests/unit/routes/pages.test.ts"
+        "tests/unit/routes/pages.test.ts",
+        "tests/unit/workspace/notifications.test.ts",
+        "tests/unit/workspace/service.test.ts"
       ],
       "note": "sidebar+main; hide/show toggle (aria-pressed); sidebar contents rendered."
     },
@@ -700,7 +702,7 @@
         "tests/unit/components/changeBlockCount.test.ts",
         "tests/unit/client/sidebarNotes.test.ts"
       ],
-      "note": "folder tree; filter; j/k nav; click loads diff; count badges + stale dots. Distinct text change-block counts match navigation and stay separate from comment totals across initial rendering and all client sort modes, including empty data and PR switches."
+      "note": "folder tree; filter; j/k nav; click loads diff; count badges + stale dots. Distinct text change-block counts match navigation and stay separate from comment totals across initial rendering and all client sort modes, including empty data and PR switches. Badges contain no icon; the finished message requires a nonempty review with every file hidden."
     },
     "8.3": {
       "tests": [
@@ -734,7 +736,8 @@
         "tests/unit/client/workspaceState.test.ts",
         "tests/unit/client/workspaceResize.test.ts",
         "tests/unit/client/commentAnchor.test.ts",
-        "tests/unit/components/diffView.test.ts"
+        "tests/unit/components/diffView.test.ts",
+        "tests/unit/client/findFocus.test.ts"
       ],
       "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar; bounded Tab/Shift+Tab change navigation with edit/dialog exceptions; viewport-based c/v thread navigation with ten source lines of context and cross-file mount guards."
     },
@@ -966,7 +969,9 @@
       "tests": [
         "tests/unit/ai/models.test.ts",
         "tests/unit/ai/list-models.test.ts",
-        "tests/integration/api/ai-routes.test.ts"
+        "tests/integration/api/ai-routes.test.ts",
+        "tests/integration/api/ai-model-preferences.test.ts",
+        "tests/unit/ai/responses.test.ts"
       ],
       "note": "five-platform set; live model discovery + static fallback; resolveModelId; save platform/model."
     },
@@ -1034,7 +1039,9 @@
         "tests/unit/ai/shared.test.ts",
         "tests/integration/api/ai-routes.test.ts",
         "tests/unit/client/analysis-trigger-error.test.ts",
-        "tests/unit/client/analysisEngine.test.ts"
+        "tests/unit/client/analysisEngine.test.ts",
+        "tests/unit/workspace/agent.test.ts",
+        "tests/unit/workspace/publish.test.ts"
       ],
       "note": "per-batch failure isolation; malformed-JSON/schema handling; failure surfaced with error status; trigger-error union guard; client poll-engine transition sequences in analysisEngine.test.ts.",
       "stateful": true,
@@ -1716,9 +1723,12 @@
     },
     "7.6": {
       "tests": [
-        "tests/integration/api/ai-routes.test.ts"
+        "tests/integration/api/ai-routes.test.ts",
+        "tests/unit/ai/fresh-review.test.ts",
+        "tests/unit/db/ai-queries.test.ts",
+        "tests/unit/client/reviewSessions.test.ts"
       ],
-      "note": "In-session analysis caching: running analyses of the same type are deduplicated ('deduplicates running analyses of the same type'). (cache invalidate/carry-forward across runs is a sub-gap)."
+      "note": "Fresh review cancels old runs, clears scores, bypasses caches, and enforces a persisted five-minute limit. Latest-run queries and client request generations exclude old results."
     },
     "15.10": {
       "waived": "Theme performance (instant switch, no flash) is a timing/visual NFR; theme switching correctness is covered by themes.test.ts but the perf target is not deterministically assertable.",
