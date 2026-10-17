@@ -12,6 +12,7 @@ Requirements for optional AI-powered code analysis features.
 - Users shall be able to switch platforms and models via the settings dialog.
 - **Model lists shall be discovered live from each provider's models API** when a key is configured, rather than relying solely on a hardcoded list (GB-894): Anthropic `GET /v1/models`, OpenAI `GET /v1/models` (filtered to chat models), Google `GET /v1beta/models` (filtered to `generateContent`). A curated static list (`src/ai/models.ts`) is the fallback when there is no key, the request fails, or in demo/`--ai-service-test` mode. Because the provider returns only currently-available models, retired snapshots never appear.
 - Saved model IDs discovered from a provider shall be preserved even when absent from the bundled fallback catalog, including after restart or a discovery failure. Only explicitly listed legacy IDs are migrated (e.g. `claude-sonnet-4-5` → `claude-sonnet-4-6`, GB-893); an empty selection uses the platform default. An unknown ID alone is not evidence that a model is retired.
+- GPT-5.5 Pro and its dated snapshots use the [Responses API](https://developers.openai.com/api/docs/models/gpt-5.5-pro), with `instructions`, message `input`, `max_output_tokens`, and `store: false`. Completed message text is extracted after any reasoning items; incomplete, failed, empty, and refused responses are reported as errors. Other OpenAI selections retain their existing Chat Completions path.
 
 ### 7.2 Risk Analysis
 
