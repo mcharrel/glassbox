@@ -5,12 +5,13 @@ import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { PullTabSchema } from '../../../src/api/workspace.js';
 
-const mocks = vi.hoisted(() => ({ dataDir: '', file: vi.fn() }));
+const mocks = vi.hoisted(() => ({ dataDir: '', file: vi.fn(), find: vi.fn(), github: vi.fn() }));
 vi.mock('../../../src/db/connection.js', () => ({ getDataDir: () => mocks.dataDir }));
 vi.mock('../../../src/db/queries.js', () => ({ createReview: async () => ({ id: 'review' }), addReviewFile: mocks.file, updateReviewSource: vi.fn() }));
 vi.mock('../../../src/review-update.js', () => ({ updateReviewDiffs: vi.fn() }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => ({ tabs: [] }) }));
-vi.mock('../../../src/workspace/github.js', () => ({ githubToken: async () => 'fixture' }));
+vi.mock('../../../src/workspace/github.js', () => ({ githubToken: async () => 'fixture', github: mocks.github, repoApi: () => 'repos/example/project' }));
+vi.mock('../../../src/workspace/repositories.js', () => ({ findLocalRepository: mocks.find }));
 import { importPull } from '../../../src/workspace/checkout.js';
 
 it('fetches missing objects through a shared checkout, protects them from GC, and leaves its source untouched', async () => {
@@ -42,3 +43,33 @@ it('fetches missing objects through a shared checkout, protects them from GC, an
     expect(git(tab.repoRoot!, 'show', 'HEAD:file.ts')).toBe('after');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+it('uses the exact remote merge base for cold snapshots without downloading a history window', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'glassbox-cold-import-'));
+  try {
+    mocks.file.mockClear(); mocks.find.mockResolvedValue(undefined);
+    const remote = join(root, 'remote'); mkdirSync(remote);
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    git(remote, 'init', '-q'); git(remote, 'config', 'user.name', 'Test'); git(remote, 'config', 'user.email', 'test@example.com');
+    git(remote, 'config', 'commit.gpgsign', 'false');
+    writeFileSync(join(remote, 'file.ts'), 'before\n'); git(remote, 'add', '.'); git(remote, 'commit', '-qm', 'common ancestor');
+    const ancestor = git(remote, 'rev-parse', 'HEAD');
+    writeFileSync(join(remote, 'base-only.ts'), 'not part of the PR\n'); git(remote, 'add', '.'); git(remote, 'commit', '-qm', 'base advanced');
+    const target = git(remote, 'rev-parse', 'HEAD');
+    git(remote, 'checkout', '--detach', ancestor);
+    writeFileSync(join(remote, 'file.ts'), 'after\n'); git(remote, 'add', '.'); git(remote, 'commit', '-qm', 'PR change');
+    const head = git(remote, 'rev-parse', 'HEAD');
+    mocks.dataDir = join(root, 'data');
+    const checkout = join(mocks.dataDir, 'workspaces/example-project-1'); mkdirSync(checkout, { recursive: true });
+    git(checkout, 'init', '-q'); git(checkout, 'config', `url.file://${remote}.insteadOf`, 'https://github.com/example/project.git');
+    mocks.github.mockResolvedValue({ merge_base_commit: { sha: ancestor } });
+    const tab = PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: null,
+      info: { id: 'PR1', number: 1, url: '', title: 'Example', body: '', author: { login: 'test' }, state: 'OPEN', isDraft: false,
+        baseRefName: 'main', headRefName: 'topic', baseRefOid: target, headRefOid: head, mergeable: 'MERGEABLE', mergedAt: null } });
+    await importPull(tab);
+    expect(tab.reviewedBase).toBe(ancestor);
+    expect(mocks.file.mock.calls.map(call => call[1])).toEqual(['file.ts']);
+    expect(readFileSync(join(checkout, '.git/shallow'), 'utf8').split('\n')).toContain(head);
+    expect(mocks.github).toHaveBeenCalledWith(tab.ref, `repos/example/project/compare/${target}...${head}?per_page=1`);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 10000);

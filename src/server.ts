@@ -43,9 +43,11 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
 
   // Inject context
   app.use('*', async (c, next) => {
-    const requestedId = c.req.query('reviewId') ?? reviewId;
+    const queryId = c.req.query('reviewId');
+    const requestedId = queryId === undefined || queryId === '' ? reviewId : queryId;
     const requested = requestedId === reviewId ? null : await getReview(requestedId);
-    if (requestedId !== reviewId && !requested) return c.text('Review not found', 404);
+    if (requestedId !== reviewId && !requested) return c.req.path.startsWith('/api/')
+      ? c.json({ error: 'Review not found' }, 404) : c.text('Review not found', 404);
     c.set('reviewId', requestedId);
     c.set('currentReviewId', reviewId);
     c.set('repoRoot', requested?.repo_path ?? tabForReview(requestedId)?.repoRoot ?? repoRoot);

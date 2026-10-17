@@ -2,7 +2,6 @@ import { delegate, effect, mount } from 'kerfjs';
 
 import { type PullTab, reportVisibility, reviewerStates } from '../../api/workspace.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
-import { IconGear, IconX } from '../../icons.js';
 import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
 import { refreshFind } from '../diff/find.js';
 import { invalidateDiffCache, restoreDiffScroll, saveDiffScroll } from '../diff/index.js';
@@ -14,6 +13,7 @@ import { openExternalUrl } from '../tauri.js';
 import { showToast } from '../toast.js';
 import { createCommentNavigator } from './commentNavigation.js';
 import { startFreshReview } from './freshReview.js';
+import { pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
 import { activeReviewReady, activeTab, addingPull, mutate, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads, threadHtml } from './threads.js';
@@ -65,69 +65,6 @@ function totals() {
       }
   }
   return { added, removed };
-}
-function header(tab: PullTab) {
-  const info = tab.info;
-  const own = info?.author.login === tab.viewer;
-  const buttons = own
-    ? [
-        ['draft', 'Draft'],
-        ['ready', 'Ready for Review'],
-        ['close', 'Close'],
-      ]
-    : [
-        ['approve', 'Approve'],
-        ['changes', 'Request Changes'],
-        ['slop', 'This is AI slop'],
-      ];
-  const selected = own ? (info.state === 'CLOSED' ? 'close' : info.isDraft ? 'draft' : 'ready') : tab.action;
-  const counts = tab.reviewId === document.body.dataset.reviewId ? totals() : { added: 0, removed: 0 };
-  return (
-    <>
-      <div className="pr-heading">
-        <h2 data-workspace={own ? 'title' : undefined} title={own ? 'Click to edit PR title' : undefined}>
-          {title(tab)}
-        </h2>
-        <button className="btn btn-xs" data-workspace="settings" title="Settings">
-          <IconGear />
-        </button>
-        <button className="btn btn-xs" data-workspace="close" title="Remove PR tab">
-          <IconX />
-        </button>
-      </div>
-      <div className="review-mode">{info ? `${info.baseRefName} ← ${info.headRefName}` : 'Loading…'}</div>
-      <div className="pr-counts">
-        <span className="pr-additions">+{counts.added}</span>{' '}
-        <span className="pr-deletions">-{counts.removed}</span>
-      </div>
-      <div className="pr-actions">
-        {info?.state === 'MERGED' ? (
-          <button className="selected" disabled>
-            Merged
-          </button>
-        ) : (
-          buttons.map(([action, label]) => (
-            <button
-              data-key={action}
-              data-pr-action={action}
-              className={selected === action ? 'selected' : ''}
-              disabled={!info}
-            >
-              {label}
-            </button>
-          ))
-        )}
-      </div>
-      {Boolean(tab.error) && (
-        <div className="workspace-error" title={tab.error}>
-          {tab.error}
-        </div>
-      )}
-      {tab.reviewedHead && info && tab.reviewedHead !== info.headRefOid && (
-        <div className="workspace-error">New commits on GitHub. Press Cmd+R to refresh this review.</div>
-      )}
-    </>
-  );
 }
 function reviewers(tab: PullTab) {
   const states = tab.info ? reviewerStates(tab.info) : new Map<string, string>();
@@ -312,7 +249,7 @@ export function initWorkspace(): void {
       mountedHeader = true;
       mount(oldHeader, () => {
         const current = activeTab();
-        return <div className="pr-header-content">{current ? header(current) : null}</div>;
+        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null) : null}</div>;
       });
     }
 
@@ -471,14 +408,15 @@ export function initWorkspace(): void {
   asInput(add.querySelector('input')).addEventListener('keydown', (e) => {
     if (e.key === 'Enter') void loadPullInput(add);
   });
-  void delegate(oldHeader, 'click', '[data-pr-action]', (_event, element) => {
-    const action = (element as HTMLElement).dataset.prAction;
+  void delegate(oldHeader, 'change', '[data-pr-action]', (_event, element) => {
+    if (!(element instanceof HTMLSelectElement)) return;
+    const action = element.value;
     const tab = activeTab();
     if (!tab) return;
-    if (action === 'slop') {
-      void mutate({ op: 'close', key: tab.key });
-      return;
-    }
+    // Keep the confirmed status (or neutral Review label) until GitHub accepts the action.
+    element.value = tab.info?.author.login === tab.viewer
+      ? (tab.info.state === 'CLOSED' ? 'close' : tab.info.isDraft ? 'draft' : 'ready') : '';
+    oldHeader.querySelector('.request-changes-form')?.remove();
     if (action === 'changes') {
       const box = toElement(
         <div className="request-changes-form">
@@ -499,7 +437,7 @@ export function initWorkspace(): void {
           if (ok) box.remove();
         });
       });
-    } else if (action === 'draft' || action === 'ready' || action === 'close' || action === 'approve')
+    } else if (action === 'draft' || action === 'ready' || action === 'close' || action === 'approve' || action === 'humanize')
       void mutate({ op: 'action', key: tab.key, action });
   });
   const commentInput = asTextarea(mainSections.querySelector<HTMLTextAreaElement>('.pr-comment-input'));
@@ -533,9 +471,12 @@ export function initWorkspace(): void {
   void refreshWorkspace().catch((error: unknown) => {
     showToast(String(error));
   });
-  setInterval(() => {
-    void refreshWorkspace().catch(() => {});
-  }, 2000);
+  const poll = async () => {
+    try { await refreshWorkspace(); } catch { /* Retry the local server on the next tick. */ }
+    // Imports publish several stages; keep the UI responsive without polling GitHub.
+    setTimeout(() => { void poll(); }, workspace.value.tabs.some(tab => tab.loading) ? 250 : 2000);
+  };
+  setTimeout(() => { void poll(); }, 250);
 }
 async function loadPullInput(container: HTMLElement): Promise<void> {
   const input = asInput(container.querySelector<HTMLInputElement>('input'));

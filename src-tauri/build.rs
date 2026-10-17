@@ -25,6 +25,7 @@ fn main() {
             "check_for_update",
             "install_update",
             "pick_plugin_folder",
+            "set_app_zoom",
         ]),
     ))
     .expect("failed to run tauri-build");

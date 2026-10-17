@@ -67,6 +67,8 @@ Requirements for the browser-based UI and user interaction patterns.
 
 ### 8.6 Keyboard Shortcuts
 
+- Cmd/Ctrl+= and Cmd/Ctrl+- zoom the entire desktop interface in 10% steps, bounded to 50–200%; Cmd/Ctrl+0 resets to 100%. Persist the setting across launches and deduplicate native/key delivery. Browser mode retains browser zoom.
+
 - `Enter` or `Cmd/Ctrl+Enter` shall save the current annotation form; Shift+Enter inserts a newline.
 - `Escape` shall close modals and annotation forms.
 - `j`/`k` shall navigate between files in the sidebar.
@@ -105,3 +107,5 @@ The compact PR rail's minimum follows the rendered ID text plus small padding, w
 Personal workflow polish: place + directly after the PR tabs; use thin dividers that widen on hover/focus. Only own PR titles can be edited, with the same font and immediate exit on blur. Show “You reviewed all the files, congrats!” after every file is hidden by review navigation. Desktop notifications are suppressed while any Glassbox client is visible and focused.
 
 Personal GitHub synchronization is now manual: cached tabs, startup, tab switches, and reopening do not poll GitHub. New/unfinished imports load once, and Cmd/Ctrl+R waits for one refresh of the selected PR; overlapping refreshes are coalesced. Explicit edits/actions and queued comments still publish, with offline retries every five minutes. The client’s local-server progress polling remains active. External status changes and notifications are discovered only on refresh.
+
+The shared PR header places line totals above the PR branch and adds a second `into <base>` line only for targets other than `prod`/`main`. Use a compact purple dropdown: own Draft/Ready for Review/Close status; other PRs show Review with Approve, Request code change, and Make explanations more human. The last option posts the exact explanation request documented in MY_GLASSBOX.md as a GitHub Request changes review. Workspace progress and opening additional PRs remain available while the current import has no review ID.

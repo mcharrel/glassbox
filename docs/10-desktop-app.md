@@ -6,6 +6,8 @@ Requirements for the Tauri desktop application and platform distribution.
 
 ### 10.1 Native Window
 
+The personal fork exposes a View menu with Zoom In, Zoom Out, and Actual Size, using native webview zoom for the entire interface. The local frontend may invoke `set_app_zoom` with a finite scale between 0.5 and 2.0.
+
 The personal fork's desktop icon uses the supplied portrait with rounded corners and transparent margins. Legacy ICNS packaging includes this silhouette in the image itself. `scripts/build-personal-icon.swift` creates the padded source PNG from the unchanged original artwork; Tauri generates the packaged icon sizes from it.
 
 - The desktop app shall wrap the Node.js server in a native window using Tauri v2.

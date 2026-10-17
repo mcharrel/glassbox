@@ -4,7 +4,7 @@ import { apiCall } from './_runner.js';
 
 export const VisibilitySchema = z.object({ id: z.string().min(1).max(100), visible: z.boolean() });
 export const reportVisibility = (body: z.infer<typeof VisibilitySchema>) =>
-  apiCall(z.object({ ok: z.boolean() }), '/workspace/visibility', { method: 'POST', body });
+  apiCall(z.object({ ok: z.boolean() }), '/workspace/visibility', { method: 'POST', body, reviewId: null });
 
 export const PullRefSchema = z.object({
   owner: z.string(),
@@ -130,7 +130,7 @@ export const WorkspaceMutationSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('action'),
     key: z.string(),
-    action: z.enum(['draft', 'ready', 'close', 'approve', 'changes']),
+    action: z.enum(['draft', 'ready', 'close', 'approve', 'changes', 'humanize']),
     body: z.string().optional(),
   }),
   z.object({
@@ -152,9 +152,10 @@ export const WorkspaceMutationSchema = z.discriminatedUnion('op', [
   }),
 ]);
 export type WorkspaceMutation = z.infer<typeof WorkspaceMutationSchema>;
-export const getWorkspace = () => apiCall(WorkspaceSchema, '/workspace');
+export const getWorkspace = () => apiCall(WorkspaceSchema, '/workspace', { reviewId: null });
 export const changeWorkspace = (body: WorkspaceMutation) =>
-  apiCall(WorkspaceSchema, '/workspace', { method: 'POST', body });
+  apiCall(WorkspaceSchema, '/workspace', { method: 'POST', body,
+    reviewId: body.op === 'open' ? body.attachReviewId ?? null : null });
 
 export const SearchHitSchema = z.object({
   fileId: z.string().nullable(),

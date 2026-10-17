@@ -4,7 +4,7 @@ import { openExternal } from '../api/system.js';
 import { asButton } from './dom.js';
 
 interface TauriGlobal {
-  core?: { invoke: (cmd: string) => Promise<unknown> };
+  core?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
   event?: { listen: (name: string, cb: () => void) => Promise<() => void> | undefined };
 }
 
@@ -17,7 +17,7 @@ export function getTauriGlobal(): TauriGlobal | undefined {
 }
 
 /** Convenience: returns the Tauri `invoke()` if available, otherwise `null`. */
-export function getTauriInvoke(): ((cmd: string) => Promise<unknown>) | null {
+export function getTauriInvoke(): ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null {
   return getTauriGlobal()?.core?.invoke ?? null;
 }
 

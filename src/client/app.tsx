@@ -26,6 +26,7 @@ import { getTauriInvoke, showUpdateBanner } from "./tauri.js";
 import { SCROLL_SAVE_DEBOUNCE_MS, UPDATE_POLL_DELAYS_MS } from './timing.js';
 import { initWorkspace } from "./workspace/index.js";
 import { initReviewSessions } from "./workspace/reviewSessions.js";
+import { bindAppZoom } from "./zoom.js";
 
 async function initAISorting() {
   try {
@@ -188,6 +189,7 @@ async function init() {
 
   bindToolbar();
   bindFind();
+  bindAppZoom();
   bindGoToDefinition();
   bindCompleteButton();
   bindReopenButton();

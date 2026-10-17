@@ -502,6 +502,14 @@ async fn pick_plugin_folder(app: tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+#[tauri::command]
+fn set_app_zoom(window: tauri::WebviewWindow, scale: f64) -> Result<(), String> {
+    if !scale.is_finite() || !(0.5..=2.0).contains(&scale) {
+        return Err("Zoom must be between 50% and 200%".into());
+    }
+    window.set_zoom(scale).map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -517,7 +525,8 @@ pub fn run() {
             get_pending_update,
             check_for_update,
             install_update,
-            pick_plugin_folder
+            pick_plugin_folder,
+            set_app_zoom
         ])
         .setup(|_app| {
             #[allow(unused_variables)]
@@ -543,6 +552,12 @@ pub fn run() {
                 )?)
                 .build()?;
 
+            let view_menu = SubmenuBuilder::new(app_handle, "View")
+                .item(&MenuItem::with_id(app_handle, "zoom-in", "Zoom In", true, Some("CmdOrCtrl+Equal"))?)
+                .item(&MenuItem::with_id(app_handle, "zoom-out", "Zoom Out", true, Some("CmdOrCtrl+Minus"))?)
+                .item(&MenuItem::with_id(app_handle, "zoom-reset", "Actual Size", true, Some("CmdOrCtrl+0"))?)
+                .build()?;
+
             #[cfg(target_os = "macos")]
             let menu = MenuBuilder::new(app_handle)
                 .item(
@@ -559,6 +574,7 @@ pub fn run() {
                         .build()?,
                 )
                 .item(&edit_menu)
+                .item(&view_menu)
                 .item(
                     &SubmenuBuilder::new(app_handle, "Window")
                         .minimize()
@@ -571,13 +587,18 @@ pub fn run() {
                 .build()?;
 
             #[cfg(not(target_os = "macos"))]
-            let menu = MenuBuilder::new(app_handle).item(&edit_menu).build()?;
+            let menu = MenuBuilder::new(app_handle).item(&edit_menu).item(&view_menu).build()?;
 
             app.set_menu(menu)?;
 
             // Handle Edit > Find menu click
             let handle = app_handle.clone();
             app.on_menu_event(move |_app, event| {
+                if matches!(event.id().0.as_str(), "zoom-in" | "zoom-out" | "zoom-reset") {
+                    if let Some(window) = handle.get_webview_window("main") {
+                        let _ = window.eval(format!("document.dispatchEvent(new Event('glassbox-{}'))", event.id().0));
+                    }
+                }
                 if event.id().0 == "find" {
                     // Deliver directly to the webview, independent of localhost IPC permissions.
                     if let Some(window) = handle.get_webview_window("main") {

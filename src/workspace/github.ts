@@ -12,6 +12,7 @@ const exec = promisify(execFile);
 const LocalConfigSchema = z.object({
   accounts: z.record(z.string(), z.string()).default({}),
   slack: z.record(z.string(), z.string()).default({}),
+  repositories: z.record(z.string(), z.string()).default({}),
 });
 export function localWorkspaceConfig() {
   try {
@@ -196,6 +197,8 @@ export async function mutatePull(tab: PullTab, action: string, body?: string): P
       state: 'closed',
     });
   else {
+    if (action === 'humanize')
+      body = 'Could you make the explanations (description, in-line comments) easier to digest for a human ?';
     if (action === 'changes' && (body?.trim() ?? '') === '')
       throw new Error('Explain the requested changes before submitting');
     await github(ref, `${repoApi(ref)}/pulls/${ref.number}/reviews`, 'POST', {

@@ -45,16 +45,22 @@ function currentReviewId(): string {
 export async function apiCall<T>(
   responseSchema: z.ZodType<T>,
   path: string,
-  opts: { method?: string; body?: unknown; reviewId?: string } = {},
+  opts: { method?: string; body?: unknown; reviewId?: string | null } = {},
 ): Promise<T> {
   const separator = path.includes('?') ? '&' : '?';
-  const url = '/api' + path + separator + 'reviewId=' + encodeURIComponent(opts.reviewId ?? currentReviewId());
+  const reviewId = opts.reviewId === null ? '' : opts.reviewId ?? currentReviewId();
+  const url = '/api' + path + (reviewId ? separator + 'reviewId=' + encodeURIComponent(reviewId) : '');
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
     method: opts.method,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
-  const json: unknown = await res.json();
+  const text = await res.text();
+  let json: unknown;
+  try { json = JSON.parse(text); }
+  catch {
+    throw new Error(`Request to ${path} failed (${res.status}): ${text.trim().slice(0, 160) || 'empty response'}`);
+  }
   if (!res.ok) {
     const error = z.object({ error: z.string() }).safeParse(json);
     throw new Error(error.success ? error.data.error : `Request failed (${res.status})`);

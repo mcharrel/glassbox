@@ -73,6 +73,14 @@ describe('startServer', () => {
     });
   });
 
+  it('accepts empty review IDs during imports instead of returning a non-JSON error', async () => {
+    await startServer(4183, 'review-123', '/tmp/repo', { noOpen: true });
+    const handler = vi.mocked(serve).mock.calls.at(-1)![0].fetch;
+    const response = await handler(new Request('http://localhost:4183/api/ping?reviewId='));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
   it('calls serve with the correct port and hostname', async () => {
     await startServer(4183, 'review-123', '/tmp/repo', { noOpen: true });
 

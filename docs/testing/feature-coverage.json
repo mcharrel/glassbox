@@ -4,9 +4,11 @@
   "units": {
     "3.1": {
       "tests": [
-        "tests/unit/git/repo-helpers.test.ts"
+        "tests/unit/git/repo-helpers.test.ts",
+        "tests/unit/workspace/repositories.test.ts",
+        "tests/unit/workspace/checkout.test.ts"
       ],
-      "note": "isGitRepo (repo check), getRepoRoot (root path), getRepoName (name), getHeadCommit (HEAD SHA) — all four sub-behaviors asserted."
+      "note": "isGitRepo (repo check), getRepoRoot (root path), getRepoName (name), getHeadCommit (HEAD SHA) — all four sub-behaviors asserted. PR imports discover matching local clones and use exact merge-base snapshots for cold repositories."
     },
     "3.2": {
       "tests": [
@@ -689,9 +691,11 @@
         "tests/e2e/sidebar.test.ts",
         "tests/unit/routes/pages.test.ts",
         "tests/unit/workspace/notifications.test.ts",
-        "tests/unit/workspace/service.test.ts"
+        "tests/unit/workspace/service.test.ts",
+        "tests/unit/client/workspaceHeader.test.ts",
+        "tests/unit/api/workspace-requests.test.ts"
       ],
-      "note": "sidebar+main; hide/show toggle (aria-pressed); sidebar contents rendered."
+      "note": "sidebar+main; hide/show toggle (aria-pressed); sidebar contents rendered. The shared PR header, compact dropdown and workspace calls without a selected review are covered."
     },
     "8.2": {
       "tests": [
@@ -737,9 +741,10 @@
         "tests/unit/client/workspaceResize.test.ts",
         "tests/unit/client/commentAnchor.test.ts",
         "tests/unit/components/diffView.test.ts",
-        "tests/unit/client/findFocus.test.ts"
+        "tests/unit/client/findFocus.test.ts",
+        "tests/unit/client/appZoom.test.ts"
       ],
-      "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar; bounded Tab/Shift+Tab change navigation with edit/dialog exceptions; viewport-based c/v thread navigation with ten source lines of context and cross-file mount guards."
+      "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar; bounded Tab/Shift+Tab change navigation with edit/dialog exceptions; viewport-based c/v thread navigation with ten source lines of context and cross-file mount guards. Native whole-app zoom steps, persistence, bounds, reset and duplicate menu/key delivery are covered."
     },
     "8.7": {
       "tests": [
@@ -1146,7 +1151,10 @@
     },
     "10.1": {
       "waived": "Tauri native-window wrap + window title + macOS Dock .app identity — desktop shell behavior in src-tauri; verified by manual/CI build.",
-      "note": "desktop."
+      "note": "desktop. Client zoom dispatch uses the native command; desktop build verifies the command registration and ACL.",
+      "tests": [
+        "tests/unit/client/appZoom.test.ts"
+      ]
     },
     "10.2": {
       "waived": "Sidecar PID tracking + exit cleanup lives in src-tauri/src/lib.rs but has no #[test]; Tauri runtime teardown not unit-testable.",
