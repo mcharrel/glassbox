@@ -945,3 +945,4 @@ Diff line styling keeps +/- markers outside the text flow and animates navigatio
 Personal review controls: diff/reviewKeys.ts binds gg and n/N; localDeclaration.ts handles local variable declarations; find.tsx reapplies symbol queries after mounts. Annotation rows retain metadata while exposing click-to-edit and delete/keep only.
 
 sidebar/notesResize.ts binds the persistent, bounded vertical guidance divider. The divider sits outside the notes mount; note sections retain accessible labels without visible title badges.
+AI prompt context labels each diff row with its original and new source line numbers. Supplemental full-file context also includes explicit new-side line numbers, so deletion rows and summarized gaps do not shift generated note anchors.
