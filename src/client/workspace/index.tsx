@@ -5,14 +5,14 @@ import { parseDiffData } from '../../git/parseDiffData.js';
 import { IconGear, IconX } from '../../icons.js';
 import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
 import { refreshFind } from '../diff/find.js';
-import { navigateToLocation } from '../diff/goToDefinition.js';
 import { invalidateDiffCache } from '../diff/index.js';
 import { asEl, asInput, asTextarea, toElement } from '../dom.js';
 import { loadFiles } from '../sidebar/fileTree.js';
 import { filePriority } from '../sidebar/readingOrder.js';
-import { allFileOrder, reviewStore } from '../stores/index.js';
+import { reviewStore } from '../stores/index.js';
 import { openExternalUrl } from '../tauri.js';
 import { showToast } from '../toast.js';
+import { createCommentNavigator } from './commentNavigation.js';
 import { bindDivider } from './resize.js';
 import { activeTab, addingPull, mutate, refreshWorkspace, workspace } from './state.js';
 import { bindThreads, threadHtml } from './threads.js';
@@ -571,6 +571,7 @@ function bindTabReorder(rail: HTMLElement): void {
   window.addEventListener('pointerup', stop);
 }
 function bindWorkspaceKeys(): void {
+  const navigateComment = createCommentNavigator();
   let hovered: Element | null = null;
   document.addEventListener('pointermove', (event) => {
     hovered = event.target instanceof Element ? event.target : null;
@@ -640,56 +641,4 @@ function bindWorkspaceKeys(): void {
       void navigateComment(direction);
     }
   });
-}
-let commentCursor: HTMLElement | null = null;
-let commentScroll = -1;
-async function navigateComment(direction: number): Promise<void> {
-  const pane = document.getElementById('diff-container');
-  if (!pane) return;
-  const top = pane.getBoundingClientRect().top + 25;
-  const threads = [
-    ...pane.querySelectorAll<HTMLElement>(
-      '[data-comment-thread], .annotation-item:not([data-comment-thread])',
-    ),
-  ];
-  const previousIndex =
-    commentCursor !== null && Math.abs(pane.scrollTop - commentScroll) < 2
-      ? threads.indexOf(commentCursor)
-      : -1;
-  const ordered = direction < 0 ? [...threads].reverse() : threads;
-  const next =
-    previousIndex >= 0
-      ? threads[previousIndex + direction]
-      : ordered.find((t) =>
-          direction > 0 ? t.getBoundingClientRect().top > top + 5 : t.getBoundingClientRect().top < top - 5,
-        );
-  if (next !== undefined) {
-    next.scrollIntoView({ block: 'start', behavior: 'instant' });
-    commentCursor = next;
-    commentScroll = pane.scrollTop;
-    return;
-  }
-  const files = allFileOrder.value
-    .map((id) => reviewStore.state.value.files.find((file) => file.id === id))
-    .filter((file) => file !== undefined);
-  const current = files.findIndex((f) => f.id === reviewStore.state.value.currentFileId);
-  for (let offset = 1; offset < files.length; offset++) {
-    const file = files[(current + direction * offset + files.length) % files.length];
-    const comment = activeTab()?.comments.find(
-      (m) => !m.deleted && m.path === file.file_path && (m.line ?? 0) > 0,
-    );
-    if (comment?.line !== undefined && comment.line !== null) {
-      const hidden = new Set(reviewStore.state.value.hiddenFileIds);
-      hidden.delete(file.id);
-      reviewStore.actions.update({ hiddenFileIds: hidden });
-      await navigateToLocation(file.file_path, comment.line);
-      const thread = pane.querySelector<HTMLElement>(`[data-comment-thread="${comment.id}"]`);
-      if (thread) {
-        thread.scrollIntoView({ block: 'start', behavior: 'instant' });
-        commentCursor = thread;
-        commentScroll = pane.scrollTop;
-      }
-      return;
-    }
-  }
 }

@@ -727,9 +727,10 @@
         "tests/e2e/review-workflow.test.ts",
         "tests/e2e/find.test.ts",
         "tests/unit/client/changeNavigation.test.ts",
+        "tests/unit/client/commentNavigation.test.ts",
         "tests/unit/components/diffView.test.ts"
       ],
-      "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar; bounded Tab/Shift+Tab change navigation with edit/dialog exceptions."
+      "note": "Escape closes forms/modals; j/k; Cmd/Ctrl+F find bar; bounded Tab/Shift+Tab change navigation with edit/dialog exceptions; viewport-based c/v thread navigation with ten source lines of context and cross-file mount guards."
     },
     "8.7": {
       "tests": [

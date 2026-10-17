@@ -31,7 +31,7 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 - Tab / Shift+Tab and `f` / `g` advance/backtrack through changes that are not fully visible. Show ideally five lines of preceding context. Page through oversized changes with ten lines of overlap, then continue to the next file.
 - Advancing out of a file hides it from the remaining-file list. Reverse navigation reveals it again. Reaching the end can leave the list empty without losing the traversal history.
 - Shift+G goes to the bottom. The old `gg` shortcut is removed.
-- `c` / `v` move between comment threads (Shift+C also goes backward).
+- `c` / `v` move to the next / previous comment thread that is not fully visible (Shift+C also goes backward), including replies. Show ten preceding source lines below the sticky breadcrumb, counting wrapped lines correctly; use the available context near the file start or in a small window. Page through long threads with ten lines of overlap. Across files, wait for the destination to render and reveal the first / last thread with the same context.
 - Cmd/Ctrl+S copies a GitHub link for the source line or filename under the pointer.
 
 ## Search and definitions
