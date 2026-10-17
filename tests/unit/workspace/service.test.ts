@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PullTabSchema } from '../../../src/api/workspace.js';
 
 const mocks = vi.hoisted(() => ({
@@ -19,7 +19,7 @@ vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   loadPull: vi.fn(),
   loadComments: vi.fn().mockResolvedValue([]),
 }));
-import { flushOutbox, insertTab, mutateWorkspace, syncTab } from '../../../src/workspace/service.js';
+import { flushOutbox, insertTab, mutateWorkspace, startWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
 import { importPull } from '../../../src/workspace/checkout.js';
 
@@ -190,4 +190,92 @@ it('rejects title edits on another author’s PR before calling GitHub', async (
   const tab = mocks.data.tabs[0]; tab.info = { author: { login: 'bob' } };
   await expect(mutateWorkspace({ op: 'edit', key: tab.key, title: 'New' }, 'review')).rejects.toThrow('Only the PR author');
   expect(mocks.github).not.toHaveBeenCalled();
+});
+
+
+describe('manual GitHub refresh', () => {
+  let stop: (() => void) | undefined;
+  function cached(number = 1) {
+    const value = tab(number);
+    value.commentsLoaded = true;
+    value.reviewedBase = 'base'; value.reviewedHead = 'head';
+    value.info = { id: 'pr', number, url: value.ref.url, author: { login: 'alice' }, title: 'PR', body: '',
+      reviews: [], reviewRequests: [], statusCheckRollup: [], state: 'OPEN', isDraft: true,
+      mergeable: 'UNKNOWN', mergeStateStatus: 'DRAFT', reviewDecision: '', mergedAt: null,
+      baseRefName: 'main', headRefName: 'topic', baseRefOid: 'base', headRefOid: 'head' };
+    return value;
+  }
+  beforeEach(() => {
+    stop = undefined;
+    vi.mocked(loadPull).mockReset().mockResolvedValue(cached().info!);
+    vi.mocked(loadComments).mockReset().mockResolvedValue([]);
+    vi.mocked(importPull).mockReset();
+    mocks.data.tabs = [cached()];
+  });
+  afterEach(() => { stop?.(); vi.useRealTimers(); });
+
+  it.each([0, 1, 5])('makes zero idle GitHub requests with %i cached tabs, including startup and reopening', async count => {
+    vi.useFakeTimers();
+    mocks.data.tabs = Array.from({ length: count }, (_, index) => cached(index + 1));
+    stop = startWorkspace();
+    await vi.advanceTimersByTimeAsync(3600000);
+    for (const tab of [...mocks.data.tabs]) {
+      await mutateWorkspace({ op: 'select', key: tab.key }, 'review');
+      await mutateWorkspace({ op: 'open', url: tab.ref.url }, 'review');
+      await mutateWorkspace({ op: 'close', key: tab.key }, 'review');
+      await mutateWorkspace({ op: 'open', url: tab.ref.url }, 'review');
+    }
+    expect(loadPull).not.toHaveBeenCalled();
+    expect(loadComments).not.toHaveBeenCalled();
+    expect(mocks.github).not.toHaveBeenCalled();
+    expect(importPull).not.toHaveBeenCalled();
+  });
+  it('initializes an unfinished PR once alongside cached tabs without periodic refresh', async () => {
+    vi.useFakeTimers();
+    const pending = cached(2); pending.info = null; pending.reviewId = null;
+    mocks.data.tabs.push(pending);
+    vi.mocked(importPull).mockImplementation(async tab => { tab.reviewId = 'imported'; });
+    stop = startWorkspace();
+    await vi.advanceTimersByTimeAsync(3600000);
+    expect(loadPull).toHaveBeenCalledTimes(1);
+    expect(loadPull).toHaveBeenCalledWith(pending.ref);
+    expect(loadComments).toHaveBeenCalledTimes(1);
+    expect(pending.reviewId).toBe('imported');
+  });
+  it('waits for an explicit refresh and coalesces overlapping requests', async () => {
+    const tab = mocks.data.tabs[0];
+    const latest = { ...tab.info, title: 'Updated', headRefOid: 'next-head' };
+    let finish!: (value: any) => void;
+    vi.mocked(loadPull).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    vi.mocked(importPull).mockImplementation(async tab => { tab.reviewedHead = 'next-head'; });
+    let settled = false;
+    const refresh = mutateWorkspace({ op: 'refresh', key: tab.key }, 'review').then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(tab.loading).toBe(true);
+    await mutateWorkspace({ op: 'refresh', key: tab.key }, 'review');
+    finish(latest); await refresh;
+    expect(loadPull).toHaveBeenCalledTimes(1);
+    expect(loadComments).toHaveBeenCalledTimes(1);
+    expect(importPull).toHaveBeenCalledTimes(1);
+    expect(tab.info.title).toBe('Updated');
+    expect(tab.reviewedHead).toBe('next-head');
+    expect(tab.loading).toBe(false);
+  });
+  it('still publishes an offline comment when its five-minute retry becomes due', async () => {
+    vi.useFakeTimers();
+    const tab = mocks.data.tabs[0];
+    tab.comments.push({ id: 'offline', author: 'alice', body: 'Retry me', kind: 'issue', status: 'error', date: '', url: '' });
+    mocks.data.outbox.push({ id: 'queued', tab: tab.key, message: 'offline', operation: 'create', nextAttempt: Date.now() + 300000, attempted: false });
+    mocks.github.mockResolvedValue(remote(40));
+    stop = startWorkspace();
+    await vi.advanceTimersByTimeAsync(299999);
+    expect(mocks.github).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.github).toHaveBeenCalledTimes(1);
+    expect(mocks.github.mock.calls[0][2]).toBe('POST');
+    expect(mocks.data.outbox).toHaveLength(0);
+    expect(loadPull).not.toHaveBeenCalled();
+    expect(loadComments).not.toHaveBeenCalled();
+  });
 });

@@ -35,7 +35,7 @@ import {
 import { notify } from './notifications.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
-const syncing = new Set<string>();
+const syncing = new Map<string, boolean>();
 const pendingRefresh = new Set<string>();
 let flushing = false;
 export function tabForReview(reviewId: string): PullTab | undefined {
@@ -83,10 +83,10 @@ function notifyChanges(before: PullTab['info'], tab: PullTab): void {
 }
 export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> {
   if (syncing.has(tab.key)) {
-    if (refreshDiff) pendingRefresh.add(tab.key);
+    if (refreshDiff && syncing.get(tab.key) === false) pendingRefresh.add(tab.key);
     return;
   }
-  syncing.add(tab.key);
+  syncing.set(tab.key, refreshDiff);
   try {
     const before = tab.info;
     const [info, viewer] = await Promise.all([
@@ -194,6 +194,9 @@ async function syncComments(tab: PullTab): Promise<void> {
   tab.commentsLoaded = true;
   saveWorkspace();
 }
+function needsInitialSync(tab: PullTab): boolean {
+  return tab.info === null || tab.reviewId === null || !tab.viewer || !tab.commentsLoaded || tab.importLocalComments;
+}
 export function startWorkspace(): () => void {
   const data = workspaceData();
   for (const tab of data.tabs) {
@@ -202,10 +205,12 @@ export function startWorkspace(): () => void {
         message.status = 'error';
         message.error = 'The app restarted while the agent was working. Any local edits were preserved.';
       }
-    void syncTab(tab);
+    tab.loading = false;
+    if (needsInitialSync(tab)) void syncTab(tab);
   }
+  saveWorkspace();
+  // Only pending writes retry in the background; cached PRs refresh on demand.
   const timer = setInterval(() => {
-    for (const tab of workspaceData().tabs) void syncTab(tab);
     void flushOutbox();
   }, 10_000);
   timer.unref();
@@ -433,7 +438,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     }
     data.active = tab.key;
     saveWorkspace();
-    void syncTab(tab);
+    if (needsInitialSync(tab)) void syncTab(tab);
     return;
   }
   if (input.op === 'order') {
@@ -463,7 +468,8 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   }
   if (input.op === 'refresh') {
     tab.loading = true;
-    void syncTab(tab, true);
+    saveWorkspace();
+    await syncTab(tab, true);
   }
   if (input.op === 'edit') {
     if (input.title !== undefined && (!tab.info || tab.info.author.login !== tab.viewer))

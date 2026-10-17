@@ -617,15 +617,23 @@ function bindWorkspaceKeys(): void {
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'r') {
       event.preventDefault();
-      if (tab)
-        void mutate({ op: 'refresh', key: tab.key })
-          .then(() => activeTab()?.key === tab.key && activeReviewReady() ? loadFiles() : undefined)
-          .then(() => {
-            if (activeTab()?.key === tab.key) {
-              reviewRetry.value++;
-              if (activeReviewReady()) invalidateDiffCache();
-            }
-          });
+      if (!tab || tab.loading || event.repeat) return;
+      tab.loading = true;
+      workspace.value = { ...workspace.value };
+      void mutate({ op: 'refresh', key: tab.key })
+        .then(async ok => {
+          if (!ok) {
+            tab.loading = false;
+            workspace.value = { ...workspace.value };
+            return;
+          }
+          if (activeTab()?.key !== tab.key) return;
+          if (activeReviewReady()) await loadFiles();
+          if (activeTab()?.key === tab.key) {
+            reviewRetry.value++;
+            if (activeReviewReady()) invalidateDiffCache();
+          }
+        }).catch((error: unknown) => { showToast(String(error)); });
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {

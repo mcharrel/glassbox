@@ -9,14 +9,14 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 - The + immediately after the PR tabs opens a URL field. A GitHub PR URL may include `/files`, query parameters, or a fragment. Reopening a tracked PR selects the existing tab.
 - New own PRs appear above other people's PRs. Related stacked PRs are placed together, parent before child. Manual ordering persists.
 - Each PR initially opens its Main view and remembers its last selected view. `r` switches Main and File views.
-- GitHub metadata and conversations load in the background; all tracked PRs sync every ten seconds. Cached content is available before the network completes.
+- New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; there is no idle GitHub polling. Cmd/Ctrl+R refreshes the selected PR, including source changes.
 - Closing a tab, including “This is AI slop,” only removes it from the tab list. Pending comments keep syncing, and reopening restores the PR.
 
 ## Shared header and Main view
 
 - The shared header shows the GitHub title, Settings, and a close-tab icon. Only my own PR titles are editable. Editing keeps the displayed font size, and clicking away immediately restores the normal title while saving. Branches appear as `base ← head`. Added lines are blue, removed lines orange; totals exclude tests and generated protos.
 - Own PR actions: Draft, Ready for Review, Close. Other PR actions: Approve, Request Changes, This is AI slop. The last action only closes the tab. Merged PRs show one disabled selected Merged button.
-- Cmd/Ctrl+R refreshes the PR. New source revisions are fetched on explicit refresh, preserving annotations through Glassbox's re-anchoring logic. Background metadata updates do not move the code underneath a review.
+- Cmd/Ctrl+R refreshes the PR. New source revisions are fetched on explicit refresh, preserving annotations through Glassbox's re-anchoring logic. Repeated shortcuts during an in-flight refresh do not queue another full refresh.
 - Main content is the PR description. Click to edit; Save or Cmd/Ctrl+Enter publishes the edit. Escape/Cancel discards it.
 - The mid panel contains reviewers, CI checks ordered failed/pending/succeeded, then the PR conversation with newest comments first. Every section scrolls and its divider resizes. Merged PRs replace CI with the Deployment section; deployment details are intentionally undecided.
 - Reviewer names open Slack where a local mapping exists. The local mapping was imported from Doggo; company directory data and account mappings stay outside this repository in `~/.glassbox/workspace-config.json`.
@@ -72,7 +72,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 - GUIDE and LEARN stay together in one scrolling section; only the divider above the combined section resizes it.
 - All panel widths and section heights persist. Temporary hiding or limited space does not overwrite the chosen size. The title section cannot shrink below its content, including wrapped titles and action buttons.
-- PR tabs switch within the same page. Files, AI guidance, loaded diff DOM, inline drafts, scroll positions, remaining-file lists, and navigation history remain in memory per PR. The first load stays asynchronous; background GitHub synchronization continues. Explicit refresh or a changed reviewed revision invalidates the affected cached content.
+- PR tabs switch within the same page. Files, AI guidance, loaded diff DOM, inline drafts, scroll positions, remaining-file lists, and navigation history remain in memory per PR. The first load stays asynchronous; later remote changes wait for Cmd/Ctrl+R. Posting comments, edits, and review actions remains immediate, and offline comments still retry every five minutes. Explicit refresh or a changed reviewed revision invalidates the affected cached content.
 - Remote inline comments appear only at a valid current source line, including old-side coordinates on unified context lines. Threads without a matching current line are hidden, with no fallback at the file top.
 
 ## Loading and input fixes
@@ -92,3 +92,11 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 - Import source code and remote comments independently. Reuse existing Git objects and negotiate missing objects through an existing repository, instead of downloading another shallow copy for every PR. First-time repository downloads still depend on repository size and the network.
 - Suppress desktop notifications while a Glassbox window is visible and focused. Background windows still notify for reviewer/mergeability/merge changes.
 - The native app icon uses my supplied purple portrait, preserved in `assets/app-icon.png`.
+
+## GitHub request budget
+
+- Cached PRs make zero idle GitHub requests, including after an app restart. The local client still checks its own server for import, comment, and agent progress; those requests never contact GitHub.
+- A normal explicit refresh uses one GraphQL request for metadata and three REST requests for issue comments, inline comments, and submitted review bodies. More than 99 entries in a collection require extra pagination requests; first-time account identification and source fetches add work.
+- New PRs and unfinished imports load once. Existing cached tabs wait for Cmd/Ctrl+R. Duplicate in-flight explicit refreshes are coalesced, and holding the shortcut does not repeatedly refresh.
+- Comments, title/description edits, review actions, and agent pushes still contact GitHub when requested. Failed comment publication keeps its five-minute retry schedule.
+- Without background metadata polling, changes made by other people and associated desktop notifications are discovered on refresh. There are no continuous background status notifications.
