@@ -62,7 +62,7 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 
 - Changed and unchanged code lines share the same text alignment. Added/removed markers do not shift code indentation.
 - Disable character-level change highlighting, retaining whole-line diff colors. Navigation uses an outline effect instead of replacing the red/green background.
-- Bugs are contributed upstream autonomously; personal layout and workflow choices stay in this fork. Upstream contributions include definition lookup across search highlights, stable line alignment/highlighting, and explicit AI line anchors.
+- All contributions, including bug fixes and personal customizations, stay in `mcharrel/glassbox`. Do not open or update upstream contribution PRs. The earlier upstream PRs (#73–77) are closed; their fixes remain in this fork. Reading and pulling upstream updates is still allowed.
 
 ## Local data
 
@@ -79,4 +79,4 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 - The PR tab rail shrinks to the width of the longest compact PR ID, with only the status dot and small padding around it. Longer IDs increase that minimum so they remain readable.
 - Newly opened PRs show a pending indicator until their own file list is available. Their file view, file names, and GUIDE/LEARN never display the previous PR. A cold file also shows a loading indicator instead of the previous file. Failed file-list loads offer Retry.
-- Model selections discovered from the provider, including `gpt-5.5-pro`, persist across settings opens and app restarts. The fallback model catalog no longer silently substitutes GPT-4o. GPT-5.5 Pro and its dated snapshots use their required Responses API for analysis, with response storage disabled. Both model fixes are contributed upstream.
+- Model selections discovered from the provider, including `gpt-5.5-pro`, persist across settings opens and app restarts. The fallback model catalog no longer silently substitutes GPT-4o. GPT-5.5 Pro and its dated snapshots use their required Responses API for analysis, with response storage disabled. Both model fixes remain in this fork.
