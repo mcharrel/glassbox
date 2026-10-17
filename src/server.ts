@@ -16,8 +16,10 @@ import { pageRoutes } from './routes/pages.js';
 import { themeApiRoutes } from './routes/theme-api.js';
 import type { AppEnv } from './types.js';
 import { openOS } from './utils/openOS.js';
+import { ensureCheckout } from './workspace/checkout.js';
 import { workspaceRoutes } from './workspace/routes.js';
 import { startWorkspace, tabForReview } from './workspace/service.js';
+import { saveWorkspace } from './workspace/storage.js';
 
 /** How many consecutive ports to try (starting at the requested one) before
  *  giving up, when not in `--strict-port` mode. */
@@ -48,6 +50,15 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
     const requested = requestedId === reviewId ? null : await getReview(requestedId);
     if (requestedId !== reviewId && !requested) return c.req.path.startsWith('/api/')
       ? c.json({ error: 'Review not found' }, 404) : c.text('Review not found', 404);
+    const tab = tabForReview(requestedId);
+    if (tab && (c.req.path.startsWith('/file/') || c.req.path === '/file-raw')) {
+      if (Date.now() - tab.lastUsedAt > 60000) {
+        tab.lastUsedAt = Date.now();
+        saveWorkspace();
+      }
+      try { await ensureCheckout(tab); }
+      catch { return c.text(tab.error ?? 'Could not restore the review checkout', 503); }
+    }
     c.set('reviewId', requestedId);
     c.set('currentReviewId', reviewId);
     c.set('repoRoot', requested?.repo_path ?? tabForReview(requestedId)?.repoRoot ?? repoRoot);
@@ -151,7 +162,7 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
     try { openOS(url, 'url'); } catch { /* best-effort */ }
   }
 
-  const stopWorkspace = startWorkspace();
+  const stopWorkspace = startWorkspace(repoRoot);
   server.on('close', stopWorkspace);
   return { port: actualPort, server };
 }

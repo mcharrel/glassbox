@@ -20,7 +20,7 @@ import {
 } from '../db/queries.js';
 import { parseDiffData } from '../git/parseDiffData.js';
 import { startCommentAgent } from './agent.js';
-import { importPull } from './checkout.js';
+import { ensureCheckout, importPull } from './checkout.js';
 import {
   github,
   loadComments,
@@ -33,13 +33,15 @@ import {
   repoApi,
 } from './github.js';
 import { notify } from './notifications.js';
+import { startWorkspaceCleanup } from './retention.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 const syncing = new Map<string, boolean>();
 const pendingRefresh = new Set<string>();
 let flushing = false;
 export function tabForReview(reviewId: string): PullTab | undefined {
-  return workspaceData().tabs.find((t) => t.reviewId === reviewId);
+  const data = workspaceData();
+  return [...data.tabs, ...data.archived].find((t) => t.reviewId === reviewId);
 }
 function requireTab(key: string): PullTab {
   const tab = workspaceData().tabs.find((t) => t.key === key);
@@ -87,6 +89,7 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
     return;
   }
   syncing.set(tab.key, refreshDiff);
+  tab.loading = true;
   try {
     const before = tab.info;
     const [info, viewer] = await Promise.all([
@@ -118,7 +121,7 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
       syncComments(tab),
       (async () => {
         if (
-          tab.reviewId === null ||
+          tab.reviewId === null || tab.checkoutEvicted ||
           ((refreshDiff || tab.importLocalComments) &&
             (tab.reviewedHead !== info.headRefOid || tab.reviewedBase !== info.baseRefOid))
         ) await importPull(tab);
@@ -137,6 +140,7 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
     tab.error = error instanceof Error ? error.message : 'Sync failed';
   } finally {
     tab.loading = false;
+    tab.lastUsedAt = Date.now();
     syncing.delete(tab.key);
     saveWorkspace();
     if (pendingRefresh.delete(tab.key) && workspaceData().tabs.includes(tab)) void syncTab(tab, true);
@@ -197,16 +201,19 @@ async function syncComments(tab: PullTab): Promise<void> {
 function needsInitialSync(tab: PullTab): boolean {
   return tab.info === null || tab.reviewId === null || !tab.viewer || !tab.commentsLoaded || tab.importLocalComments;
 }
-export function startWorkspace(): () => void {
+export function startWorkspace(pinnedRoot?: string): () => void {
   const data = workspaceData();
-  for (const tab of data.tabs) {
+  for (const tab of [...data.tabs, ...data.archived]) {
     for (const message of tab.comments)
       if (message.kind === 'ai' && message.status === 'working') {
         message.status = 'error';
         message.error = 'The app restarted while the agent was working. Any local edits were preserved.';
       }
     tab.loading = false;
+    if (!data.tabs.includes(tab)) continue;
+    if (tab.checkoutEvicted && tab.key !== data.active) continue;
     if (needsInitialSync(tab)) void syncTab(tab);
+    else if (tab.key === data.active) void ensureCheckout(tab).catch(() => {});
   }
   saveWorkspace();
   // Only pending writes retry in the background; cached PRs refresh on demand.
@@ -215,11 +222,14 @@ export function startWorkspace(): () => void {
   }, 10_000);
   timer.unref();
   void flushOutbox();
+  const stopCleanup = startWorkspaceCleanup(pinnedRoot);
   return () => {
     clearInterval(timer);
+    stopCleanup();
   };
 }
 function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'edit' | 'delete'): void {
+  tab.lastUsedAt = Date.now();
   message.status = 'pending';
   const data = workspaceData();
   if (
@@ -437,8 +447,10 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
       data.tabs.unshift(tab);
     }
     data.active = tab.key;
+    tab.lastUsedAt = Date.now();
     saveWorkspace();
     if (needsInitialSync(tab)) void syncTab(tab);
+    else void ensureCheckout(tab).catch(() => {});
     return;
   }
   if (input.op === 'order') {
@@ -453,18 +465,25 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     return;
   }
   const tab = requireTab(input.key);
+  tab.lastUsedAt = Date.now();
   if (input.op === 'retry-agent') {
     const reply = tab.comments.find((message) => message.id === input.id && message.kind === 'ai');
     const original = tab.comments.find((message) => message.id === reply?.parentKey);
     if (reply?.status !== 'error' || !original) throw new Error('No failed agent job to retry');
     startCommentAgent(tab, original);
   }
-  if (input.op === 'select') data.active = tab.key;
+  if (input.op === 'select') {
+    data.active = tab.key;
+    if (needsInitialSync(tab)) void syncTab(tab);
+    else void ensureCheckout(tab).catch(() => {});
+  }
   if (input.op === 'view') tab.view = input.view;
   if (input.op === 'close') {
     data.tabs = data.tabs.filter((t) => t !== tab);
     data.archived.push(tab);
     if (data.active === tab.key) data.active = data.tabs[0]?.key ?? null;
+    const next = data.tabs.find(item => item.key === data.active);
+    if (next) void ensureCheckout(next).catch(() => {});
   }
   if (input.op === 'refresh') {
     tab.loading = true;

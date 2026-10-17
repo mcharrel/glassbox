@@ -78,6 +78,8 @@ export const ThreadMessageSchema = z.object({
   error: z.string().optional(),
   editable: z.boolean().default(false),
   deleted: z.boolean().default(false),
+  workspaceUpdatedAt: z.number().optional(),
+  workspaceSafeHead: z.string().optional(),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
 export const PullTabSchema = z.object({
@@ -91,6 +93,8 @@ export const PullTabSchema = z.object({
   loading: z.boolean().default(false),
   error: z.string().optional(),
   updatedAt: z.number().default(0),
+  lastUsedAt: z.number().default(0),
+  checkoutEvicted: z.boolean().default(false),
   comments: z.array(ThreadMessageSchema).default([]),
   commentsLoaded: z.boolean().default(false),
   slack: z.record(z.string(), z.string()).default({}),

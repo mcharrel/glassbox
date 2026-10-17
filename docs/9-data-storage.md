@@ -68,3 +68,9 @@ The system shall persist the following seven entities:
 
 - Reviews from different repositories shall be isolated by `repo_path`.
 - The instance lock file (`glassbox.lock`) shall prevent concurrent database access from multiple processes.
+
+### 9.7 Managed Workspace Retention
+
+The personal fork checks on startup and hourly for disposable PR checkouts and comment-agent worktrees unused for 14 days. Persist review use and agent completion timestamps; local polling must not refresh them. Remove only verified managed directories, preserving the selected PR, the server checkout, running operations, offline writes, local files/commits, user branches, locked worktrees, initialized submodules and Git data still borrowed by another checkout. Remove expired borrowers before providers and unregister agent worktrees through Git without force.
+
+Cleanup preserves the database, comments, attachments and tab history. Reopening an expired checkout recreates its saved base/head without rewriting review records or refreshing GitHub metadata, and the client shows pending source until restoration finishes. Cleanup and import/restoration are serialized per PR, and selection/activity is rechecked before deletion. The sweep itself makes no GitHub requests.

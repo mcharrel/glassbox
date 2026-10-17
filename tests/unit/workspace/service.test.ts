@@ -12,7 +12,8 @@ vi.mock('../../../src/workspace/storage.js', () => ({
   saveWorkspace: mocks.save,
 }));
 vi.mock('../../../src/workspace/agent.js', () => ({ startCommentAgent: mocks.agent }));
-vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn() }));
+vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
 vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/workspace/github.js')>()),
   github: mocks.github,
@@ -21,7 +22,7 @@ vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
 }));
 import { flushOutbox, insertTab, mutateWorkspace, startWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
-import { importPull } from '../../../src/workspace/checkout.js';
+import { ensureCheckout, importPull } from '../../../src/workspace/checkout.js';
 
 function tab(number = 1) {
   return PullTabSchema.parse({
@@ -230,6 +231,17 @@ describe('manual GitHub refresh', () => {
     expect(mocks.github).not.toHaveBeenCalled();
     expect(importPull).not.toHaveBeenCalled();
   });
+  it('restores an expired checkout only on selection, without refreshing cached GitHub metadata', async () => {
+    vi.useFakeTimers();
+    const expired = cached(2); expired.checkoutEvicted = true;
+    mocks.data.tabs.push(expired); vi.mocked(ensureCheckout).mockClear();
+    stop = startWorkspace(); await vi.advanceTimersByTimeAsync(100);
+    expect(ensureCheckout).not.toHaveBeenCalledWith(expired);
+    await mutateWorkspace({ op: 'select', key: expired.key }, 'review');
+    expect(ensureCheckout).toHaveBeenCalledWith(expired);
+    expect(expired.lastUsedAt).toBe(Date.now());
+    expect(loadPull).not.toHaveBeenCalled(); expect(loadComments).not.toHaveBeenCalled();
+  });
   it('initializes an unfinished PR once alongside cached tabs without periodic refresh', async () => {
     vi.useFakeTimers();
     const pending = cached(2); pending.info = null; pending.reviewId = null;
@@ -278,4 +290,17 @@ describe('manual GitHub refresh', () => {
     expect(loadPull).not.toHaveBeenCalled();
     expect(loadComments).not.toHaveBeenCalled();
   });
+});
+
+it('recovers interrupted agents in closed tabs so they cannot block retention forever', () => {
+  const archived = tab(2);
+  archived.loading = true;
+  archived.comments.push({ id: 'a', kind: 'ai', status: 'working', body: 'Working', author: 'AI', date: '', url: '', editable: false, deleted: false });
+  mocks.data.tabs = []; mocks.data.archived = [archived];
+  const stop = startWorkspace();
+  try {
+    expect(archived.loading).toBe(false);
+    expect(archived.comments[0].status).toBe('error');
+    expect(archived.comments[0].error).toContain('local edits were preserved');
+  } finally { stop(); }
 });

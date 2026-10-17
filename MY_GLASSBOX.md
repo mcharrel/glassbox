@@ -107,3 +107,10 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 - Reuse matching local repositories found under Go workspaces and common source folders, validating their GitHub remotes (including SSH aliases). Optional explicit paths live in `~/.glassbox/workspace-config.json` under `repositories` keyed by `owner/repo`. Preserve the source checkout's files/index/branch and protect borrowed commits from garbage collection.
 - Cold imports fetch the exact PR/base snapshots with depth 1, using GitHub's reported merge base. Do not guess with depth 100 or deepen by 1,000 commits. Completely new repositories still require downloading source snapshots; metadata and comments can display independently. Poll local import progress more frequently while an import is running; cached tabs still make no idle GitHub requests.
 - Cmd/Ctrl+= (or +) and Cmd/Ctrl+- zoom the entire desktop app, in 10% steps from 50% to 200%. Cmd/Ctrl+0 resets to 100%. The preference persists and applies to every PR; standard browser zoom remains unchanged when running outside the desktop shell.
+
+## Workspace retention
+
+- Automatically check on startup and hourly for PR checkouts and comment-agent worktrees inactive for 14 days. Selection, imports, edits and agent completion count as activity; local workspace polling does not.
+- Remove only disposable directories created inside this review data directory’s `workspaces/` and `agents/`. Preserve the selected PR, running work, queued offline comments, dirty/untracked/ignored files, unpublished commits, user branches, locked worktrees and initialized submodules. Never delete my ordinary clones or the checkout hosting the running app.
+- Shared Git providers stay while another checkout needs them; expired borrowers are removed first. Agent worktrees are unregistered with Git, without force.
+- Keep PR tabs, comments, annotations, attachments and reading state. Selecting an expired PR shows loading while recreating its exact saved source revision; it does not refresh GitHub metadata or rewrite annotations. Cleanup makes no GitHub API requests.

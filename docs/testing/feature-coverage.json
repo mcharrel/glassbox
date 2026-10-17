@@ -122,6 +122,10 @@
       ],
       "note": "config.json chmod 0600, base64-encoded keys, and GLASSBOX_CONFIG_DIR override all asserted."
     },
+    "9.7": {
+      "tests": ["tests/integration/workspace/retention.test.ts", "tests/unit/workspace/service.test.ts", "tests/unit/client/reviewSessions.test.ts"],
+      "note": "Real Git cleanup/restoration covers cutoff boundaries, closed/open PRs, active work, local changes, safe agent heads, shared dependencies, path safety and selection races; client/service tests cover lazy recovery without metadata refresh."
+    },
     "9.6": {
       "tests": [
         "tests/unit/db/queries.test.ts",

@@ -11,8 +11,9 @@ import { addReviewFile, createReview, updateReviewSource } from '../db/queries.j
 import { parseDiff } from '../git/parseDiff.js';
 import { updateReviewDiffs } from '../review-update.js';
 import { github, githubToken, repoApi } from './github.js';
+import { withCheckoutLock } from './lifecycle.js';
 import { findLocalRepository } from './repositories.js';
-import { workspaceData } from './storage.js';
+import { saveWorkspace, workspaceData } from './storage.js';
 
 const exec = promisify(execFile);
 const fetches = new Map<string, Promise<string>>();
@@ -51,8 +52,40 @@ async function remoteMergeBase(tab: PullTab): Promise<string> {
 }
 /** Import into a dedicated checkout; never switch the user's existing working tree. */
 export async function importPull(tab: PullTab): Promise<void> {
+  return withCheckoutLock(tab.key, () => prepareCheckout(tab, false));
+}
+
+const restoring = new Map<string, Promise<void>>();
+/** Recreate the exact saved source snapshot without rewriting review files or annotations. */
+export async function ensureCheckout(tab: PullTab): Promise<void> {
+  if (!tab.checkoutEvicted) return;
+  const existing = restoring.get(tab.key);
+  if (existing) return existing;
+  const pending = withCheckoutLock(tab.key, async () => {
+    if (!tab.checkoutEvicted) return;
+    tab.loading = true;
+    tab.error = undefined;
+    tab.lastUsedAt = Date.now();
+    saveWorkspace();
+    try {
+      await prepareCheckout(tab, true);
+      tab.error = undefined;
+    } catch (error) {
+      tab.error = error instanceof Error ? error.message : 'Could not restore the review checkout';
+      throw error;
+    } finally { tab.loading = false; saveWorkspace(); }
+  });
+  restoring.set(tab.key, pending);
+  try { await pending; }
+  finally { if (restoring.get(tab.key) === pending) restoring.delete(tab.key); }
+}
+
+async function prepareCheckout(tab: PullTab, restore: boolean): Promise<void> {
   const info = tab.info;
   if (!info) throw new Error('PR details are unavailable');
+  const head = restore ? tab.reviewedHead : info.headRefOid;
+  const target = restore ? tab.reviewedBase : info.baseRefOid;
+  if (!head || !target) throw new Error('The saved PR revision is unavailable; refresh the PR');
   const root = join(
     getDataDir() ??
       (() => {
@@ -67,10 +100,10 @@ export async function importPull(tab: PullTab): Promise<void> {
   if (!(await readFile(exclude, 'utf8')).split('\n').includes('/.glassbox/'))
     await appendFile(exclude, '\n/.glassbox/\n');
   const source =
-    tab.repoRoot ??
+    (!tab.checkoutEvicted ? tab.repoRoot : null) ??
     workspaceData().tabs.find(
       (other) =>
-        other.ref.owner === tab.ref.owner && other.ref.repo === tab.ref.repo && other.repoRoot !== null,
+        other.key !== tab.key && !other.checkoutEvicted && other.ref.owner === tab.ref.owner && other.ref.repo === tab.ref.repo && other.repoRoot !== null,
     )?.repoRoot ?? await findLocalRepository(tab.ref);
   if (source !== undefined && source !== root) {
     const objects = (
@@ -82,8 +115,8 @@ export async function importPull(tab: PullTab): Promise<void> {
   // Fetch through an existing checkout so Git can negotiate its known history.
   const fetchRoot = source ?? root;
   // A cold clone needs two snapshots, not an arbitrary window of commit history.
-  let base = source !== undefined ? undefined : await remoteMergeBase(tab);
-  const commits = [...new Set([info.baseRefOid, info.headRefOid, ...(base !== undefined ? [base] : [])])];
+  let base = restore ? target : source !== undefined ? undefined : await remoteMergeBase(tab);
+  const commits = [...new Set([target, head, ...(base !== undefined ? [base] : [])])];
   const available = await Promise.all(commits.map(sha =>
     gitAsync(['cat-file', '-e', `${sha}^{commit}`], root).then(() => true, () => false)));
   if (!available.every(Boolean)) await gitAsync(
@@ -110,7 +143,12 @@ export async function importPull(tab: PullTab): Promise<void> {
   }
   const dirty = await gitAsync(['status', '--porcelain'], root);
   if (dirty.trim()) throw new Error('The managed checkout has local changes; they were preserved.');
-  await gitAsync(['checkout', '--detach', info.headRefOid], root);
+  await gitAsync(['checkout', '--detach', head], root);
+  if (restore) {
+    tab.repoRoot = root;
+    tab.checkoutEvicted = false;
+    return;
+  }
   try {
     base ??= (await gitAsync(['merge-base', info.baseRefOid, info.headRefOid], root)).trim();
   } catch {
@@ -139,4 +177,6 @@ export async function importPull(tab: PullTab): Promise<void> {
   tab.repoRoot = root;
   tab.reviewedHead = info.headRefOid;
   tab.reviewedBase = base;
+  tab.checkoutEvicted = false;
+  tab.lastUsedAt = Date.now();
 }

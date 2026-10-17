@@ -179,3 +179,17 @@ describe('in-memory PR sessions', () => {
     expect(scroll).toEqual({ value: 'Typing while loading', scrollTop: 50 });
   });
 });
+
+it('does not preload expired sources and waits for restoration without losing the previous reading state', async () => {
+  workspace.value.tabs[1].checkoutEvicted = true;
+  dispose = initReviewSessions(); await tick();
+  expect(api).not.toHaveBeenCalled();
+  reviewStore.actions.update({ currentFileId: 'a2', hiddenFileIds: new Set(['a1']) });
+  workspace.value = { ...workspace.value, active: 'b' }; await tick();
+  expect(activeReviewReady()).toBe(false); expect(api).not.toHaveBeenCalled();
+  expect(reviewStore.state.value.files).toEqual([]);
+  workspace.value = { ...workspace.value, tabs: workspace.value.tabs.map(t => ({ ...t, checkoutEvicted: false })) }; await tick();
+  expect(activeReviewReady()).toBe(true); expect(reviewStore.state.value.files[0].id).toBe('b1');
+  workspace.value = { ...workspace.value, active: 'a' }; await tick();
+  expect(reviewStore.state.value.currentFileId).toBe('a2'); expect([...reviewStore.state.value.hiddenFileIds]).toEqual(['a1']);
+});

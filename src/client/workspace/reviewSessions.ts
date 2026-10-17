@@ -84,7 +84,7 @@ export function initReviewSessions(): () => void {
     if (existing) return existing;
     const reviewId = tab.reviewId ?? '';
     if (reviewId !== '' && [...sessions.values()].some(value => value.review.reviewId === reviewId)) invalidateDiffCache(reviewId);
-    if (reviewId !== '' && reviewId === initial.review.reviewId && !usedInitial) {
+    if (!tab.checkoutEvicted && reviewId !== '' && reviewId === initial.review.reviewId && !usedInitial) {
       usedInitial = true;
       sessions.set(key, initial);
       return initial;
@@ -103,7 +103,7 @@ export function initReviewSessions(): () => void {
     } catch { /* optional persistence */ }
     sessions.set(key, session);
     // Importing tabs have no review yet. Never fetch against the prior/default review.
-    if (tab.reviewId === null) return session;
+    if (tab.reviewId === null || tab.checkoutEvicted) return session;
     const isCurrent = () => live && current === key && sessions.get(key) === session;
     const publish = (kind: 'files' | 'ai') => {
       if (!isCurrent()) return;
@@ -183,7 +183,7 @@ export function initReviewSessions(): () => void {
         window.history.replaceState(null, '', tab.reviewId === null ? '/' : `/?reviewId=${encodeURIComponent(tab.reviewId)}`);
         document.dispatchEvent(new Event('glassbox-review-selected'));
       }
-      for (const other of workspace.value.tabs) if (other.reviewId !== null) prepare(other);
+      for (const other of workspace.value.tabs) if (other.reviewId !== null && !other.checkoutEvicted) prepare(other);
     });
   });
   return () => { live = false; stop(); document.removeEventListener('glassbox-analysis-reset', resetAnalysis); };

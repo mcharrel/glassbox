@@ -8,7 +8,7 @@ import { type AIMessage, sendAIRequest } from '../ai/client.js';
 import { loadAIConfig } from '../ai/config.js';
 import type { PullTab, ThreadMessage } from '../api/workspace.js';
 import { getDataDir } from '../db/connection.js';
-import { gitAsync } from './checkout.js';
+import { ensureCheckout, gitAsync } from './checkout.js';
 import { prepareAgentHead, publishAgentChanges } from './publish.js';
 import { saveWorkspace } from './storage.js';
 
@@ -60,6 +60,7 @@ export function startCommentAgent(tab: PullTab, comment: ThreadMessage): void {
     let root: string | undefined;
     try {
       if (config === null) throw new Error('The guidance model configuration could not be loaded');
+      await ensureCheckout(tab);
       if (tab.repoRoot === null || !tab.reviewedHead)
         throw new Error('Wait for the PR checkout to finish loading');
       if (config.apiKey === null && config.platform !== 'local' && config.platform !== 'apple')
@@ -76,6 +77,9 @@ export function startCommentAgent(tab: PullTab, comment: ThreadMessage): void {
       );
       const access = config.agentAccess ?? 'push';
       const baseHead = access === 'push' ? await prepareAgentHead(tab) : tab.reviewedHead;
+      reply.workspaceSafeHead = baseHead;
+      reply.workspaceUpdatedAt = Date.now();
+      saveWorkspace();
       await gitAsync(['worktree', 'add', '--detach', root, baseHead], tab.repoRoot);
       const checkout = root;
       const files = (await gitAsync(['ls-files', '-z'], root)).split('\0').filter(Boolean);
@@ -145,6 +149,7 @@ export function startCommentAgent(tab: PullTab, comment: ThreadMessage): void {
       if (finished && diff.trim()) {
         if (access === 'push') {
           const url = await publishAgentChanges(tab, root, baseHead);
+          reply.workspaceSafeHead = url.split('/').at(-1);
           reply.body += `\n\n[Signed and pushed](${url}). Whitespace checks passed; project tests were not run.`;
         } else reply.body += `\n\nLocal edits saved in ${root}. Changes have not been pushed.`;
       }
@@ -155,6 +160,8 @@ export function startCommentAgent(tab: PullTab, comment: ThreadMessage): void {
       reply.error = error instanceof Error ? error.message : 'Agent failed';
       if (root !== undefined) reply.error += `\nLocal checkout: ${root}`;
     }
+    reply.workspaceUpdatedAt = Date.now();
+    tab.lastUsedAt = Date.now();
     saveWorkspace();
   });
   queues.set(key, job);
