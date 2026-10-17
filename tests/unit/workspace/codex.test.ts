@@ -1,3 +1,4 @@
+import { pullInfo } from './fixtures.js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { PullTabSchema, ThreadMessageSchema, type PullTab } from '../../../src/api/workspace.js';
 const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[] }, connect: vi.fn(), send: vi.fn(), save: vi.fn(), close: vi.fn() }));
@@ -5,9 +6,9 @@ vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks
 vi.mock('../../../src/workspace/codex-client.js', () => ({ codexConnection: mocks.connect, sendToCodex: mocks.send }));
 import { commentPrompt, flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment } from '../../../src/workspace/codex.js';
 const chat = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const message = (body = 'Please simplify this') => ThreadMessageSchema.parse({ id: crypto.randomUUID(), body, author: 'alice', date: '', kind: 'review', path: 'src/example.ts', line: 10, side: 'new' });
+const message = (body = 'Please simplify this') => ThreadMessageSchema.parse({ id: crypto.randomUUID(), body, author: 'alice', date: '', kind: 'review', destination: 'local', path: 'src/example.ts', line: 10, side: 'new' });
 function tab() {
-  return PullTabSchema.parse({ key: 'owner/repo#1', ref: { owner: 'owner', repo: 'repo', number: 1, url: 'https://github.com/owner/repo/pull/1' }, repoRoot: null, reviewId: null, info: null, codexThreadId: chat });
+  return PullTabSchema.parse({ key: 'owner/repo#1', ref: { owner: 'owner', repo: 'repo', number: 1, url: 'https://github.com/owner/repo/pull/1' }, repoRoot: null, reviewId: null, info: pullInfo(), viewer: 'alice', codexThreadId: chat });
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -53,7 +54,7 @@ it('does not retry uncertain delivery automatically, including across app restar
   await vi.waitFor(() => expect(m.codex?.status).toBe('uncertain'));
   await flushCodexComments(); expect(mocks.send).toHaveBeenCalledTimes(1);
   m.codex!.status = 'sending'; recoverCodexComments(); expect(m.codex?.status).toBe('uncertain');
-  mocks.send.mockResolvedValue(undefined); retryCodexComment(m);
+  mocks.send.mockResolvedValue(undefined); retryCodexComment(mocks.data.tabs[0], m);
   await vi.waitFor(() => expect(m.codex?.status).toBe('sent'));
   expect(mocks.send).toHaveBeenCalledTimes(2);
 });
@@ -64,4 +65,23 @@ it('ignores remote, old, deleted and already delivered comments but preserves an
   t.comments.push(remote, deleted, pending); mocks.data.archived.push(t); mocks.data.tabs = [];
   await flushCodexComments(); expect(mocks.send).toHaveBeenCalledTimes(1);
   expect(mocks.send.mock.calls[0][4]).toBe(pending.id);
+});
+
+it.each(['bob', null])('never connects or sends on another or unidentified PR (%s)', async author => {
+  const t = mocks.data.tabs[0]; t.info = author ? pullInfo(author) : null;
+  const fresh = message(); t.comments.push(fresh); queueCodexComment(t, fresh);
+  expect(fresh.codex).toBeUndefined();
+  fresh.codex = { threadId: chat, status: 'queued', mode: 'queue' };
+  await flushCodexComments();
+  expect(mocks.connect).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
+  fresh.codex.status = 'uncertain';
+  expect(() => retryCodexComment(t, fresh)).toThrow('own PRs');
+});
+it('does not deliver public comments or a message whose chat binding changed', async () => {
+  const t = mocks.data.tabs[0]; const m = message(); m.destination = 'github'; t.comments.push(m);
+  queueCodexComment(t, m); expect(m.codex).toBeUndefined();
+  m.codex = { threadId: chat, status: 'queued', mode: 'queue' }; await flushCodexComments();
+  expect(mocks.connect).not.toHaveBeenCalled();
+  m.destination = 'local'; delete t.codexThreadId; await flushCodexComments();
+  expect(mocks.send).not.toHaveBeenCalled();
 });

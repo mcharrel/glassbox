@@ -1,6 +1,6 @@
 import { delegate, effect, mount } from 'kerfjs';
 
-import { type PullTab, reportVisibility, reviewerStates } from '../../api/workspace.js';
+import { commentDestination, type PullTab, reportVisibility, reviewerStates } from '../../api/workspace.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
 import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
 import { refreshFind } from '../diff/find.js';
@@ -264,11 +264,14 @@ export function initWorkspace(): void {
   });
   mount(conversation, () => {
     const tab = activeTab();
+    const input = mainSections.querySelector<HTMLTextAreaElement>('.pr-comment-input');
+    if (input) input.placeholder = tab && commentDestination(tab) === 'local' ? 'Comment locally ...'
+      : tab && commentDestination(tab) === 'github' ? 'Comment on GitHub ...' : 'Comment (waiting for PR ownership) ...';
     queueMicrotask(refreshFind);
     return (
       <>
         {tab?.comments
-          .filter((m) => !m.deleted && m.kind === 'issue')
+          .filter((m) => !m.deleted && m.kind === 'issue' && m.parentKey === undefined && m.parentId === undefined)
           .sort((a, b) => b.date.localeCompare(a.date))
           .map((m) => threadHtml(m, tab.comments))}
         {tab && !tab.commentsLoaded && <p>Loading comments…</p>}

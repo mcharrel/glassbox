@@ -85,6 +85,8 @@ export const ThreadMessageSchema = z.object({
   editable: z.boolean().default(false),
   deleted: z.boolean().default(false),
   codex: CodexDeliverySchema.optional(),
+  destination: z.enum(['local', 'github']).optional(),
+  codexRequested: z.boolean().optional(),
   workspaceUpdatedAt: z.number().optional(),
   workspaceSafeHead: z.string().optional(),
 });
@@ -112,6 +114,12 @@ export const PullTabSchema = z.object({
   codexThreadId: z.uuid().optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
+// Unknown ownership must never default to publishing a private comment.
+export function commentDestination(tab: Pick<PullTab, 'info' | 'viewer'>): 'local' | 'github' | null {
+  const author = tab.info?.author.login;
+  if (!tab.viewer || author === undefined || author === '') return null;
+  return tab.viewer.toLowerCase() === author.toLowerCase() ? 'local' : 'github';
+}
 export const WorkspaceSchema = z.object({
   tabs: z.array(PullTabSchema),
   active: z.string().nullable(),
@@ -152,6 +160,7 @@ export const WorkspaceMutationSchema = z.discriminatedUnion('op', [
     key: z.string(),
     body: z.string().min(1),
     parentId: z.number().optional(),
+    parentKey: z.string().optional(),
   }),
   z.object({
     op: z.literal('edit-comment'),

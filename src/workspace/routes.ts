@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import { VisibilitySchema, WorkspaceMutationSchema } from '../api/workspace.js';
+import { commentDestination, VisibilitySchema, WorkspaceMutationSchema } from '../api/workspace.js';
 import type { AppEnv } from '../types.js';
 import { parseBody } from '../utils/parseBody.js';
 import { postCodexReply } from './codex-reply.js';
@@ -8,7 +8,7 @@ import { authorizeControl, CodexOpenSchema, CodexReplySchema } from './control.j
 import { parsePullUrl, pullKey } from './github.js';
 import { reportVisibility } from './notifications.js';
 import { searchAllFiles } from './search.js';
-import { mutateWorkspace } from './service.js';
+import { mutateWorkspace, reconcileCommentRouting } from './service.js';
 import { saveWorkspace, workspaceData  } from './storage.js';
 
 export const workspaceRoutes = new Hono<AppEnv>();
@@ -26,11 +26,12 @@ workspaceRoutes.post('/codex-open', async c => {
   try {
     const key = pullKey(parsePullUrl(parsed.data.url));
     const before = [...workspaceData().tabs, ...workspaceData().archived].find(tab => tab.key === key);
-    if (parsed.data.threadId !== undefined && before?.codexThreadId !== undefined && before.codexThreadId !== parsed.data.threadId)
+    if (before && commentDestination(before) !== 'github' && parsed.data.threadId !== undefined && before.codexThreadId !== undefined && before.codexThreadId !== parsed.data.threadId)
       return c.json({ error: 'This PR is already linked to another Codex chat' }, 409);
     await mutateWorkspace({ op: 'open', url: parsed.data.url }, c.get('reviewId'));
     const tab = workspaceData().tabs.find(item => item.key === key);
-    if (tab && parsed.data.threadId !== undefined) tab.codexThreadId = parsed.data.threadId;
+    if (tab && parsed.data.threadId !== undefined && commentDestination(tab) !== 'github') tab.codexThreadId = parsed.data.threadId;
+    if (tab) reconcileCommentRouting(tab);
     workspaceData().externalSelection = (workspaceData().externalSelection ?? 0) + 1;
     saveWorkspace();
     return c.json({ ok: true, linked: Boolean(tab?.codexThreadId) });

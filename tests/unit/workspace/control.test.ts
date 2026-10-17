@@ -1,3 +1,4 @@
+import { pullInfo } from './fixtures.js';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +8,7 @@ import { PullTabSchema, type PullTab } from '../../../src/api/workspace.js';
 import type { AppEnv } from '../../../src/types.js';
 const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[], active: null, externalSelection: 0 }, mutate: vi.fn(), save: vi.fn() }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks.data, saveWorkspace: mocks.save }));
-vi.mock('../../../src/workspace/service.js', () => ({ mutateWorkspace: mocks.mutate }));
+vi.mock('../../../src/workspace/service.js', () => ({ mutateWorkspace: mocks.mutate, reconcileCommentRouting: vi.fn() }));
 import { authorizeControl, controlPath, registerControl } from '../../../src/workspace/control.js';
 import { workspaceRoutes } from '../../../src/workspace/routes.js';
 let dir: string;
@@ -45,4 +46,13 @@ it('rejects another chat trying to silently replace the original binding', async
 it('does not remove a newer server registration when the old server closes', () => {
   const oldStop = registerControl(4183); const newStop = registerControl(4184); oldStop();
   expect(JSON.parse(readFileSync(controlPath(), 'utf8')).port).toBe(4184); newStop();
+});
+
+it('opens another person’s PR without binding a Codex chat', async () => {
+  const stop = registerControl(4183); const { token } = JSON.parse(readFileSync(controlPath(), 'utf8'));
+  await mocks.mutate();
+  mocks.data.tabs[0].viewer = 'alice'; mocks.data.tabs[0].info = pullInfo('bob');
+  const response = await post({ url, threadId: chat }, token);
+  expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ linked: false });
+  expect(mocks.data.tabs[0].codexThreadId).toBeUndefined(); stop();
 });

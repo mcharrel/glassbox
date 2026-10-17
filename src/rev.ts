@@ -15,6 +15,7 @@ import { parsePullUrl } from './workspace/github.js';
 async function openPull(url: string): Promise<void> {
   const ref = parsePullUrl(url);
   const threadId = process.env.CODEX_THREAD_ID;
+  const opened = { linked: false };
   if (threadId !== undefined) z.uuid().parse(threadId);
   const request = async (): Promise<boolean> => {
     let connection: z.infer<typeof ConnectionSchema>;
@@ -28,6 +29,7 @@ async function openPull(url: string): Promise<void> {
       });
     } catch { return false; }
     if (!response.ok) throw new Error(`rev could not open the PR (${response.status}): ${await response.text()}`);
+    opened.linked = z.object({ linked: z.boolean() }).parse(await response.json()).linked;
     return true;
   };
   if (!await request()) {
@@ -43,7 +45,7 @@ async function openPull(url: string): Promise<void> {
     }
     if (!ready) throw new Error('rev did not start. Run rev serve to see the startup error.');
   }
-  console.log(`Opened ${ref.url}${threadId !== undefined ? ' and linked the originating Codex chat' : ''}.`);
+  console.log(`Opened ${ref.url}${opened.linked ? ' and linked the originating Codex chat' : ''}.`);
 }
 async function replyToComment(args: string[]): Promise<void> {
   const value = (name: string) => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };

@@ -1,3 +1,4 @@
+import { pullInfo } from './fixtures.js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { PullTabSchema, ThreadMessageSchema, type PullTab } from '../../../src/api/workspace.js';
 const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[] }, save: vi.fn() }));
@@ -6,8 +7,8 @@ import { postCodexReply } from '../../../src/workspace/codex-reply.js';
 const chat = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const input = { url: 'https://github.com/owner/repo/pull/1', commentId: 'comment', threadId: chat, body: 'Fixed and pushed the signed commit. The focused tests pass.' };
 beforeEach(() => {
-  const comment = ThreadMessageSchema.parse({ id: 'comment', body: 'Fix it', kind: 'review', author: 'alice', date: '', path: 'src/file.ts', line: 10, side: 'new', annotationId: 'annotation', codex: { threadId: chat, status: 'queued', mode: 'queue' } });
-  mocks.data.tabs = [PullTabSchema.parse({ key: 'owner/repo#1', ref: { owner: 'owner', repo: 'repo', number: 1, url: input.url }, repoRoot: null, reviewId: null, info: null, codexThreadId: chat, comments: [comment] })]; mocks.data.archived = [];
+  const comment = ThreadMessageSchema.parse({ id: 'comment', body: 'Fix it', kind: 'review', destination: 'local', author: 'alice', date: '', path: 'src/file.ts', line: 10, side: 'new', annotationId: 'annotation', codex: { threadId: chat, status: 'queued', mode: 'queue' } });
+  mocks.data.tabs = [PullTabSchema.parse({ key: 'owner/repo#1', ref: { owner: 'owner', repo: 'repo', number: 1, url: input.url }, repoRoot: null, reviewId: null, info: pullInfo(), viewer: 'alice', codexThreadId: chat, comments: [comment] })]; mocks.data.archived = [];
 });
 it('posts the original chat’s answer in the original comment thread and preserves its source anchor', () => {
   const id = postCodexReply(input); const comments = mocks.data.tabs[0].comments;
@@ -30,4 +31,10 @@ it('rejects another chat, wrong PR, deleted comment and remote-only comments', (
 it('allows an in-flight answer to reach a closed PR tab without reopening it', () => {
   mocks.data.archived = mocks.data.tabs; mocks.data.tabs = [];
   postCodexReply(input); expect(mocks.data.tabs).toHaveLength(0); expect(mocks.data.archived[0].comments).toHaveLength(2);
+});
+
+it.each(['bob', null])('rejects Codex replies on another or unidentified PR (%s)', author => {
+  mocks.data.tabs[0].info = author ? pullInfo(author) : null;
+  expect(() => postCodexReply(input)).toThrow('own PRs');
+  expect(mocks.data.tabs[0].comments).toHaveLength(1);
 });

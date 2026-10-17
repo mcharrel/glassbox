@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import {
+  commentDestination,
   type PullTab,
   PullTabSchema,
   reviewerStates,
@@ -101,6 +102,8 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
     if (!workspaceData().tabs.includes(tab)) return;
     tab.info = info;
     tab.viewer = viewer.login;
+    reconcileCommentRouting(tab);
+    void flushOutbox();
     const directory = localWorkspaceConfig().slack;
     tab.slack = Object.fromEntries(
       [...reviewerStates(info).keys()]
@@ -161,7 +164,7 @@ async function syncComments(tab: PullTab): Promise<void> {
   for (const message of tab.comments)
     if (message.remoteId !== undefined && !knownRemoteIds.has(message.remoteId)) pendingIds.add(message.id);
   const local = tab.comments.filter(
-    (m) => m.kind === 'ai' || pendingIds.has(m.id) || m.annotationId !== undefined || m.codex !== undefined,
+    (m) => m.destination === 'local' || m.kind === 'ai' || pendingIds.has(m.id) || m.annotationId !== undefined || m.codex !== undefined,
   );
   tab.comments = [
     ...local,
@@ -170,7 +173,7 @@ async function syncComments(tab: PullTab): Promise<void> {
   // Reconcile externally edited replies while retaining local annotation identity.
   for (const message of local) {
     const match = remote.find((r) => r.remoteId === message.remoteId);
-    if (!pendingIds.has(message.id) && message.remoteId !== undefined) {
+    if (message.destination !== 'local' && !pendingIds.has(message.id) && message.remoteId !== undefined) {
       if (!match) {
         message.deleted = true;
         if (message.annotationId !== undefined) await deleteAnnotation(message.annotationId);
@@ -206,6 +209,7 @@ export function startWorkspace(pinnedRoot?: string): () => void {
   const data = workspaceData();
   recoverCodexComments();
   for (const tab of [...data.tabs, ...data.archived]) {
+    reconcileCommentRouting(tab);
     for (const message of tab.comments)
       if (message.kind === 'ai' && message.status === 'working') {
         message.status = 'error';
@@ -250,8 +254,32 @@ function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'ed
       attempted: false,
     });
   }
+  reconcileCommentRouting(tab);
   saveWorkspace();
   void flushOutbox();
+}
+export function reconcileCommentRouting(tab: PullTab): void {
+  const destination = commentDestination(tab);
+  const data = workspaceData();
+  if (destination === 'github') delete tab.codexThreadId;
+  for (const message of tab.comments) {
+    const queued = data.outbox.some(item => item.tab === tab.key && item.message === message.id);
+    if (message.destination === 'local' || (destination === 'local' &&
+      (queued || message.kind === 'ai' || message.codex))) {
+      message.destination = 'local';
+      data.outbox = data.outbox.filter(item => item.tab !== tab.key || item.message !== message.id);
+      if (message.kind !== 'ai') {
+        message.status = 'done';
+        delete message.error;
+      }
+    } else if (destination === 'github' && queued) message.destination = 'github';
+    if (destination === 'github') delete message.codex;
+    if (destination === 'local' && message.destination === 'local' && message.codexRequested === true && !message.codex)
+      queueCodexComment(tab, message);
+  }
+}
+function canPublishComment(tab: PullTab, message: ThreadMessage): boolean {
+  return commentDestination(tab) === 'github' && message.destination !== 'local';
 }
 export async function queueAnnotation(
   reviewId: string,
@@ -284,10 +312,10 @@ export async function queueAnnotation(
     status: 'pending',
     editable: true,
     deleted: false,
+    codexRequested: forwardToCodex,
   };
   tab.comments.push(message);
   enqueue(tab, message, 'create');
-  if (forwardToCodex) queueCodexComment(tab, message);
 }
 export function queueAnnotationChange(
   reviewId: string,
@@ -308,11 +336,14 @@ export async function flushOutbox(): Promise<void> {
   flushing = true;
   try {
     const data = workspaceData();
+    for (const tab of [...data.tabs, ...data.archived]) reconcileCommentRouting(tab);
+    saveWorkspace();
     for (const item of [...data.outbox]) {
       if (!data.outbox.includes(item) || item.nextAttempt > Date.now()) continue;
       const tab = [...data.tabs, ...data.archived].find((t) => t.key === item.tab);
       const message = tab?.comments.find((m) => m.id === item.message);
       if (!tab || !message) continue;
+      if (!canPublishComment(tab, message)) continue;
       if (
         item.operation !== 'create' &&
         message.remoteId === undefined &&
@@ -355,6 +386,7 @@ export async function flushOutbox(): Promise<void> {
             continue;
           }
           if (message.remoteId === undefined) {
+            if (!canPublishComment(tab, message)) continue;
             item.attempted = true;
             saveWorkspace();
             const location =
@@ -473,7 +505,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   if (input.op === 'retry-codex') {
     const message = tab.comments.find(item => item.id === input.id && !item.deleted);
     if (!message) throw new Error('Comment not found');
-    retryCodexComment(message);
+    retryCodexComment(tab, message);
   }
   if (input.op === 'retry-agent') {
     const reply = tab.comments.find((message) => message.id === input.id && message.kind === 'ai');
@@ -517,17 +549,21 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     void syncTab(tab);
   }
   if (input.op === 'comment') {
+    if (input.parentKey !== undefined && input.parentId !== undefined) throw new Error('Choose one comment thread');
     const parent =
-      input.parentId !== undefined ? tab.comments.find((m) => m.remoteId === input.parentId) : undefined;
-    if (Boolean(input.parentId) && !parent) throw new Error('Comment thread not found');
+      tab.comments.find(m => !m.deleted && (input.parentKey !== undefined ? m.id === input.parentKey
+        : input.parentId !== undefined && m.remoteId === input.parentId));
+    if ((input.parentId !== undefined || input.parentKey !== undefined) && !parent) throw new Error('Comment thread not found');
+    if (input.parentKey !== undefined && commentDestination(tab) !== 'local') throw new Error('Local replies are only available on your own PRs');
     const message: ThreadMessage = {
       id: randomUUID(),
       body: input.body,
       author: tab.viewer || 'You',
       date: new Date().toISOString(),
       url: '',
-      kind: parent ? 'review' : 'issue',
-      parentId: parent?.parentId ?? parent?.remoteId,
+      kind: parent?.path !== undefined ? 'review' : 'issue',
+      parentId: input.parentKey === undefined ? parent?.parentId ?? parent?.remoteId : undefined,
+      parentKey: input.parentKey,
       path: parent?.path,
       line: parent?.line,
       side: parent?.side,
@@ -535,10 +571,10 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
       status: 'pending',
       editable: true,
       deleted: false,
+      codexRequested: true,
     };
     tab.comments.push(message);
     enqueue(tab, message, 'create');
-    queueCodexComment(tab, message);
   }
   if (input.op === 'edit-comment' || input.op === 'delete-comment') {
     const message = tab.comments.find((m) => m.id === input.id);

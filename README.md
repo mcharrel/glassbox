@@ -53,7 +53,7 @@ rev uses `gh` credentials; never put tokens in this repository. For multiple acc
 }
 ```
 
-Existing local checkouts can speed up first imports. GitHub metadata stays cached until **Cmd/Ctrl+R**. New comments still publish immediately; offline writes retry every five minutes. Disposable managed checkouts expire after two weeks without use or updates, with unpublished work preserved.
+Existing local checkouts can speed up first imports. GitHub metadata stays cached until **Cmd/Ctrl+R**. Comments on other people’s PRs publish immediately; offline writes retry every five minutes. Comments on your own PRs stay local. Disposable managed checkouts expire after two weeks without use or updates, with unpublished work preserved.
 
 ### GUIDE and LEARN
 
@@ -67,9 +67,9 @@ After creating a draft PR, run this **inside the Codex chat that created it**:
 rev open https://github.com/OWNER/REPOSITORY/pull/123
 ```
 
-Codex supplies `CODEX_THREAD_ID`, so rev links the PR to that original chat. Opening it from a normal terminal still works, without linking a chat. An existing link cannot silently be replaced by another chat. Add the command to your personal agent instructions to make draft-PR opening automatic.
+Codex supplies `CODEX_THREAD_ID`, so rev links your own PR to that original chat once ownership is known. Other people’s PRs are opened without a Codex binding. Opening it from a normal terminal still works, without linking a chat. An existing link cannot silently be replaced by another chat. Add the command to your personal agent instructions to make draft-PR opening automatic.
 
-New comments you write in a linked PR are saved as `new comment: …`, with the PR URL and source location. Ordinary comments use the original chat's queue; a leading `[steer]` requests immediate steering of its active turn. Imported GitHub comments, edits, and old annotations are not automatically executed. GitHub publication remains independent of Codex delivery. rev never starts a separate comment agent.
+On **your own PRs**, new comments, follow-ups, edits, deletes, and Codex replies stay **local to rev**. Linked comments are saved as `new comment: …`, with the PR URL and source location. Ordinary comments use the original chat's queue; a leading `[steer]` requests immediate steering of its active turn. On **other people’s PRs**, your comments publish to **GitHub only**, without Codex watching or answering them. Ownership must be known before anything is sent. A private comment can never become public through a refresh, retry, or account change. Imported GitHub comments and old annotations do not trigger Codex; existing published comments remain on GitHub. rev never starts a separate comment agent.
 
 **Current limitation:** delivery requires a Codex installation whose desktop chat is connected to an existing shared app server exposing `thread/queue/add`, `thread/queue/start`, and `turn/steer`. A desktop session running its private stdio server cannot receive these messages from rev. Linking/opening still works, but comments stay visibly pending. This is not a substitute for the originating chat, and rev never resumes a second process against the same history.
 

@@ -1,3 +1,4 @@
+import { pullInfo } from './fixtures.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PullTabSchema } from '../../../src/api/workspace.js';
 
@@ -30,7 +31,7 @@ function tab(number = 1) {
     ref: parsePullUrl(`https://github.com/example/project/pull/${number}`),
     reviewId: 'review',
     repoRoot: '/checkout',
-    info: null,
+    info: pullInfo('bob'),
     viewer: 'alice',
   });
 }
@@ -46,14 +47,17 @@ function remote(id: number, body = 'comment') {
 beforeEach(() => {
   vi.restoreAllMocks();
   mocks.github.mockReset();
-  mocks.agent.mockClear();
+  mocks.agent.mockReset().mockImplementation((tab, message) => {
+    if (tab.codexThreadId && !message.codex && !message.deleted)
+      message.codex = { threadId: tab.codexThreadId, mode: 'queue', status: 'queued' };
+  });
   mocks.data.tabs = [tab()];
   mocks.data.archived = [];
   mocks.data.outbox = [];
   mocks.data.active = 'example/project#1';
 });
 describe('durable comment outbox', () => {
-  it('posts once, records the link and routes the new comment to its originating chat', async () => {
+  it('posts another PR’s comment once, records its link and never calls Codex', async () => {
     mocks.github.mockResolvedValue(remote(10));
     await mutateWorkspace(
       { op: 'comment', key: 'example/project#1', body: 'Please simplify this' },
@@ -63,7 +67,7 @@ describe('durable comment outbox', () => {
     expect(mocks.github).toHaveBeenCalledTimes(1);
     expect(mocks.github.mock.calls[0][3].body).toContain('<!-- glassbox:');
     expect(mocks.data.tabs[0].comments[0].url).toContain('issuecomment-10');
-    expect(mocks.agent).toHaveBeenCalledTimes(1);
+    expect(mocks.agent).not.toHaveBeenCalled();
   });
   it('waits five minutes and reconciles an ambiguous successful POST before retrying', async () => {
     let now = 1000;
@@ -158,7 +162,7 @@ it('deletes a remotely accepted comment after an ambiguous create even when dele
 
 it('does not delete a comment published while an older remote snapshot is loading', async () => {
   const tab = mocks.data.tabs[0];
-  const info = { id: 'pr', author: { login: 'alice' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' };
+  const info = { id: 'pr', author: { login: 'bob' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' };
   tab.info = info;
   vi.mocked(loadPull).mockResolvedValue(info as any);
   let resolveComments: (value: any[]) => void = () => {};
@@ -277,6 +281,7 @@ describe('manual GitHub refresh', () => {
   it('still publishes an offline comment when its five-minute retry becomes due', async () => {
     vi.useFakeTimers();
     const tab = mocks.data.tabs[0];
+    tab.info.author.login = 'bob';
     tab.comments.push({ id: 'offline', author: 'alice', body: 'Retry me', kind: 'issue', status: 'error', date: '', url: '' });
     mocks.data.outbox.push({ id: 'queued', tab: tab.key, message: 'offline', operation: 'create', nextAttempt: Date.now() + 300000, attempted: false });
     mocks.github.mockResolvedValue(remote(40));
@@ -304,7 +309,7 @@ it('recovers interrupted agents in closed tabs so they cannot block retention fo
     expect(archived.comments[0].error).toContain('local edits were preserved');
   } finally { stop(); }
 });
-it('preserves the original chat and local comment identity when GitHub refreshes a general PR comment', async () => {
+it('migrates an existing Codex conversation to local-only and preserves it on GitHub refresh', async () => {
   const tab = mocks.data.tabs[0];
   const info = { id: 'pr', author: { login: 'alice' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' };
   tab.info = info; vi.mocked(loadPull).mockResolvedValue(info as any);
@@ -312,6 +317,131 @@ it('preserves the original chat and local comment identity when GitHub refreshes
   tab.comments.push(original);
   vi.mocked(loadComments).mockResolvedValueOnce([{ ...original, id: 'remote-comment', codex: undefined, body: 'Updated from GitHub' }] as any);
   await syncTab(tab);
-  expect(tab.comments[0]).toMatchObject({ id: 'local-comment', body: 'Updated from GitHub', codex: original.codex });
+  expect(tab.comments[0]).toMatchObject({ id: 'local-comment', body: 'Please fix this', destination: 'local', codex: original.codex });
   expect(tab.comments[0].codex?.threadId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+});
+
+describe('ownership-based comment routing', () => {
+  const chat = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  function own() {
+    const t = mocks.data.tabs[0]; t.info = pullInfo('ALICE'); t.codexThreadId = chat;
+    vi.mocked(loadPull).mockResolvedValue(t.info);
+    vi.mocked(loadComments).mockResolvedValue([]);
+    return t;
+  }
+  it('keeps own PR comments, replies, edits and deletes local through refresh', async () => {
+    const t = own();
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Please change this' }, 'review');
+    const first = t.comments[0];
+    expect(first).toMatchObject({ destination: 'local', status: 'done', codex: { threadId: chat } });
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'And keep the API', parentKey: first.id }, 'review');
+    const reply = t.comments[1];
+    expect(reply).toMatchObject({ destination: 'local', kind: 'issue', parentKey: first.id });
+    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: first.id, body: 'Clarified request' }, 'review');
+    await mutateWorkspace({ op: 'delete-comment', key: t.key, id: reply.id }, 'review');
+    await syncTab(t);
+    expect(t.comments).toEqual([first, reply]);
+    expect(first.body).toBe('Clarified request'); expect(reply.deleted).toBe(true);
+    expect(mocks.data.outbox).toHaveLength(0); expect(mocks.github).not.toHaveBeenCalled();
+    expect(mocks.agent).toHaveBeenCalledTimes(2);
+  });
+  it.each(['alice', 'bob'])('waits for ownership and then routes to author %s exactly once', async author => {
+    const t = mocks.data.tabs[0]; t.info = null; t.codexThreadId = chat;
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Wait for metadata' }, 'review');
+    await flushOutbox();
+    expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
+    expect(mocks.data.outbox).toHaveLength(1);
+    vi.mocked(loadPull).mockResolvedValue(pullInfo(author));
+    vi.mocked(loadComments).mockResolvedValue([]);
+    mocks.github.mockResolvedValue(remote(101));
+    await syncTab(t); await flushOutbox();
+    expect(mocks.data.outbox).toHaveLength(0);
+    expect(t.comments[0].destination).toBe(author === 'alice' ? 'local' : 'github');
+    expect(mocks.github).toHaveBeenCalledTimes(author === 'alice' ? 0 : 1);
+    expect(mocks.agent).toHaveBeenCalledTimes(author === 'alice' ? 1 : 0);
+    if (author === 'bob') expect(t.codexThreadId).toBeUndefined();
+  });
+  it('holds writes when the authenticated viewer is unknown', async () => {
+    const t = mocks.data.tabs[0]; t.viewer = '';
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Private until identified' }, 'review');
+    await flushOutbox();
+    expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
+    t.viewer = 'bob'; await flushOutbox();
+    expect(t.comments[0].destination).toBe('local'); expect(mocks.data.outbox).toHaveLength(0);
+  });
+  it('cancels delayed and ambiguous own-PR writes, including archived edits/deletes, while publishing other PR comments', async () => {
+    const mine = own(); const other = tab(2); other.codexThreadId = chat;
+    for (const t of [mine, other]) {
+      t.comments.push({ id: `message-${t.key}`, body: 'Saved', author: 'alice', date: '', url: '', kind: 'issue', status: 'pending', codex: { threadId: chat, mode: 'queue', status: 'queued' } });
+      for (const operation of t === mine ? ['create', 'edit', 'delete'] : ['create'])
+        mocks.data.outbox.push({ id: `${t.key}-${operation}`, tab: t.key, message: t.comments[0].id, operation, nextAttempt: t === mine ? Date.now() + 300000 : 0, attempted: t === mine });
+    }
+    mocks.data.tabs = [other]; mocks.data.archived = [mine];
+    mocks.github.mockResolvedValue(remote(103));
+    await flushOutbox();
+    expect(mocks.data.outbox).toHaveLength(0); expect(mine.comments[0].destination).toBe('local');
+    expect(other.comments[0].codex).toBeUndefined(); expect(other.codexThreadId).toBeUndefined();
+    expect(mocks.github).toHaveBeenCalledTimes(1); expect(mocks.github.mock.calls[0][0].number).toBe(2);
+  });
+  it('never publishes a private message if the account subsequently changes', async () => {
+    const t = own();
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Private' }, 'review');
+    const message = t.comments[0]; t.viewer = 'another-account';
+    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: message.id, body: 'Still private' }, 'review');
+    await mutateWorkspace({ op: 'delete-comment', key: t.key, id: message.id }, 'review');
+    expect(message.destination).toBe('local'); expect(message.codex).toBeUndefined();
+    expect(mocks.data.outbox).toHaveLength(0); expect(mocks.github).not.toHaveBeenCalled();
+  });
+  it('keeps edits of already-public comments local on own PRs without losing them on refresh', async () => {
+    const t = own(); const original = { id: 'existing', remoteId: 106, body: 'Published earlier', kind: 'issue', author: 'alice', date: '', url: 'https://github.com/example/project/pull/1', status: 'synced', editable: true };
+    t.comments.push(original); vi.mocked(loadComments).mockResolvedValue([{ ...original } as any]);
+    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Local correction' }, 'review');
+    await syncTab(t); expect(t.comments[0].body).toBe('Local correction');
+    await mutateWorkspace({ op: 'delete-comment', key: t.key, id: original.id }, 'review');
+    await syncTab(t); expect(t.comments[0].deleted).toBe(true);
+    expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
+  });
+  it('retains unlinked private comments and only queues fresh requests when their chat is linked later', async () => {
+    const t = own(); delete t.codexThreadId;
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'New request' }, 'review');
+    t.comments.push({ id: 'imported', kind: 'review', body: 'Historical annotation', destination: 'local', status: 'done' });
+    await syncTab(t);
+    expect(t.comments).toHaveLength(2); expect(t.comments[0].codex).toBeUndefined();
+    t.codexThreadId = chat; await flushOutbox(); await flushOutbox();
+    expect(t.comments[0].codex?.status).toBe('queued'); expect(t.comments[1].codex).toBeUndefined();
+    expect(mocks.github).not.toHaveBeenCalled();
+  });
+  it('rejects invalid local replies and never turns them into public replies', async () => {
+    const t = own();
+    await expect(mutateWorkspace({ op: 'comment', key: t.key, body: 'Reply', parentKey: 'missing' }, 'review')).rejects.toThrow('not found');
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Root' }, 'review');
+    t.info = pullInfo('bob');
+    await expect(mutateWorkspace({ op: 'comment', key: t.key, body: 'Reply', parentKey: t.comments[0].id }, 'review')).rejects.toThrow('own PRs');
+    expect(mocks.github).not.toHaveBeenCalled();
+  });
+});
+
+it('keeps imported annotations local on own PRs without treating historical feedback as a new Codex request', async () => {
+  const queries = await import('../../../src/db/queries.js');
+  const { queueAnnotation, queueAnnotationChange } = await import('../../../src/workspace/service.js');
+  const t = mocks.data.tabs[0]; t.info = pullInfo(); t.codexThreadId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  vi.spyOn(queries, 'getReviewFile').mockResolvedValue({ review_id: 'review', file_path: 'file.ts', diff_data: null } as any);
+  await queueAnnotation('review', { id: 'old-note', content: 'Imported note', review_file_id: 'file', side: 'new', line_number: 8, created_at: '' } as any, false);
+  expect(t.comments[0]).toMatchObject({ destination: 'local', codexRequested: false, path: 'file.ts', line: 8 });
+  expect(mocks.agent).not.toHaveBeenCalled();
+  await queueAnnotation('review', { id: 'new-note', content: 'Fresh note', review_file_id: 'file', side: 'new', line_number: 9, created_at: '' } as any);
+  queueAnnotationChange('review', 'new-note', 'edit', 'Edited note');
+  queueAnnotationChange('review', 'new-note', 'delete');
+  expect(t.comments[1]).toMatchObject({ destination: 'local', body: 'Edited note', deleted: true });
+  expect(mocks.agent).toHaveBeenCalledTimes(1); expect(mocks.github).not.toHaveBeenCalled();
+});
+
+it('still refreshes other people’s GitHub comments on own PRs', async () => {
+  const t = mocks.data.tabs[0]; t.info = pullInfo();
+  vi.mocked(loadPull).mockResolvedValue(t.info);
+  vi.mocked(loadComments).mockResolvedValue([{ id: 'remote', remoteId: 110, author: 'bob', body: 'Feedback', kind: 'issue', status: 'synced', date: '', url: '', editable: false } as any]);
+  await syncTab(t); expect(t.comments[0].body).toBe('Feedback');
+  vi.mocked(loadComments).mockResolvedValue([{ ...t.comments[0], body: 'Updated feedback' }]);
+  await syncTab(t); expect(t.comments[0].body).toBe('Updated feedback');
+  expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.github).not.toHaveBeenCalled();
 });

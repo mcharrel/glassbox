@@ -1,6 +1,6 @@
 import { delegate, effect } from 'kerfjs';
 
-import type { ThreadMessage } from '../../api/workspace.js';
+import { commentDestination, type ThreadMessage } from '../../api/workspace.js';
 import { IconTrash } from '../../icons.js';
 import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
 import { refreshFind } from '../diff/find.js';
@@ -22,7 +22,7 @@ export function codexStatus(message: ThreadMessage) {
   </div>;
 }
 export function messageHtml(message: ThreadMessage) {
-  const pending = message.status === 'pending' || message.status === 'error';
+  const pending = message.destination !== 'local' && (message.status === 'pending' || message.status === 'error');
   return (
     <article
       className={`pr-message ${message.kind === 'ai' ? 'agent-message' : ''}`}
@@ -34,15 +34,16 @@ export function messageHtml(message: ThreadMessage) {
         {pending && (
           <span
             className="comment-offline"
-            title={message.error ?? 'Waiting to sync; retrying every five minutes'}
+            title={message.error ?? (message.destination === 'github' ? 'Waiting to sync; retrying every five minutes' : 'Waiting to determine PR ownership')}
           >
             ☁
           </span>
         )}
         <span>{message.author}</span>
+        {message.destination === 'local' && <span>Local</span>}
         <time dateTime={message.date}>{new Date(message.date).toLocaleString()}</time>
         <span className="pr-message-actions">
-          <button
+          {message.destination !== 'local' && <button
             className="btn btn-xs comment-share"
             data-comment-action="share"
             title="Copy GitHub comment link"
@@ -51,7 +52,7 @@ export function messageHtml(message: ThreadMessage) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 16V3m-5 5 5-5 5 5M5 13v8h14v-8" />
             </svg>
-          </button>
+          </button>}
           {message.editable && (
             <button className="btn btn-xs btn-danger" data-comment-action="delete" title="Delete">
               <IconTrash />
@@ -90,11 +91,17 @@ export function threadHtml(root: ThreadMessage, comments: ThreadMessage[]) {
           {comments.filter((child) => !child.deleted && child.parentKey === reply.id).map(messageHtml)}
         </>
       ))}
-      {root.kind === 'review' && root.remoteId !== undefined && (
-        <textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder="Reply ..." />
-      )}
+      {replyInput(root)}
     </div>
   );
+}
+function replyInput(root: ThreadMessage) {
+  const tab = activeTab();
+  if (tab && commentDestination(tab) === 'local')
+    return <textarea className="pr-reply-input" data-parent-key={root.id} placeholder="Reply locally ..." />;
+  if (root.destination !== 'local' && root.kind === 'review' && root.remoteId !== undefined)
+    return <textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder="Reply on GitHub ..." />;
+  return null;
 }
 export function bindThreads(): void {
   const candidate = document.getElementById('diff-container');
@@ -128,7 +135,7 @@ export function bindThreads(): void {
     }
     const comments = tab.comments.filter((m) => !m.deleted);
     const roots = comments.filter(
-      (m) => m.kind === 'review' && m.parentId === undefined && m.path === view.dataset.filePath,
+      (m) => m.kind === 'review' && m.parentId === undefined && m.parentKey === undefined && m.path === view.dataset.filePath,
     );
     for (const root of roots) {
       const local =
@@ -140,8 +147,8 @@ export function bindThreads(): void {
         const localText = local.querySelector('.annotation-text');
         if (localText && localText.textContent !== root.body) localText.textContent = root.body;
         const status = toElement(
-          <span className="local-comment-status" title={root.error ?? 'Queued for GitHub'}>
-            {root.status === 'synced' ? '' : '☁'}
+          <span className="local-comment-status" title={root.destination === 'local' ? 'Only in rev' : root.error ?? (root.destination === 'github' ? 'Queued for GitHub' : 'Waiting to determine PR ownership')}>
+            {root.destination === 'local' ? 'Local' : root.status === 'synced' ? '' : '☁'}
           </span>,
         );
         local.prepend(status);
@@ -160,7 +167,7 @@ export function bindThreads(): void {
             showToast('Comment link copied');
           });
         });
-        local.querySelector('.annotation-actions')?.prepend(share);
+        if (root.destination !== 'local') local.querySelector('.annotation-actions')?.prepend(share);
         const replies = comments.filter(
           (m) => m.parentKey === root.id || (root.remoteId !== undefined && m.parentId === root.remoteId),
         );
@@ -173,9 +180,7 @@ export function bindThreads(): void {
                 {comments.filter((child) => !child.deleted && child.parentKey === reply.id).map(messageHtml)}
               </>
             ))}
-            {root.kind === 'review' && root.remoteId !== undefined && (
-              <textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder="Reply ..." />
-            )}
+            {replyInput(root)}
           </div>,
         );
         local.after(details);
@@ -275,7 +280,7 @@ export function bindThreads(): void {
       op: 'comment',
       key: tab.key,
       body: input.value,
-      parentId: Number(input.dataset.replyTo),
+      ...(input.dataset.parentKey !== undefined ? { parentKey: input.dataset.parentKey } : { parentId: Number(input.dataset.replyTo) }),
     })
       .then((ok) => {
         if (ok) {

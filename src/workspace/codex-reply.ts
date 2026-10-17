@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ThreadMessage } from '../api/workspace.js';
+import { commentDestination, type ThreadMessage } from '../api/workspace.js';
 import { parsePullUrl, pullKey } from './github.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
@@ -10,6 +10,8 @@ export function postCodexReply(input: { url: string; threadId: string; commentId
   const tab = [...data.tabs, ...data.archived].find(item => item.key === key);
   const original = tab?.comments.find(item => item.id === input.commentId && !item.deleted && item.kind !== 'ai');
   if (!tab || !original) throw new Error('Comment not found in this PR');
+  if (commentDestination(tab) !== 'local' || original.destination !== 'local')
+    throw new Error('Codex only handles local comments on your own PRs');
   if (tab.codexThreadId !== input.threadId || original.codex?.threadId !== input.threadId)
     throw new Error('Only the originating Codex chat can answer this comment');
   // Repeating the same reply after a lost acknowledgement must not duplicate it.
@@ -18,7 +20,7 @@ export function postCodexReply(input: { url: string; threadId: string; commentId
   if (existing) return existing.id;
   const reply: ThreadMessage = {
     id: randomUUID(), parentKey: original.id, author: 'Codex', body: input.body,
-    date: new Date().toISOString(), url: '', kind: 'ai', status: 'done', editable: false, deleted: false,
+    date: new Date().toISOString(), url: '', kind: 'ai', status: 'done', editable: false, deleted: false, destination: 'local',
     path: original.path, line: original.line, side: original.side, annotationId: original.annotationId,
   };
   tab.comments.push(reply);
