@@ -2,6 +2,7 @@ import type { SafeHtml } from 'kerfjs';
 import { raw } from 'kerfjs';
 
 import type { Annotation,ReviewFile } from '../db/queries.js';
+import { changeBlocks } from '../git/changeBlocks.js';
 import type { DiffHunk, DiffLine,FileDiff } from '../git/diff.js';
 import { isImageFile, isSvgFile } from '../git/image.js';
 import type { GroundTruthStepNav } from '../ground-truth/presentation.js';
@@ -54,17 +55,12 @@ export function DiffView({ file, diff, annotations, mode, reviewNotes = [], imag
 
   // Mark every changed row so navigation can measure both sides of a whole block.
   const changeMarkers: ChangeMarkers = new Map();
-  let block = -1;
-  for (const hunk of diff.hunks) {
-    let changing = false;
-    for (const line of hunk.lines) {
-      if (line.type === 'context') { changing = false; continue; }
-      if (!changing) block++;
+  for (const [block, lines] of changeBlocks(diff).entries()) {
+    for (const [index, line] of lines.entries()) {
       changeMarkers.set(line, {
         'data-change-block': block,
-        ...(!changing ? { 'data-change-start': block } : {}),
+        ...(index === 0 ? { 'data-change-start': block } : {}),
       });
-      changing = true;
     }
   }
 

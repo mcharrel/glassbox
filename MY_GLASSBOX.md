@@ -27,6 +27,7 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 - Unified view is the default. Show full file context, without folding. Keep only the new line-number column in unified view.
 - Hide both file-name bars and the bottom toolbar. Keep the sticky class/function breadcrumb.
 - The mid-panel file list shows basenames, with paths on hover and no position numbers. No Filter files field or sorting buttons.
+- Beside each filename, a diff-icon badge counts distinct change blocks alongside the comment count. Adjacent additions/removals form one block; unchanged lines separate blocks, just as in change navigation. No badge appears for files without text changes.
 - Reading order is fixed: ordinary source files using Glassbox's AI narrative order, YAML, tests, dependency changes, generated protos. This is most important first, least important last.
 - Tab / Shift+Tab and `f` / `g` advance/backtrack through changes that are not fully visible. Show ideally five lines of preceding context. Page through oversized changes with ten lines of overlap, then continue to the next file.
 - Advancing out of a file hides it from the remaining-file list. Reverse navigation reveals it again. Reaching the end can leave the list empty without losing the traversal history.

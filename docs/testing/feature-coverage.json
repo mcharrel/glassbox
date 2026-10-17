@@ -696,9 +696,11 @@
         "tests/e2e/review-workflow.test.ts",
         "tests/e2e/sidebar.test.ts",
         "tests/e2e/annotations.test.ts",
-        "tests/unit/components/fileList.test.ts"
+        "tests/unit/components/fileList.test.ts",
+        "tests/unit/components/changeBlockCount.test.ts",
+        "tests/unit/client/sidebarNotes.test.ts"
       ],
-      "note": "folder tree; filter; j/k nav; click loads diff; count badges + stale dots."
+      "note": "folder tree; filter; j/k nav; click loads diff; count badges + stale dots. Distinct text change-block counts match navigation and stay separate from comment totals across initial rendering and all client sort modes, including empty data and PR switches."
     },
     "8.3": {
       "tests": [

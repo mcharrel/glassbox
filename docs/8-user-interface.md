@@ -22,6 +22,7 @@ Requirements for the browser-based UI and user interaction patterns.
 - When the selected file changes (via keyboard navigation, click, or any other means), the sidebar shall auto-scroll (without animation) the minimum amount needed to keep the selected file visible.
 - File rows in Reading order and Risk mode shall show only the filename; the full path remains in the hover title for disambiguation.
 - The sidebar shall display annotation count badges per file.
+- Beside the annotation count, a diff-icon badge shows the number of distinct text change blocks, using the same grouping as change navigation. Adjacent removals and additions count together; context and hunk boundaries separate blocks. Files with no known text changes omit the badge.
 - The sidebar shall display stale annotation count indicators per file.
 
 ### 8.3 Sort Modes

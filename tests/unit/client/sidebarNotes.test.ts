@@ -4,6 +4,7 @@ vi.stubGlobal('document', { body: { dataset: {} } });
 const { aiStore, reviewStore, visibleFileOrder, visibleNoteLines } = await import('../../../src/client/stores/index.js');
 const { sidebarNotesJsx } = await import('../../../src/client/sidebar/aiNotes.js');
 const { fileListJsx } = await import('../../../src/client/sidebar/fileListView.js');
+const { parseDiff } = await import('../../../src/git/parseDiff.js');
 
 const files = ['test/service_test.go', 'src/z.go', 'src/a.go'].map(path => ({
   id: path, file_path: path, review_id: 'r', status: 'pending', created_at: '', diff_data: null,
@@ -88,6 +89,19 @@ describe('sidebar guidance', () => {
 });
 
 describe('sidebar order agrees with keyboard navigation', () => {
+  it.each(['narrative', 'risk', 'folder'] as const)('keeps change and comment counts separate in %s, including after a PR switch', sortMode => {
+    const diff = parseDiff('diff --git a/z.go b/z.go\n--- a/z.go\n+++ b/z.go\n@@ -1,3 +1,3 @@\n-old\n+new\n same\n-old again\n+new again\n')[0];
+    reviewStore.actions.update({ files: files.map(file => ({ ...file, diff_data: JSON.stringify(diff) })), annotationCounts: { 'src/z.go': 7 } });
+    aiStore.actions.update({ sortMode, riskScores: [{ reviewFileId: 'src/z.go', filePath: 'src/z.go', aggregateScore: 0.5, dimensionScores: {}, rationale: '', sortOrder: 0 }] });
+    const html = fileListJsx().toString();
+    expect(html.match(/class="change-block-count" title="2 change blocks"/g)).toHaveLength(3);
+    expect(html).toContain('class="annotation-count">7</span>');
+    reviewStore.actions.update({ files: [files[0]], annotationCounts: {} });
+    expect(fileListJsx().toString()).not.toContain('change-block-count');
+    reviewStore.actions.update({ files: [] });
+    expect(fileListJsx().toString()).not.toContain('change-block-count');
+  });
+
   it('shows filenames alone while retaining full paths in hover titles', () => {
     const html = fileListJsx().toString();
     expect(html).toContain('class="file-name" title="src/z.go">z.go</span>');

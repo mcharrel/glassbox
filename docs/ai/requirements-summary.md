@@ -1321,3 +1321,5 @@ Workspace stability: `workspace/reviewSessions.ts` caches review and AI state pe
 
 **Personal workspace loading and input — Shipped:** compact PR tabs shrink to their text width, repeated Cmd/Ctrl+F toggles focus while retaining matches, and importing or cold-loading PRs/files show pending indicators instead of another PR's content. Failed file-list loads offer Retry. Model preferences preserve provider IDs outside the bundled fallback catalog.
 **GPT-5.5 Pro analysis — Shipped:** the model and dated snapshots use Responses with storage disabled; unfinished, refused, or empty responses fail clearly instead of becoming analysis results.
+
+Personal file lists show a diff-icon count of distinct text change blocks beside the comment count. Replacements count once; context separates blocks. Files without known text changes omit the badge.

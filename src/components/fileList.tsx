@@ -1,6 +1,7 @@
 import type { ReviewFile } from '../db/queries.js';
 import { parseDiffData } from '../git/diff.js';
 import { IconChevronDown, IconMessageSquareText } from '../icons.js';
+import { ChangeBlockCount } from './changeBlockCount.js';
 
 interface TreeNode {
   name: string;
@@ -94,6 +95,7 @@ function TreeView({ node, depth, annotationCounts, staleCounts, notedFileIds }: 
             {notedFileIds.has(f.id) ? <span className="file-note-icon" title="Has AI review notes"><IconMessageSquareText /></span> : null}
             <span className={`file-status ${diff?.status ?? ''}`}>{diff?.status ?? ''}</span>
             {stale > 0 ? <span className="stale-dot"></span> : null}
+            <ChangeBlockCount diffData={f.diff_data} />
             {count > 0 ? <span className="annotation-count">{count}</span> : null}
           </div>
         );

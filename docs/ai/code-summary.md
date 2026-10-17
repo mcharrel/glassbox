@@ -955,3 +955,5 @@ Workspace stability: `workspace/reviewSessions.ts` caches review and AI state pe
 
 Personal workspace loading: `workspace/state.ts` exposes the selected session's identity and load status; `reviewSessions.ts` uses empty sessions for pending imports and scopes asynchronous results to their originating PR. The workspace hides old content immediately on selection until the matching file list is ready. The diff fetcher shows a loading state for uncached files. `bindDivider` supports text-measured rail minimums; the find controller toggles search/file focus on repeated Cmd/Ctrl+F.
 `src/ai/client.ts` routes GPT-5.5 Pro (including dated snapshots) through `/v1/responses` with response storage disabled. It extracts completed message text, ignores reasoning items, preserves token usage, and rejects incomplete/empty/refused output. Other OpenAI models retain Chat Completions.
+
+File-list change counts use `git/changeBlocks.ts`, shared with diff navigation markers, and `components/changeBlockCount.tsx` in both server and client file rows.

@@ -71,6 +71,10 @@ export function IconActualSize(): SafeHtml {
 
 // --- Sidebar icons ---
 
+export function IconDiff(): SafeHtml {
+  return <svg {...S12}><path d="M12 3v6M9 6h6M9 18h6"/><rect x="3" y="1" width="18" height="22" rx="2"/></svg>;
+}
+
 export function IconFolder(): SafeHtml {
   return <svg {...S14}><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>;
 }

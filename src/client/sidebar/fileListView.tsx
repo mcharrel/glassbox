@@ -1,6 +1,7 @@
 import type { SafeHtml } from 'kerfjs';
 import { raw } from 'kerfjs';
 
+import { ChangeBlockCount } from '../../components/changeBlockCount.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
 import { EXPECTED_KIND_LABELS } from '../../ground-truth/presentation.js';
 import { IconChevronDown, IconMessageSquareText } from '../../icons.js';
@@ -109,6 +110,7 @@ function riskListJsx(): SafeHtml {
   const scored = sortedRiskScores();
   const scoredIds = new Set((ai.riskScores ?? []).map(s => s.reviewFileId));
   const tail = unscoredFiles(scoredIds);
+  const filesById = new Map(review.files.map(file => [file.id, file]));
 
   // `.map()`, not `each()` — kerf Hard Rule 13. The `RiskFileScore` /
   // `ReviewFile` items keep stable object identity across mount re-runs (they
@@ -121,18 +123,19 @@ function riskListJsx(): SafeHtml {
   // the per-row memoization isn't worth the bug surface.
   return (
     <>
-      {scored.map(score => riskRowJsx(score, ai, review))}
+      {scored.map(score => riskRowJsx(score, ai, review, filesById.get(score.reviewFileId)?.diff_data))}
       {tail.map(file => flatRowJsx(file, review))}
     </>
   );
 }
 
-/** Trailing stale-count + annotation-count badges, shared by every file-row
+/** Trailing change-block + annotation-count badges, shared by every file-row
  *  renderer (risk / narrative / flat / ground-truth / tree). */
-function FileRowBadges({ count, staleCount }: { count: number; staleCount: number }): SafeHtml {
+function FileRowBadges({ count, staleCount, diffData }: { count: number; staleCount: number; diffData: string | null | undefined }): SafeHtml {
   return (
     <>
       {staleCount > 0 ? <span className="stale-count" title={`${String(staleCount)} stale annotation${staleCount === 1 ? '' : 's'}`}>{staleCount}</span> : null}
+      <ChangeBlockCount diffData={diffData} />
       {count > 0 ? <span className="annotation-count">{count}</span> : null}
     </>
   );
@@ -142,6 +145,7 @@ function riskRowJsx(
   score: RiskFileScore,
   ai: typeof aiStore.state.value,
   review: typeof reviewStore.state.value,
+  diffData: string | null | undefined,
 ): SafeHtml {
   const displayScore = getScoreForDimension(score, ai.riskSortDimension);
   const fileName = baseName(score.filePath);
@@ -161,7 +165,7 @@ function riskRowJsx(
       )}
       <span className="file-name" title={score.filePath}>{fileName}</span>
       {noteIconJsx(score.reviewFileId)}
-      <FileRowBadges count={count} staleCount={staleCount} />
+      <FileRowBadges count={count} staleCount={staleCount} diffData={diffData} />
     </div>
   );
 }
@@ -175,10 +179,10 @@ function narrativeListJsx(): SafeHtml {
   return <>{readingOrderFiles().map((file, index) => narrativeRowJsx({
     reviewFileId: file.id, filePath: file.file_path, position: index + 1,
     rationale: notes.get(file.id)?.rationale ?? '',
-  }, review))}</>;
+  }, review, file.diff_data))}</>;
 }
 
-function narrativeRowJsx(item: NarrativeFileOrder, review: typeof reviewStore.state.value): SafeHtml {
+function narrativeRowJsx(item: NarrativeFileOrder, review: typeof reviewStore.state.value, diffData: string | null | undefined): SafeHtml {
   const fileName = baseName(item.filePath);
   const count = review.annotationCounts[item.reviewFileId] ?? 0;
   const staleCount = review.staleCounts[item.reviewFileId] ?? 0;
@@ -189,7 +193,7 @@ function narrativeRowJsx(item: NarrativeFileOrder, review: typeof reviewStore.st
 
       <span className="file-name" title={item.filePath}>{fileName}</span>
       {noteIconJsx(item.reviewFileId)}
-      <FileRowBadges count={count} staleCount={staleCount} />
+      <FileRowBadges count={count} staleCount={staleCount} diffData={diffData} />
     </div>
   );
 }
@@ -204,7 +208,7 @@ function flatRowJsx(file: typeof reviewStore.state.value['files'][number], revie
       {...ACTIONS.selectFile.attrs} data-file-id={file.id} style="padding-left: 16px">
       <span className="file-name" title={file.file_path}>{fileName}</span>
       {noteIconJsx(file.id)}
-      <FileRowBadges count={count} staleCount={staleCount} />
+      <FileRowBadges count={count} staleCount={staleCount} diffData={file.diff_data} />
     </div>
   );
 }
@@ -285,7 +289,7 @@ function groundTruthRowJsx(
       {score !== null && score !== undefined
         ? <span className={`diff-badge diff-${diffScoreLevel(score)}`} title="Perceptual difference from the expected image">{formatDiffPct(score)}</span>
         : null}
-      <FileRowBadges count={count} staleCount={staleCount} />
+      <FileRowBadges count={count} staleCount={staleCount} diffData={f.diff_data} />
     </div>
   );
 }
@@ -361,7 +365,7 @@ function fileRowJsx(f: typeof reviewStore.state.value['files'][number], depth: n
       {score !== null && score !== undefined
         ? <span className={`diff-badge diff-${diffScoreLevel(score)}`} title="Perceptual difference from the expected image">{formatDiffPct(score)}</span>
         : <span className={`file-status ${diff?.status ?? ''}`}>{diff?.status ?? ''}</span>}
-      <FileRowBadges count={count} staleCount={staleCount} />
+      <FileRowBadges count={count} staleCount={staleCount} diffData={f.diff_data} />
     </div>
   );
 }

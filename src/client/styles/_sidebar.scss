@@ -177,7 +177,8 @@
   opacity: 0.85;
 }
 
-.annotation-count {
+.annotation-count,
+.change-block-count {
   font-size: 11px;
   color: var(--accent);
   background: rgba(137,180,250,0.15);
@@ -185,6 +186,15 @@
   border-radius: 8px;
   min-width: 18px;
   text-align: center;
+  flex-shrink: 0;
+}
+
+.change-block-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+
+  > span { display: flex; }
 }
 
 // --- Folder Tree ---
