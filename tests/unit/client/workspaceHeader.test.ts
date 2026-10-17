@@ -10,12 +10,12 @@ function tab(base = 'main', author = 'me', state = 'OPEN', draft = true) {
 it.each(['main', 'prod'])('places totals above the PR branch and omits the ordinary %s target', base => {
   const html = String(pullHeader(tab(base), { added: 12, removed: 3 }));
   expect(html.indexOf('+12')).toBeLessThan(html.indexOf('my-branch'));
-  expect(html).not.toContain('into ');
+  expect(html).not.toContain('-&gt; ');
   expect(html).toContain('<option value="draft" selected');
   expect(html).not.toContain('data-pr-action="draft"');
 });
 it('shows a stacked target on a separate line', () => {
-  expect(String(pullHeader(tab('parent-branch'), null))).toContain('<div>my-branch</div><div>into parent-branch</div>');
+  expect(String(pullHeader(tab('parent-branch'), null))).toContain('<div>my-branch</div><div>-&gt; parent-branch</div>');
 });
 it('keeps other PRs under Review and offers the human-readable explanation request', () => {
   const html = String(pullHeader(tab('main', 'someone'), null));

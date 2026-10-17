@@ -22,7 +22,7 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
     </div>
     <div className="review-mode pr-branches">
       {info ? <><div>{info.headRefName}</div>
-        {!['prod', 'main'].includes(info.baseRefName) && <div>into {info.baseRefName}</div>}</> : 'Loading…'}
+        {!['prod', 'main'].includes(info.baseRefName) && <div>{'-> '}{info.baseRefName}</div>}</> : 'Loading…'}
     </div>
     <div className="pr-actions">
       {info?.state === 'MERGED' ? <button className="selected" disabled>Merged</button> :
