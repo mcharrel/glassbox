@@ -91,7 +91,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 - Press `a` then `i` within 1.2 seconds to replace GUIDE/LEARN with a fresh review. It bypasses cached analysis, keeps human comments, and is limited to once per five minutes per PR, including after a restart. LEARN runs when enabled. Stale requests cannot restore discarded guidance.
 - Import source code and remote comments independently. Reuse existing Git objects and negotiate missing objects through an existing repository, instead of downloading another shallow copy for every PR. First-time repository downloads still depend on repository size and the network.
 - Suppress desktop notifications while a Glassbox window is visible and focused. Background windows still notify for reviewer/mergeability/merge changes.
-- The native app icon uses my supplied purple portrait, preserved in `assets/app-icon.png`.
+- The native app icon uses my supplied purple portrait, preserved in `assets/app-icon.png`. Its macOS version has clean rounded corners and transparent outer padding so it matches the Dock's usual icon size. The artwork is scaled directly, without AI redrawing. `swift scripts/build-personal-icon.swift` reproduces `assets/app-icon-macos.png`: an 824-pixel white rounded tile centered on a 1024-pixel transparent canvas. The native icon sizes are generated from that PNG with `tauri icon`.
 
 ## GitHub request budget
 

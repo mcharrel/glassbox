@@ -6,6 +6,8 @@ Requirements for the Tauri desktop application and platform distribution.
 
 ### 10.1 Native Window
 
+The personal fork's desktop icon uses the supplied portrait with rounded corners and transparent margins. Legacy ICNS packaging includes this silhouette in the image itself. `scripts/build-personal-icon.swift` creates the padded source PNG from the unchanged original artwork; Tauri generates the packaged icon sizes from it.
+
 - The desktop app shall wrap the Node.js server in a native window using Tauri v2.
 - The window title shall display the project name, configurable via `.glassbox/settings.json` (`appName` field), defaulting to "Glassbox — {folder name}."
 - On macOS, each project shall get its own Dock/Cmd+Tab identity via a stub `.app` bundle.
