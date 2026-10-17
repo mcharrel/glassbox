@@ -60,3 +60,5 @@ The system shall support seven annotation categories, each with specific semanti
 - **Survive restarts** — Annotations shall survive application restarts.
 
 Personal fork: code comments use a purple accent background and click-to-edit (Enter when focused). Delete and Keep remain available; category, drag, attachment and edit controls are omitted. New comments are notes; edits preserve existing categories, note replies, regions and attachments.
+
+In the personal workspace, Enter saves and Shift+Enter inserts a newline. Comments synchronize through a persistent GitHub outbox with five-minute retry/reconciliation, and start an isolated local agent using the configured guidance model. GitHub replies and agent results appear in threads. See [MY_GLASSBOX.md](../MY_GLASSBOX.md).

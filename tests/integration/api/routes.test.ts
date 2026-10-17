@@ -1,3 +1,4 @@
+vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => ({ tabs: [], archived: [], active: null, outbox: [] }), saveWorkspace: vi.fn() }));
 /**
  * Integration tests for the API routes in src/routes/api.ts.
  *

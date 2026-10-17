@@ -55,6 +55,10 @@ export async function apiCall<T>(
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
   const json: unknown = await res.json();
+  if (!res.ok) {
+    const error = z.object({ error: z.string() }).safeParse(json);
+    throw new Error(error.success ? error.data.error : `Request failed (${res.status})`);
+  }
   const result = responseSchema.safeParse(json);
   if (!result.success) {
     const summary = result.error.issues

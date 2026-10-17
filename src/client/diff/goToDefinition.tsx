@@ -121,7 +121,7 @@ export async function navigateToLocation(filePath: string, line: number) {
 }
 
 async function loadRawFile(filePath: string, targetLine: number) {
-  const res = await fetch('/file-raw?path=' + encodeURIComponent(filePath));
+  const res = await fetch('/file-raw?path=' + encodeURIComponent(filePath) + '&reviewId=' + encodeURIComponent(document.body.dataset.reviewId ?? ''));
   if (!res.ok) {
     showToast(`Could not open ${filePath}`);
     return;

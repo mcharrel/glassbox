@@ -19,22 +19,21 @@ beforeEach(() => {
   vi.stubGlobal('Element', Target);
   vi.stubGlobal('performance', { now: () => now });
   vi.stubGlobal('document', {
+    body: { dataset: { workspaceView: 'file' } },
     addEventListener: (_name: string, fn: typeof handler) => { handler = fn; },
-    getElementById: () => ({ scrollTo }),
+    getElementById: () => ({ scrollTo, scrollHeight: 5000 }),
     querySelector: () => modal ? {} : null,
   });
   bindReviewKeys(next);
 });
 afterEach(() => vi.unstubAllGlobals());
-it('gg scrolls to the absolute file top but single, delayed and held g do not', () => {
-  key('g'); expect(scrollTo).not.toHaveBeenCalled();
-  now += 100; key('g'); expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' });
-  scrollTo.mockClear(); key('g'); now += 800; key('g'); expect(scrollTo).not.toHaveBeenCalled();
-  key('g', { repeat: true }); expect(scrollTo).not.toHaveBeenCalled();
+it('G scrolls to the file bottom and gg no longer scrolls', () => {
+  key('g'); key('g'); expect(scrollTo).not.toHaveBeenCalled();
+  key('G', { shiftKey: true }); expect(scrollTo).toHaveBeenCalledWith({ top: 5000, behavior: 'instant' });
 });
 it('n and N navigate forward/backward', () => {
-  key('n'); key('N', { shiftKey: true });
-  expect(next.mock.calls).toEqual([[1], [-1]]);
+  key('n'); key('N', { shiftKey: true }); key('m');
+  expect(next.mock.calls).toEqual([[1], [-1], [-1]]);
 });
 it('leaves text entry, modifiers, composition and modal dialogs alone', () => {
   for (const props of [{ target: new Target(true) }, { metaKey: true }, { ctrlKey: true }, { altKey: true }, { isComposing: true }, { defaultPrevented: true }]) {
@@ -43,6 +42,6 @@ it('leaves text entry, modifiers, composition and modal dialogs alone', () => {
   modal = true; key('g'); key('g'); key('n');
   expect(scrollTo).not.toHaveBeenCalled(); expect(next).not.toHaveBeenCalled();
 });
-it('an intervening key cancels the gg sequence', () => {
-  key('g'); key('x'); key('g'); expect(scrollTo).not.toHaveBeenCalled();
+it('G does not scroll the hidden file while the main view is open', () => {
+  document.body.dataset.workspaceView = 'main'; key('G'); expect(scrollTo).not.toHaveBeenCalled();
 });

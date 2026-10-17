@@ -22,6 +22,7 @@ interface ReviewState {
   annotationCounts: Record<string, number>;
   staleCounts: Record<string, number>;
   filterText: string;
+  hiddenFileIds: Set<string>;
   /** Ground-truth (doc 26 §26.1): per-file label/expectedKind, keyed by file id.
    *  Non-empty only for ground-truth reviews, so its keys also signal the mode. */
   groundTruth: Record<string, GroundTruthMeta>;
@@ -41,6 +42,7 @@ export const reviewStore = defineStore({
     annotationCounts: {},
     staleCounts: {},
     filterText: '',
+    hiddenFileIds: new Set(),
     groundTruth: {},
     pluginRendered: new Set<string>(),
     notedFileIds: new Set<string>(),
@@ -251,7 +253,7 @@ export function sortedRiskScores(): RiskFileScore[] {
 }
 
 export function readingOrderFiles(): ReviewFile[] {
-  return readingOrder(filteredFiles.value, aiStore.state.value.narrativeOrder);
+  return readingOrder(filteredFiles.value, aiStore.state.value.narrativeOrder).filter(file => !reviewStore.state.value.hiddenFileIds.has(file.id));
 }
 
 export function unscoredFiles(scoredFileIds: Set<string>): ReviewFile[] {
@@ -260,6 +262,8 @@ export function unscoredFiles(scoredFileIds: Set<string>): ReviewFile[] {
   const unscored = review.files.filter(f => !scoredFileIds.has(f.id));
   return q === '' ? unscored : unscored.filter(f => f.file_path.toLowerCase().includes(q));
 }
+
+export const allFileOrder = computed(() => readingOrder(reviewStore.state.value.files, aiStore.state.value.narrativeOrder).map(file => file.id));
 
 export const visibleFileOrder = computed<string[]>(() => {
   const ai = aiStore.state.value;

@@ -63,3 +63,29 @@ export function bindNotesResize(sidebar: HTMLElement, notes: HTMLElement): void 
   new ResizeObserver(apply).observe(sidebar);
   apply();
 }
+
+/** Store the shared split on the parent, so changing visible notes preserves it. */
+export function bindGuideLearnResize(notes: HTMLElement): void {
+  const key = 'glassbox.guideLearnSplit';
+  let share = 50;
+  try { share = Number(localStorage.getItem(key)) || 50; } catch { /* optional persistence */ }
+  const apply = (value: number) => {
+    share = Math.max(15, Math.min(85, value));
+    notes.style.setProperty('--guide-share', `${share}%`);
+    try { localStorage.setItem(key, String(share)); } catch { /* optional persistence */ }
+  };
+  apply(share);
+  notes.addEventListener('pointerdown', event => {
+    const handle = (event.target as Element).closest<HTMLElement>('.guide-learn-divider');
+    if (!handle || event.button !== 0) return;
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    const move = (e: PointerEvent) => { const rect = notes.getBoundingClientRect(); if (rect.height > 0) apply(100 * (e.clientY - rect.top) / rect.height); };
+    const stop = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', stop); handle.removeEventListener('pointercancel', stop); };
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', stop); handle.addEventListener('pointercancel', stop);
+  });
+  notes.addEventListener('keydown', event => {
+    if (!(event.target as Element).closest('.guide-learn-divider') || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault(); event.stopPropagation(); apply(share + (event.key === 'ArrowDown' ? 5 : -5));
+  });
+}

@@ -1,4 +1,4 @@
-import { reviewStore, visibleFileOrder } from '../stores/index.js';
+import { allFileOrder, reviewStore } from '../stores/index.js';
 import { JUMP_HIGHLIGHT_DURATION_MS } from '../timing.js';
 import { selectFile } from './selection.js';
 
@@ -68,11 +68,12 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
   }
 
   document.addEventListener('keydown', event => {
-    if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing
+    if (!['Tab', 'f', 'g'].includes(event.key) || document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add' || event.defaultPrevented || event.isComposing
       || event.ctrlKey || event.metaKey || event.altKey) return;
     if (document.activeElement?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
     if ([...document.querySelectorAll<HTMLElement>('.modal, [role="dialog"]')]
       .some(dialog => dialog.getClientRects().length > 0)) return;
+    const backward = event.key === 'g' || (event.key === 'Tab' && event.shiftKey);
     const currentFileId = reviewStore.state.value.currentFileId;
     if (pending?.fileId === currentFileId) { event.preventDefault(); return; }
     pending = null;
@@ -83,15 +84,20 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
     const { top, bottom } = viewport();
     if (bottom <= top) return;
     const blocks = blocksIn(view);
-    if (event.shiftKey) blocks.reverse();
-    const next = blocks.find(block => event.shiftKey ? block.top < top - 1 : block.bottom > bottom + 1);
-    if (next) { jump(next, event.shiftKey); return; }
+    if (backward) blocks.reverse();
+    const next = blocks.find(block => backward ? block.top < top - 1 : block.bottom > bottom + 1);
+    if (next) { jump(next, backward); return; }
 
-    const order = visibleFileOrder.value;
+    const order = allFileOrder.value;
     const current = order.indexOf(currentFileId);
-    const nextFileId = current < 0 ? undefined : order[current + (event.shiftKey ? -1 : 1)];
+    const nextFileId = current < 0 ? undefined : order[current + (backward ? -1 : 1)];
+    const hiddenFileIds = new Set(reviewStore.state.value.hiddenFileIds);
+    if (!backward) hiddenFileIds.add(currentFileId);
+    if (nextFileId !== undefined) hiddenFileIds.delete(nextFileId);
+    reviewStore.actions.update({ hiddenFileIds });
+    try { localStorage.setItem(`glassbox.hidden.${reviewStore.state.value.reviewId}`, JSON.stringify([...hiddenFileIds])); } catch { /* optional persistence */ }
     if (nextFileId !== undefined) {
-      pending = { fileId: nextFileId, backward: event.shiftKey };
+      pending = { fileId: nextFileId, backward };
       void selectFile(nextFileId);
     }
   });

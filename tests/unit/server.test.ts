@@ -1,3 +1,4 @@
+vi.mock('../../src/workspace/service.js', () => ({ startWorkspace: vi.fn(() => () => {}), mutateWorkspace: vi.fn(), tabForReview: vi.fn() }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock @hono/node-server before importing the module under test

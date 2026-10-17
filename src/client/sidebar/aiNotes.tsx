@@ -13,10 +13,10 @@ export function sidebarNotesJsx(): SafeHtml {
   const ai = aiStore.state.value;
   const guide = ai.sortMode === 'narrative' || ai.sortMode === 'risk' ? ai.fileNotes[file.id] : undefined;
   const learn = ai.guidedReviewEnabled ? ai.guidedNotes[file.id] : undefined;
-  return <>
-    {noteSection(guide, ai.sortMode === 'risk' ? 'risk' : 'narrative', file.file_path, visible.lines)}
-    {noteSection(learn, 'guided', file.file_path, visible.lines)}
-  </>;
+  const guideSection = noteSection(guide, ai.sortMode === 'risk' ? 'risk' : 'narrative', file.file_path, visible.lines);
+  const learnSection = noteSection(learn, 'guided', file.file_path, visible.lines);
+  return <>{guideSection}{guideSection && learnSection && <div className="guide-learn-divider workspace-divider" role="separator" aria-label="Resize guide and learn" aria-orientation="horizontal" tabIndex={0} />}{learnSection}</>;
+
 }
 
 function noteSection(notes: FileNotes | undefined, kind: 'risk' | 'narrative' | 'guided', filePath: string, visible: ReadonlySet<number>): SafeHtml | null {

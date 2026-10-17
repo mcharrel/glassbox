@@ -4,7 +4,7 @@ import { basename, join, resolve } from "path";
 
 import { handleDifftoolRegistration, handleGroundTruthPromote, handleNoteSubcommand } from "./cli-subcommands.js";
 import { setDataDir } from "./db/connection.js";
-import { addReviewFile, createReview, getLatestInProgressReview } from "./db/queries.js";
+import { addReviewFile, createReview, getLatestInProgressReview, getReview } from "./db/queries.js";
 import { setAIServiceTest, setDebug, setDemoMode } from "./debug.js";
 import { DEMO_SCENARIOS, setupDemoReview } from "./demo.js";
 import type { ReviewMode } from "./git/diff.js";
@@ -16,6 +16,7 @@ import { updateReviewDiffs } from "./review-update.js";
 import { startServer } from "./server.js";
 import { ensureSkills } from "./skills.js";
 import { checkForUpdates } from "./update-check.js";
+import { workspaceData } from "./workspace/storage.js";
 
 function printUsage() {
   console.log(`
@@ -548,6 +549,17 @@ export async function launchReview(args: {
   const { mode, cwd, repoRoot, repoName, headCommit, groundTruthScores, port, resume, noOpen, strictPort, onComplete } = args;
   const modeStr = getModeString(mode);
   const modeArgs = getModeArgs(mode);
+
+  // Workspace refreshes can move a review into its managed checkout; resume by identity.
+  if (resume) {
+    const workspace = workspaceData();
+    const tab = workspace.tabs.find(item => item.key === workspace.active) ?? workspace.tabs.at(0) ?? workspace.archived.at(-1);
+    const saved = tab?.reviewId !== undefined && tab.reviewId !== null ? await getReview(tab.reviewId) : undefined;
+    if (saved) {
+      await startServer(port, saved.id, saved.repo_path, { noOpen, strictPort, onComplete });
+      return;
+    }
+  }
 
   // Check for existing in-progress review
   const existing = await getLatestInProgressReview(repoRoot, modeStr, modeArgs);

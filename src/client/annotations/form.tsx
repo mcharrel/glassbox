@@ -25,7 +25,7 @@ export function bindCreateFormEvents(diffContainer: HTMLElement): void {
 
   void delegate(diffContainer, 'keydown', '.annotation-form-container[data-form-key] textarea', (e) => {
     const ke = e as KeyboardEvent;
-    if ((ke.metaKey || ke.ctrlKey) && ke.key === 'Enter') {
+    if (ke.key === 'Enter' && !ke.shiftKey && !ke.isComposing) {
       ke.preventDefault();
       void saveNewAnnotation();
     } else if (ke.key === 'Escape') {
@@ -46,6 +46,7 @@ export function bindCreateFormEvents(diffContainer: HTMLElement): void {
 }
 
 export function showAnnotationForm(afterEl: HTMLElement, lineNumber: number, side: string, replyToNoteId?: string): void {
+  if (editFormSignal.value?.formKey === `${String(lineNumber)}:${side}` && editFormSignal.value.replyToNoteId === replyToNoteId) { cancelNewAnnotation(); return; }
   // Dismiss any existing create-form (only one open at a time).
   document.querySelectorAll('.annotation-form-container[data-form-key]').forEach(el => { el.remove(); });
 
@@ -68,7 +69,7 @@ export function showAnnotationForm(afterEl: HTMLElement, lineNumber: number, sid
           : <span className="annotation-form-anchor">Line {String(lineNumber)}</span>}
         <textarea placeholder={replyToNoteId !== undefined ? 'Reply to this note…' : "Describe the issue and what you'd expect instead…"} autoFocus></textarea>
         <div className="annotation-form-actions">
-          <span className="annotation-form-hint">Cmd/Ctrl+Enter to save · Esc to cancel</span>
+          <span className="annotation-form-hint">Enter to save · Shift+Enter for a new line · Esc to cancel</span>
           <button className="btn btn-sm cancel-btn">Cancel</button>
           <button className="btn btn-sm btn-primary annotation-save-btn" disabled>Save</button>
         </div>
@@ -99,7 +100,9 @@ function cancelNewAnnotation(): void {
   setEditForm(null);
 }
 
+let saving = false;
 async function saveNewAnnotation(): Promise<void> {
+  if (saving) return;
   const state = editFormSignal.value;
   if (state === null || state.formKey === null) return;
   const content = state.content.trim();
@@ -111,25 +114,30 @@ async function saveNewAnnotation(): Promise<void> {
   // A reply to a note may carry one or more regions the reviewer marked on the
   // note's image artifact(s) (doc 25 / GB-953, GB-959) — attach them so the
   // reply shows the spots.
-  const regions = state.replyToNoteId !== undefined
-    ? takePendingArtifactRegions(state.replyToNoteId)
-    : [];
+  saving = true;
+  try {
+    const regions = state.replyToNoteId !== undefined
+      ? takePendingArtifactRegions(state.replyToNoteId)
+      : [];
 
-  const annotation = await createAnnotation({
-    reviewFileId: reviewStore.state.value.currentFileId ?? '',
-    lineNumber,
-    side: side as AnnotationSide,
-    category: asCategory(state.category),
-    content,
-    replyToNoteId: state.replyToNoteId,
-    ...(regions.length > 0 ? { regions } : {}),
-  });
+    const annotation = await createAnnotation({
+      reviewFileId: reviewStore.state.value.currentFileId ?? '',
+      lineNumber,
+      side: side as AnnotationSide,
+      category: asCategory(state.category),
+      content,
+      replyToNoteId: state.replyToNoteId,
+      ...(regions.length > 0 ? { regions } : {}),
+    });
 
-  document.querySelectorAll<HTMLElement>(`.annotation-form-container[data-form-key="${state.formKey}"]`).forEach(el => { el.remove(); });
-  setEditForm(null);
-  renderAnnotationInline(annotation, lineNumber, side);
+    document.querySelectorAll<HTMLElement>(`.annotation-form-container[data-form-key="${state.formKey}"]`).forEach(el => { el.remove(); });
+    setEditForm(null);
+    renderAnnotationInline(annotation, lineNumber, side);
+    document.dispatchEvent(new Event('glassbox-comment-saved'));
+    void import('../workspace/state.js').then(m => m.refreshWorkspace());
 
-  const fileId = reviewStore.state.value.currentFileId ?? '';
-  const prevCount = reviewStore.state.value.annotationCounts[fileId] ?? 0;
-  reviewStore.actions.setAnnotationCount(fileId, prevCount + 1);
+    const fileId = reviewStore.state.value.currentFileId ?? '';
+    const prevCount = reviewStore.state.value.annotationCounts[fileId] ?? 0;
+    reviewStore.actions.setAnnotationCount(fileId, prevCount + 1);
+  } finally { saving = false; }
 }

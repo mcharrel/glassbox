@@ -3,7 +3,7 @@ import type { NarrativeFileOrder, ReviewFile } from '../state.js';
 
 const DEPENDENCY_FILES = /^(?:go\.(?:mod|sum|work(?:\.sum)?)|(?:package|package-lock|npm-shrinkwrap|composer)\.json|composer\.lock|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|pom\.xml|maven_install(?:_[\w-]+)?\.(?:bzl|json)|(?:go_)?deps\.bzl|dependencies\.bzl|repositories\.bzl|MODULE\.bazel(?:\.lock)?|WORKSPACE(?:\.bazel)?|build\.gradle(?:\.kts)?|gradle\.(?:properties|lockfile)|libs\.versions\.toml|Cargo\.(?:toml|lock)|requirements(?:[.-][\w-]+)?\.txt|Pipfile(?:\.lock)?|pyproject\.toml|poetry\.lock|uv\.lock|Gemfile(?:\.lock)?)$/i;
 
-function priority(file: ReviewFile): number {
+export function filePriority(file: ReviewFile): number {
   const path = file.file_path.replaceAll('\\', '/');
   const name = path.split('/').at(-1) ?? path;
   // Generated protobufs take precedence over dependency and test directories.
@@ -38,7 +38,7 @@ export function readingOrder(files: ReviewFile[], narrative: NarrativeFileOrder[
       positions.set(item.reviewFileId, Math.min(positions.get(item.reviewFileId) ?? Infinity, item.position));
     }
   }
-  return files.map(file => ({ file, priority: priority(file), position: positions.get(file.id) ?? Infinity }))
+  return files.map(file => ({ file, priority: filePriority(file), position: positions.get(file.id) ?? Infinity }))
     .sort((a, b) => a.priority - b.priority
       || (a.priority === 0 && a.position !== b.position ? a.position - b.position : 0)
       || a.file.file_path.localeCompare(b.file.file_path)

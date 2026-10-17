@@ -253,6 +253,8 @@ describe('ai-queries', () => {
       ]);
       await updateAnalysisStatus(a2.id, 'completed');
 
+      // Make the ordering explicit; the embedded clock can give both inserts the same timestamp.
+      await (await getDb()).query("UPDATE ai_analyses SET created_at = created_at - INTERVAL '1 second' WHERE id = $1", [a1.id]);
       const scores = await getFileScoresForReview(review.id, 'risk');
       expect(scores.length).toBe(1);
       expect(scores[0].aggregate_score).toBeCloseTo(0.9);

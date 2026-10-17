@@ -1,3 +1,6 @@
+vi.mock('../../../src/client/stores/index.js', () => ({ reviewStore: {}, allFileOrder: {} }));
+vi.mock('../../../src/client/diff/selection.js', () => ({ selectFile: vi.fn() }));
+vi.mock('../../../src/client/workspace/state.js', () => ({ activeTab: vi.fn(), mutate: vi.fn(), setFileView: vi.fn() }));
 /**
  * GB-797 — find-in-diff couldn't match strings that crossed text-node
  * boundaries. The diff renders syntax-highlighted code as adjacent

@@ -314,3 +314,9 @@ export function renderNoteMarkdown(text: string, related: NoteLinkTarget[] = [])
   // eslint-disable-next-line kerfjs/no-raw-with-dynamic-arg -- single trusted-assembly point; every user value is escaped at the leaves via kerfjs/html
   return raw(renderBlocks(html`${text}`.toString().split('\n'), 0, { related }));
 }
+
+/** Match the textContent of our trusted renderer for server-side comment search. */
+export function noteMarkdownText(text: string): string {
+  const entities: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
+  return renderNoteMarkdown(text).toString().replace(/<[^>]*>/g, '').replace(/&(?:amp|lt|gt|quot|#39|#x27);/g, value => entities[value]);
+}

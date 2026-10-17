@@ -1,27 +1,16 @@
-/** Vim-style review keys are inactive while entering text or using a dialog. */
+/** Review shortcuts never consume text input or modal navigation. */
 export function bindReviewKeys(nextMatch: (direction: number) => void): void {
-  let previousG = -Infinity;
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('keydown', e => {
     const target = e.target instanceof Element ? e.target : null;
     if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey ||
         target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="dialog"], dialog') ||
-        document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) {
-      previousG = -Infinity;
-      return;
-    }
-    const now = performance.now();
-    if (e.key === 'g' && !e.repeat) {
-      if (now - previousG < 700) {
-        e.preventDefault();
-        document.getElementById('diff-container')?.scrollTo({ top: 0, behavior: 'instant' });
-        previousG = -Infinity;
-      } else previousG = now;
-      return;
-    }
-    previousG = -Infinity;
-    if (e.key === 'n' || e.key === 'N') {
+        document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
+    if (e.key === 'G' && document.body.dataset.workspaceView !== 'main' && document.body.dataset.workspaceView !== 'add') {
       e.preventDefault();
-      nextMatch(e.shiftKey || e.key === 'N' ? -1 : 1);
+      const pane = document.getElementById('diff-container');
+      pane?.scrollTo({ top: pane.scrollHeight, behavior: 'instant' });
+    } else if (e.key === 'n' || e.key === 'N' || e.key === 'm') {
+      e.preventDefault(); nextMatch(e.key === 'n' ? 1 : -1);
     }
   });
 }

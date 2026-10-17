@@ -21,10 +21,13 @@ import type { ReviewMode } from '../../../src/git/types.js';
 
 const dbQueries = vi.hoisted(() => ({
   addReviewFile: vi.fn(),
+  getReview: vi.fn(),
   createReview: vi.fn(),
   getLatestInProgressReview: vi.fn(),
 }));
 vi.mock('../../../src/db/queries.js', () => dbQueries);
+const workspaceData = vi.hoisted(() => vi.fn(() => ({ tabs: [], archived: [], active: null })));
+vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData }));
 
 const setDataDir = vi.hoisted(() => vi.fn());
 vi.mock('../../../src/db/connection.js', () => ({ setDataDir }));
@@ -141,6 +144,13 @@ const baseLaunch = {
 };
 
 describe('launchReview', () => {
+  it('resumes a tracked PR by identity after its source moved to a managed checkout', async () => {
+    workspaceData.mockReturnValueOnce({ tabs: [{ key: 'example/project#1', reviewId: 'saved' }], archived: [], active: 'example/project#1' } as any);
+    dbQueries.getReview.mockResolvedValueOnce({ id: 'saved', repo_path: '/managed' });
+    await launchReview({ ...baseLaunch, resume: true });
+    expect(startServer).toHaveBeenCalledWith(4183, 'saved', '/managed', expect.anything());
+    expect(gitDiff.getFileDiffs).not.toHaveBeenCalled();
+  });
   it('reuses an in-progress review at the same HEAD: updates diffs, never creates', async () => {
     dbQueries.getLatestInProgressReview.mockResolvedValue({ id: 'rev-1', head_commit: 'abc123', created_at: 'now' });
     gitDiff.getFileDiffs.mockReturnValue([{ filePath: 'a.ts' }]);

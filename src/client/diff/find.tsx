@@ -3,10 +3,14 @@
  * Triggered by Cmd/Ctrl+F. Searches visible text in the diff container,
  * highlights matches, and allows navigation between them.
  */
+import { type SearchHit,searchReview } from '../../api/workspace.js';
 import { IconChevronDown, IconChevronUp, IconX } from '../../icons.js';
 import { toElement } from '../dom.js';
+import { allFileOrder, reviewStore } from '../stores/index.js';
 import { getTauriGlobal } from '../tauri.js';
+import { activeTab, mutate, setFileView } from '../workspace/state.js';
 import { bindReviewKeys } from './reviewKeys.js';
+import { selectFile } from './selection.js';
 
 /** The lazily-created find widget. All mutable widget state (elements, query,
  *  match cursor) lives inside the controller closure — not at module scope
@@ -27,9 +31,9 @@ const MATCH_INDEX_ATTR = 'data-match-index';
 
 export function bindFind() {
   bindReviewKeys(direction => { controller?.goToMatch(direction); });
-  // Only intercept native Find in Tauri — browsers have their own find.
+  // Use the same review search in desktop and browser windows.
   const tauri = getTauriGlobal();
-  if (tauri === undefined) return;
+
 
   document.addEventListener('keydown', (e) => {
     // Cmd/Ctrl+F: open find bar
@@ -41,6 +45,8 @@ export function bindFind() {
     if (controller === null || !controller.isOpen()) return;
     // Escape: close find bar
     if (e.key === 'Escape' && !e.defaultPrevented) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
       controller.hide();
       return;
     }
@@ -51,10 +57,10 @@ export function bindFind() {
       e.preventDefault();
       controller.goToMatch(e.shiftKey ? -1 : 1);
     }
-  });
+  }, true);
 
   // Listen for Tauri menu event (Edit > Find)
-  tauri.event?.listen('menu-find', () => {
+  tauri?.event?.listen('menu-find', () => {
     (controller ??= createFindController()).show();
   });
 }
@@ -81,6 +87,11 @@ function focusDiff(): void {
  *  listeners are stable here. */
 function createFindController(): FindController {
   let currentQuery = '';
+  let globalHits: SearchHit[] = [];
+  let globalMatch = -1;
+  let searchVersion = 0;
+  let pendingHit: SearchHit | null = null;
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let anchorLine = 0;
   let anchorSide = 'new';
   let matchCount = 0;
@@ -89,7 +100,7 @@ function createFindController(): FindController {
   const isMac = navigator.userAgent.includes('Mac');
   const findBar = toElement(
     <div className="find-bar">
-      <input type="text" className="find-input" placeholder="Find in diff..." />
+      <input type="text" className="find-input" placeholder="Find across files and comments..." />
       <span className="find-match-count"></span>
       <button className="find-nav-btn" data-dir="prev"
         title={isMac ? 'Previous (\u21E7\u2318G)' : 'Previous (Shift+F3)'}><IconChevronUp /></button>
@@ -106,10 +117,10 @@ function createFindController(): FindController {
     if (matchLabel === null) return;
     if (currentQuery.length === 0) {
       matchLabel.textContent = '';
-    } else if (matchCount === 0) {
+    } else if (matchCount === 0 && globalHits.length === 0) {
       matchLabel.textContent = 'No matches';
     } else {
-      matchLabel.textContent = `${currentMatch + 1} of ${matchCount}`;
+      matchLabel.textContent = `${globalHits.length > 0 ? globalMatch + 1 : currentMatch + 1} of ${globalHits.length || matchCount}`;
     }
   }
 
@@ -124,7 +135,7 @@ function createFindController(): FindController {
       return;
     }
 
-    const container = document.getElementById('diff-container');
+    const container = document.querySelector<HTMLElement>('.review-body');
     if (container === null) return;
 
     const { text, segments } = buildTextIndex(container);
@@ -154,7 +165,60 @@ function createFindController(): FindController {
     updateLabel();
   }
 
+  function activateHit(hit: SearchHit, scroll = true): void {
+    const selector = hit.annotationId !== undefined ? `[data-annotation-id="${hit.annotationId}"] .annotation-text`
+      : hit.commentId !== undefined ? `[data-message="${hit.commentId}"] .pr-message-body`
+      : `.diff-line[data-side="${hit.side}"][data-line="${hit.line}"] .code`;
+    const cell = document.querySelector(selector);
+    const marks = [...(cell?.querySelectorAll<HTMLElement>(`.${HIGHLIGHT_CLASS}`) ?? [])];
+    const indices = [...new Set(marks.map(mark => Number(mark.dataset.matchIndex)))];
+    if (hit.occurrence < indices.length) { activateMatch(indices[hit.occurrence], scroll); pendingHit = null; }
+    else if (scroll) cell?.scrollIntoView({ block: 'center' });
+  }
+  function goToHit(hit: SearchHit): void {
+    pendingHit = hit;
+    if (hit.fileId === null) {
+      const tab = activeTab();
+      if (tab) void mutate({ op: 'view', key: tab.key, view: 'main' }).then(() => { runSearch(currentQuery, false); activateHit(hit); });
+    } else {
+      setFileView();
+      const hidden = new Set(reviewStore.state.value.hiddenFileIds); hidden.delete(hit.fileId);
+      reviewStore.actions.update({ hiddenFileIds: hidden });
+      if (reviewStore.state.value.currentFileId !== hit.fileId) void selectFile(hit.fileId);
+      else activateHit(hit);
+    }
+    updateLabel();
+  }
+  function requestGlobal(scroll: boolean): void {
+    const version = ++searchVersion;
+    clearTimeout(searchTimer);
+    globalHits = []; globalMatch = -1; pendingHit = null;
+    if (!currentQuery) return;
+    const query = currentQuery;
+    searchTimer = setTimeout(() => {
+      void searchReview(query).then(hits => {
+        if (version !== searchVersion || currentQuery !== query) return;
+        const order = allFileOrder.value;
+        globalHits = hits.sort((a, b) => {
+          const ai = a.fileId === null ? order.length : order.indexOf(a.fileId);
+          const bi = b.fileId === null ? order.length : order.indexOf(b.fileId);
+          return ai - bi || a.line - b.line || a.side.localeCompare(b.side) || a.occurrence - b.occurrence;
+        });
+        globalMatch = globalHits.findIndex(hit => hit.fileId === reviewStore.state.value.currentFileId && (anchorLine === 0 || hit.line === anchorLine));
+        if (globalMatch < 0 && globalHits.length > 0) globalMatch = 0;
+        if (globalMatch >= 0) {
+          if (scroll) goToHit(globalHits[globalMatch]);
+          else activateHit(globalHits[globalMatch], false);
+        }
+        updateLabel();
+      }).catch(() => { /* In-file find remains available while the index cannot be read. */ });
+    }, 180);
+  }
   function goToMatch(direction: number): void {
+    if (globalHits.length > 0) {
+      globalMatch = (globalMatch + direction + globalHits.length) % globalHits.length;
+      goToHit(globalHits[globalMatch]); return;
+    }
     if (matchCount === 0) return;
     currentMatch += direction;
     if (currentMatch >= matchCount) currentMatch = 0;
@@ -165,6 +229,9 @@ function createFindController(): FindController {
 
   function hide(): void {
     findBar.style.display = 'none';
+    searchVersion++; clearTimeout(searchTimer); globalHits = []; globalMatch = -1; pendingHit = null;
+    if (findInput) findInput.value = '';
+    focusDiff();
     clearHighlights();
     currentQuery = '';
     anchorLine = 0;
@@ -173,12 +240,12 @@ function createFindController(): FindController {
   }
 
   // `findInput` is a const — TS narrows it through the `?.` for the whole closure.
-  findInput?.addEventListener('input', () => { anchorLine = 0; runSearch(findInput.value); });
+  findInput?.addEventListener('input', () => { anchorLine = 0; runSearch(findInput.value); requestGlobal(true); });
   findInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      focusDiff();
+      hide();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       goToMatch(e.shiftKey ? -1 : 1);
@@ -211,9 +278,14 @@ function createFindController(): FindController {
       findBar.style.display = 'flex';
       if (findInput) findInput.value = query;
       runSearch(query, false);
+      requestGlobal(false);
       focusDiff();
     },
-    refresh(): void { runSearch(currentQuery, false); },
+    refresh(): void {
+      runSearch(currentQuery, false);
+      if (pendingHit) activateHit(pendingHit);
+      else if (globalMatch >= 0 && globalMatch < globalHits.length) activateHit(globalHits[globalMatch], false);
+    },
     goToMatch,
     isOpen: () => findBar.style.display !== 'none',
   };
@@ -249,8 +321,8 @@ function buildTextIndex(container: HTMLElement): { text: string; segments: TextS
   const segments: TextSegment[] = [];
   const parts: string[] = [];
   let pos = 0;
-  // Search code cells independently: never join unrelated lines or include comments/chrome.
-  for (const code of container.querySelectorAll('.code')) {
+  // Search each code cell or comment independently; exclude surrounding chrome.
+  for (const code of container.querySelectorAll('.code, .annotation-text, .pr-message-body')) {
     const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
     let node: Text | null;
     while ((node = walker.nextNode() as Text | null)) {

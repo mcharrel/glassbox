@@ -307,3 +307,9 @@ export async function getStaleCountsForReview(reviewId: string): Promise<Record<
 export async function getAnnotationCountsForReview(reviewId: string): Promise<Record<string, number>> {
   return countAnnotationsByFile(reviewId, false);
 }
+
+/** Switch a workspace review to its refreshed managed snapshot without losing annotations. */
+export async function updateReviewSource(id: string, repoPath: string, base: string, head: string): Promise<void> {
+  const db = await getDb();
+  await db.query('UPDATE reviews SET repo_path = $2, mode = $3, mode_args = $4, head_commit = $5 WHERE id = $1', [id, repoPath, `range:${base}..${head}`, `${base}..${head}`, head]);
+}

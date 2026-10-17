@@ -66,10 +66,10 @@ Requirements for the browser-based UI and user interaction patterns.
 
 ### 8.6 Keyboard Shortcuts
 
-- `Cmd/Ctrl+Enter` shall save the current annotation form.
+- `Enter` or `Cmd/Ctrl+Enter` shall save the current annotation form; Shift+Enter inserts a newline.
 - `Escape` shall close modals and annotation forms.
 - `j`/`k` shall navigate between files in the sidebar.
-- `Tab` / `Shift+Tab` shall reveal the next / previous change not yet fully visible in that direction, using the code viewport below sticky headers. Fully visible changes are skipped. Jumps show ideally five lines of context before the change (after it when moving backward), reduced when needed to fit the whole change. Changes taller than the viewport are read a page at a time with ten lines of overlap; very small windows reduce overlap enough to keep advancing. After the final page, navigation continues to the next / previous file in visible sidebar order, stopping at the ends of the review. It waits for the destination to render; repeated Tab presses during loading do not skip files. Files without changed blocks are visited once. Geometry is remeasured after manual scrolling, resizing, or changing diff mode. Inputs, editable content, and visible dialogs retain normal Tab behavior; modified Tab shortcuts are untouched.
+- `Tab` / `Shift+Tab` shall reveal the next / previous change not yet fully visible in that direction, using the code viewport below sticky headers. Fully visible changes are skipped. Jumps show ideally five lines of context before the change (after it when moving backward), reduced when needed to fit the whole change. Changes taller than the viewport are read a page at a time with ten lines of overlap; very small windows reduce overlap enough to keep advancing. After the final page, navigation continues to the next / previous file in the complete Reading order, including previously hidden files when going backward, stopping at the ends of the review. It waits for the destination to render; repeated Tab presses during loading do not skip files. Files without changed blocks are visited once. Geometry is remeasured after manual scrolling, resizing, or changing diff mode. Inputs, editable content, and visible dialogs retain normal Tab behavior; modified Tab shortcuts are untouched.
 - `Cmd/Ctrl+F` shall open the find-in-diff bar (see FR-4.7 in `4-diff-viewing.md`) — **Tauri desktop app only**. In a regular browser, `Cmd/Ctrl+F` is left to the browser's own native find so the bar is not bound there.
 - `Cmd+Click` (macOS) / `Ctrl+Click` (Windows/Linux) on a symbol in the diff shall navigate to its definition — same file (scrolls) or different file in the review (switches file and scrolls). Uses the existing regex-based outline parser to build a cross-file symbol index.
 
@@ -94,3 +94,5 @@ Requirements for the browser-based UI and user interaction patterns.
 - The layout shall function at minimum window dimensions of 800x500 pixels.
 
 Personal fork: drag the divider above sidebar guidance to resize its height, or focus it and use Up/Down. The height persists locally and is clamped on window resize to preserve file-list space. Empty guidance hides the divider. GUIDE/LEARN title badges are omitted; their text and order remain.
+
+The personal fork adds a PR tab rail, a Main view with description/reviewers/checks/conversation, and a File view. `r` changes views; `f`/`g` mirror change navigation; `c`/`v` navigate comment threads. Shared header actions operate on GitHub. See [MY_GLASSBOX.md](../MY_GLASSBOX.md) for the full workspace specification.

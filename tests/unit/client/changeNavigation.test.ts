@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { reviewStore, visibleFileOrder } from '../../../src/client/stores/index.js';
+import { reviewStore, allFileOrder } from '../../../src/client/stores/index.js';
 import { selectFile } from '../../../src/client/diff/selection.js';
 import { bindChangeNavigation } from '../../../src/client/diff/changeNavigation.js';
 
 vi.mock('../../../src/client/stores/index.js', () => ({
-  reviewStore: { state: { value: { currentFileId: 'f1' } } },
-  visibleFileOrder: { value: ['f1'] },
+  reviewStore: { state: { value: { currentFileId: 'f1', reviewId: 'review', hiddenFileIds: new Set() } }, actions: { update: vi.fn() } },
+  allFileOrder: { value: ['f1'] },
 }));
 vi.mock('../../../src/client/diff/selection.js', () => ({ selectFile: vi.fn() }));
 
@@ -16,7 +16,9 @@ const change = (top: number, lines = 1, lineHeight = 20): Rows =>
 function fixture(specs: Rows[] = [change(100), change(200), change(700)], options: { height?: number; chrome?: number; maxScroll?: number } = {}) {
   vi.useFakeTimers();
   reviewStore.state.value.currentFileId = 'f1';
-  visibleFileOrder.value = ['f1'];
+  allFileOrder.value = ['f1'];
+  reviewStore.state.value.hiddenFileIds = new Set();
+  vi.mocked(reviewStore.actions.update).mockImplementation(partial => { Object.assign(reviewStore.state.value, partial); });
   vi.mocked(selectFile).mockReset().mockImplementation(async fileId => {
     reviewStore.state.value.currentFileId = fileId;
   });
@@ -42,6 +44,7 @@ function fixture(specs: Rows[] = [change(100), change(200), change(700)], option
     set scrollTop(n: number) { scrollTop = Math.max(0, Math.min(options.maxScroll ?? 5000, n)); },
   };
   const doc = {
+    body: { dataset: { workspaceView: 'file' } },
     activeElement: { closest: vi.fn((): unknown => null) },
     getElementById: () => container,
     querySelectorAll: vi.fn((): unknown[] => []),
@@ -96,7 +99,7 @@ describe('page-aware change navigation', () => {
 
   it('pages through a long change with ten lines of overlap before going to another file', () => {
     const f = fixture([change(700, 80)]);
-    visibleFileOrder.value = ['f1', 'f2'];
+    allFileOrder.value = ['f1', 'f2'];
     f.key(); expect(f.container.scrollTop).toBe(540);
     f.key(); expect(f.container.scrollTop).toBe(940);
     f.key(); expect(f.container.scrollTop).toBe(1340);
@@ -180,7 +183,7 @@ describe('page-aware change navigation', () => {
 
   it('does not navigate before a usable viewport is laid out', () => {
     const f = fixture([], { height: 0 });
-    visibleFileOrder.value = ['f1', 'f2'];
+    allFileOrder.value = ['f1', 'f2'];
     f.key(); expect(selectFile).not.toHaveBeenCalled();
   });
 
@@ -204,7 +207,7 @@ describe('page-aware change navigation', () => {
 describe('Tab across files', () => {
   it('waits for the next file and reveals its first change with context without skipping files', () => {
     const f = fixture([change(100)]);
-    visibleFileOrder.value = ['f1', 'f3', 'f2'];
+    allFileOrder.value = ['f1', 'f3', 'f2'];
     f.key(); f.key(); f.key();
     expect(selectFile).toHaveBeenCalledExactlyOnceWith('f3');
     f.onRendered('f1');
@@ -218,7 +221,7 @@ describe('Tab across files', () => {
 
   it('enters the previous file at the tail of its last change, then pages backward', () => {
     const f = fixture([change(100)]);
-    visibleFileOrder.value = ['f0', 'f1'];
+    allFileOrder.value = ['f0', 'f1'];
     f.key({ shiftKey: true });
     expect(selectFile).toHaveBeenCalledExactlyOnceWith('f0');
     f.render('f0', [change(100), change(700, 80)]);
@@ -228,7 +231,7 @@ describe('Tab across files', () => {
 
   it('visits files with no changed blocks and continues on the following Tab', () => {
     const f = fixture([]);
-    visibleFileOrder.value = ['f1', 'f2', 'f3'];
+    allFileOrder.value = ['f1', 'f2', 'f3'];
     f.key();
     expect(selectFile).toHaveBeenCalledExactlyOnceWith('f2');
     f.render('f2', []);
@@ -239,7 +242,7 @@ describe('Tab across files', () => {
 
   it('cancels a pending jump when the user selects a different file', () => {
     const f = fixture([change(100)]);
-    visibleFileOrder.value = ['f1', 'f2', 'f3'];
+    allFileOrder.value = ['f1', 'f2', 'f3'];
     f.key();
     reviewStore.state.value.currentFileId = 'f3';
     const other = f.render('f3', [change(700)]);
@@ -249,7 +252,7 @@ describe('Tab across files', () => {
 
   it('clears a pending jump on load failure and allows later navigation', () => {
     const f = fixture([change(100)]);
-    visibleFileOrder.value = ['f1', 'f2'];
+    allFileOrder.value = ['f1', 'f2'];
     f.key();
     f.render('f2', null);
     expect(f.key().preventDefault).not.toHaveBeenCalled();
@@ -268,8 +271,26 @@ describe('Tab across files', () => {
 
   it.each([{ order: [] }, { order: ['other'] }])('does not choose an unrelated file when filtered out: %j', ({ order }) => {
     const f = fixture([]);
-    visibleFileOrder.value = order;
+    allFileOrder.value = order;
     f.key(); f.key({ shiftKey: true });
     expect(selectFile).not.toHaveBeenCalled();
   });
+});
+
+it('f/g mirror change navigation and completed files can be restored backward', () => {
+  const f = fixture([change(100)]);
+  allFileOrder.value = ['f1', 'f2'];
+  f.key({ key: 'f' });
+  expect(selectFile).toHaveBeenLastCalledWith('f2');
+  expect(reviewStore.state.value.hiddenFileIds.has('f1')).toBe(true);
+  f.render('f2', [change(100)]);
+  f.container.scrollTop = 0;
+  f.key({ key: 'g' });
+  expect(selectFile).toHaveBeenLastCalledWith('f1');
+  expect(reviewStore.state.value.hiddenFileIds.has('f1')).toBe(false);
+});
+it('finishing the last file empties the remaining-file list without deleting traversal history', () => {
+  const f = fixture([change(100)]); f.key();
+  expect(reviewStore.state.value.hiddenFileIds.has('f1')).toBe(true);
+  expect(allFileOrder.value).toEqual(['f1']);
 });

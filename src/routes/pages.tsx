@@ -83,6 +83,7 @@ pageRoutes.get('/file/:fileId', async (c) => {
   // The review mode is needed for ground-truth side labels (doc 26 §26.1) and
   // for whitespace re-diff / SVG render; load it once.
   const review = await getReview(file.review_id);
+  if (review) c.set('repoRoot', review.repo_path);
   const reviewMode = review ? parseModeString(review.mode) : null;
   const imageSideLabels = reviewMode ? groundTruthSideLabels(reviewMode) : undefined;
   // Ground-truth set step navigator (doc 26 §26.3): needs the sibling steps'

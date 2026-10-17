@@ -61,9 +61,9 @@ imageRoutes.get('/image/:fileId/metadata', async (c) => {
   const file = await getReviewFile(fileIdParam.data);
   if (!file) return errorResponse(c, 'Not found', 404);
 
-  const repoRoot = c.get('repoRoot');
   const review = await getReview(file.review_id);
   if (!review) return errorResponse(c, 'Review not found', 404);
+  const repoRoot = review.repo_path;
 
   const mode = parseModeString(review.mode);
   const diff = parseDiffData(file.diff_data);
@@ -92,9 +92,9 @@ imageRoutes.get('/image/:fileId/:side', async (c) => {
   const file = await getReviewFile(fileIdParam.data);
   if (!file) return errorResponse(c, 'Not found', 404);
 
-  const repoRoot = c.get('repoRoot');
   const review = await getReview(file.review_id);
   if (!review) return errorResponse(c, 'Review not found', 404);
+  const repoRoot = review.repo_path;
 
   const mode = parseModeString(review.mode);
   const diff = parseDiffData(file.diff_data);

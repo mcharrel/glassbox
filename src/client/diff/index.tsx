@@ -101,7 +101,7 @@ function setupFetchEffect(): void {
     if (key === lastFetchKey) return;
     lastFetchKey = key;
 
-    let params = '?mode=' + diffMode + (ignoreWhitespace ? '&ignoreWhitespace=1' : '');
+    let params = '?reviewId=' + encodeURIComponent(document.body.dataset.reviewId ?? '') + '&mode=' + diffMode + (ignoreWhitespace ? '&ignoreWhitespace=1' : '');
     if (svgRendered) params += '&view=rendered';
 
     // kerf's resource owns the stale-response guard: only the latest run
@@ -274,6 +274,7 @@ function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fi
   });
   applyHighlighting();
   refreshFind();
+  document.dispatchEvent(new Event('glassbox-diff-ready'));
   updateToolbarLanguage();
   syncSplitColumnHeights();
   // Outline keys off a real review file; skip for raw views.

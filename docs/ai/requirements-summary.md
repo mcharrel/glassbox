@@ -1315,3 +1315,7 @@ Personal fork: simple purple click-to-edit comments; whole-line diffs without ch
 
 Personal sidebar guidance supports persistent height resizing, with no visible GUIDE/LEARN title badges.
 AI prompt context labels each diff row with its original and new source line numbers. Supplemental full-file context also includes explicit new-side line numbers, so deletion rows and summarized gaps do not shift generated note anchors.
+
+## Personal PR workspace
+
+The fork adds `src/workspace/` (GitHub adapter, cached tabs, durable outbox, isolated comment agents, checkout import and search), `src/api/workspace.ts`, and `src/client/workspace/` (tab panel, Main/File views, conversations and resizable sections). `/api/workspace` reads/mutates local workspace state; `/api/workspace/search` searches PR files and comments. Per-request review context selects the matching repository. See [MY_GLASSBOX.md](../../MY_GLASSBOX.md) for the complete personal behavior and shortcuts.

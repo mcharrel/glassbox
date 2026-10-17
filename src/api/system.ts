@@ -12,10 +12,9 @@ import { z } from 'zod';
 import { apiCall, OkResponseSchema } from './_runner.js';
 
 export const OpenExternalReqSchema = z.object({
-  // Restricted to http(s): this hands the value to the OS "open" handler, so
-  // we don't want to let it launch arbitrary schemes (file:, custom apps).
-  url: z.url().refine((u) => /^https?:\/\//i.test(u), {
-    message: 'url must be an http(s) URL',
+  // Only web links and the exact Slack user deep-link shape can reach the OS.
+  url: z.url().refine((u) => /^https?:\/\//i.test(u) || /^slack:\/\/user\?team=[A-Z0-9]+&id=[A-Z0-9]+$/.test(u), {
+    message: 'url must be an http(s) URL or a Slack user link',
   }),
 });
 export type OpenExternalReq = z.infer<typeof OpenExternalReqSchema>;

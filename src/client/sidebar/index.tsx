@@ -9,12 +9,13 @@ import { asEl, asElement, asInput, asSelect, toElement } from '../dom.js';
 import type { SortMode } from '../state.js';
 import { aiStore, diffViewStore, folderModeFiles, reviewStore, visibleFileOrder, visibleNoteLines } from '../stores/index.js';
 import { FILTER_DEBOUNCE_MS } from '../timing.js';
+import { setFileView } from '../workspace/state.js';
 import { ACTIONS } from './actions.js';
 import { sidebarNotesJsx } from './aiNotes.js';
 import { bindFileContextMenu } from './contextMenu.js';
 import { fileListJsx } from './fileListView.js';
 import { noteStorageFolderKeys } from './folderTree.js';
-import { bindNotesResize } from './notesResize.js';
+import { bindGuideLearnResize, bindNotesResize } from './notesResize.js';
 import { bindNoteVisibility } from './noteVisibility.js';
 import { showRiskPopover } from './riskPopover.js';
 import { sortControlJsx } from './sortControl.js';
@@ -32,6 +33,7 @@ export function initSidebar(): void {
   if (notes) {
     mount(notes, () => sidebarNotesJsx());
     bindNotesResize(sidebar, notes);
+    bindGuideLearnResize(notes);
     effect(() => { void visibleNoteLines.value; notes.scrollTop = 0; });
     const diff = document.getElementById('diff-container');
     if (diff) bindNoteVisibility(diff);
@@ -132,7 +134,7 @@ function bindDelegatedEvents(sidebar: HTMLElement): void {
     },
     [ACTIONS.selectFile.value]: (_e, el) => {
       const fileId = asEl(el).dataset.fileId;
-      if (fileId !== undefined && fileId !== '') void selectFile(fileId);
+      if (fileId !== undefined && fileId !== '') { setFileView(); void selectFile(fileId); }
     },
     [ACTIONS.toggleFolder.value]: (_e, header) => {
       const path = asEl(header).dataset.folderPath ?? '';

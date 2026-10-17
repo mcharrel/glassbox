@@ -6,11 +6,12 @@ import {
   UpdateAnnotationBodySchema,
   UpdateRegionBodySchema,
 } from '../../api/annotations.js';
-import { addAnnotation, deleteAnnotation, deleteStaleAnnotations, getAnnotationsForReview, keepAllStaleAnnotations, markAnnotationCurrent, moveAnnotation, updateAnnotation, updateAnnotationRegion } from '../../db/queries.js';
+import { addAnnotation, deleteAnnotation, deleteStaleAnnotations, getAnnotationsForReview, getReviewFile,keepAllStaleAnnotations, markAnnotationCurrent, moveAnnotation, updateAnnotation, updateAnnotationRegion  } from '../../db/queries.js';
 import { scheduleAutoExport } from '../../export/auto-export.js';
 import type { AppEnv } from '../../types.js';
 import { parseBody, requirePathParam } from '../../utils/parseBody.js';
 import { resolveReviewId } from '../../utils/resolveReviewId.js';
+import { assertOwnAnnotation, queueAnnotation, queueAnnotationChange } from '../../workspace/service.js';
 
 export const annotationsRoutes = new Hono<AppEnv>();
 
@@ -24,10 +25,13 @@ annotationsRoutes.post('/annotations', async (c) => {
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
 
+  const file = await getReviewFile(body.reviewFileId);
+  if (!file || file.review_id !== c.get('reviewId')) return c.json({ error: 'File not found in this review' }, 404);
   const annotation = await addAnnotation(
     body.reviewFileId, body.lineNumber, body.side, body.category, body.content, body.replyToNoteId,
     body.region, body.regions,
   );
+  await queueAnnotation(c.get('reviewId'), annotation);
   autoExport(c);
   return c.json(annotation, 201);
 });
@@ -38,6 +42,8 @@ annotationsRoutes.patch('/annotations/:id', async (c) => {
   const parsed = await parseBody(c, UpdateAnnotationBodySchema);
   if (!parsed.ok) return parsed.response;
 
+  await assertOwnAnnotation(c.get('reviewId'), id.data);
+  queueAnnotationChange(c.get('reviewId'), id.data, 'edit', parsed.data.content);
   await updateAnnotation(id.data, parsed.data.content, parsed.data.category);
   autoExport(c);
   return c.json({ ok: true } as const);
@@ -46,6 +52,8 @@ annotationsRoutes.patch('/annotations/:id', async (c) => {
 annotationsRoutes.delete('/annotations/:id', async (c) => {
   const id = requirePathParam(c, 'id');
   if (!id.ok) return id.response;
+  await assertOwnAnnotation(c.get('reviewId'), id.data);
+  queueAnnotationChange(c.get('reviewId'), id.data, 'delete');
   await deleteAnnotation(id.data);
   autoExport(c);
   return c.json({ ok: true } as const);

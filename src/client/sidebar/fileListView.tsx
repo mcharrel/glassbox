@@ -186,7 +186,7 @@ function narrativeRowJsx(item: NarrativeFileOrder, review: typeof reviewStore.st
     <div data-key={item.reviewFileId}
       className={`file-item${item.reviewFileId === review.currentFileId ? ' active' : ''}`}
       {...ACTIONS.selectFile.attrs} data-file-id={item.reviewFileId} style="padding-left: 16px">
-      <span className="narrative-position" title={item.rationale}>{item.position}</span>
+
       <span className="file-name" title={item.filePath}>{fileName}</span>
       {noteIconJsx(item.reviewFileId)}
       <FileRowBadges count={count} staleCount={staleCount} />

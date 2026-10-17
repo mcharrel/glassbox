@@ -71,7 +71,7 @@ export function bindAnnotationEvents(diffContainer: HTMLElement): void {
 
   void delegate(diffContainer, 'keydown', '.annotation-form-container[data-edit-for] textarea', (e) => {
     const ke = e as KeyboardEvent;
-    if ((ke.metaKey || ke.ctrlKey) && ke.key === 'Enter') {
+    if (ke.key === 'Enter' && !ke.shiftKey && !ke.isComposing) {
       ke.preventDefault();
       void saveEdit();
     } else if (ke.key === 'Escape') {
@@ -170,31 +170,38 @@ function cancelEdit(): void {
   closeEditForm();
 }
 
+let saving = false;
 async function saveEdit(): Promise<void> {
+  if (saving) return;
   const state = editFormSignal.value;
   if (state === null || state.annotationId === null) return;
   const content = state.content.trim();
   if (content === '') return;
 
-  await updateAnnotation({
-    id: state.annotationId,
-    content,
-    category: asCategory(state.category),
-  });
-
-  const item = findAnnotationItem(state.annotationId);
-  if (item !== null) {
-    const updated: Annotation = {
-      ...readAnnotation(item),
+  saving = true;
+  try {
+    await updateAnnotation({
       id: state.annotationId,
-      category: state.category,
       content,
-      is_stale: item.dataset.isStale === 'true',
-    };
-    morph(item, buildAnnotationItemHtml(updated));
-    item.style.display = '';
-  }
-  closeEditForm();
+      category: asCategory(state.category),
+    });
+
+    const item = findAnnotationItem(state.annotationId);
+    if (item !== null) {
+      const updated: Annotation = {
+        ...readAnnotation(item),
+        id: state.annotationId,
+        category: state.category,
+        content,
+        is_stale: item.dataset.isStale === 'true',
+      };
+      morph(item, buildAnnotationItemHtml(updated));
+      item.style.display = '';
+    }
+    closeEditForm();
+    document.dispatchEvent(new Event('glassbox-comment-saved'));
+    void import('../workspace/state.js').then(m => m.refreshWorkspace());
+  } finally { saving = false; }
 }
 
 function closeEditForm(): void {

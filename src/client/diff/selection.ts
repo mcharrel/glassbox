@@ -8,6 +8,7 @@ import { navPush } from './navStack.js';
  *  reactively in `diff/index.tsx` (the `initDiffView()` mount + fetch effect). */
 export async function selectFile(fileId: string): Promise<void> {
   reviewStore.actions.update({ currentFileId: fileId });
+  try { localStorage.setItem(`glassbox.lastFile.${reviewStore.state.value.reviewId}`, fileId); } catch { /* optional persistence */ }
   const file = reviewStore.state.value.files.find(f => f.id === fileId);
   navPush({ fileId, filePath: file?.file_path ?? null, scrollLine: 1 });
   updateNavFilePath(file?.file_path ?? '');

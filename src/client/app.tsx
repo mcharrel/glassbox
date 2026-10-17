@@ -1,27 +1,22 @@
 import {
   getAIConfig,
   getAIPreferences,
-  getCurrentReview,
-  refreshReview,
   SvgViewModeSchema,
   SxsOrientationSchema,
 } from "../api/index.js";
-import { IconGear, IconRefresh } from "../icons.js";
 import { initDebug } from "./api.js";
 import { parseDeepLink } from "./diff/deepLink.js";
 import { bindFind } from "./diff/find.js";
 import { bindGoToDefinition, navigateToLocation } from "./diff/goToDefinition.js";
-import { initDiffView, invalidateDiffCache, setRawDiffContent, updateNavFilePath } from "./diff/index.js";
+import { initDiffView, setRawDiffContent, updateNavFilePath } from "./diff/index.js";
 import { getVisibleScrollLine, navBack, navForward, navUpdateScroll, setNavigating } from "./diff/navStack.js";
 import { selectFile } from "./diff/selection.js";
 import { bindToolbar } from "./diff/toolbar.js";
 import { initDifftoolSession } from "./difftool/session.js";
-import { toElement } from "./dom.js";
 import { triggerGuidedAnalysis } from "./guided.js";
 import { initPluginUi } from "./plugins/uiExtensions.js";
 import { bindCompleteButton, bindReopenButton } from "./review/modal.js";
 import { initProgress } from "./review/progress.js";
-import { initSharePrompt } from "./share.js";
 import { loadFiles } from "./sidebar/fileTree.js";
 import { initSidebar } from "./sidebar/index.js";
 import { loadAnalysisResults, triggerAnalysis } from "./sidebar/sortMode.js";
@@ -29,6 +24,7 @@ import { aiStore, diffViewStore, dragStore, isGroundTruthReview, reviewStore, vi
 // --- Tauri update notification ---
 import { getTauriInvoke, showUpdateBanner } from "./tauri.js";
 import { SCROLL_SAVE_DEBOUNCE_MS, UPDATE_POLL_DELAYS_MS } from './timing.js';
+import { initWorkspace } from "./workspace/index.js";
 
 async function initAISorting() {
   try {
@@ -71,56 +67,6 @@ async function initAISorting() {
 
 }
 
-/**
- * Add the refresh + settings-gear buttons to the sidebar header. Split from
- * `initAISorting()` (GB-1087), which is preference/config bootstrap — button
- * creation is a sidebar concern.
- *
- * The share section (#sidebar-share) is populated by the time-gated share
- * prompt in `share.tsx` once the user has spent ~5 min in Glassbox — see
- * `initSharePrompt()`. It is intentionally NOT shown immediately on launch.
- */
-function bindSidebarHeaderButtons(): void {
-  const sidebarHeader = document.querySelector(".sidebar-header");
-  if (sidebarHeader === null) return;
-
-  const refreshBtn = toElement(
-    <button className="btn btn-xs refresh-btn" title="Refresh diffs"><IconRefresh /></button>
-  );
-  refreshBtn.addEventListener("click", () => {
-    void (async () => {
-    refreshBtn.style.opacity = "0.4";
-    refreshBtn.style.pointerEvents = "none";
-    try {
-      await refreshReview();
-      await loadFiles();
-      // Server-side diff content changed; same fileId so the fetch
-      // effect's dedupe would skip the refetch otherwise.
-      invalidateDiffCache();
-      const currentFileId = reviewStore.state.value.currentFileId;
-      if (currentFileId !== null) {
-        void selectFile(currentFileId);
-      }
-    } catch {
-      /* ignore */
-    }
-    refreshBtn.style.opacity = "";
-    refreshBtn.style.pointerEvents = "";
-    })();
-  });
-  sidebarHeader.appendChild(refreshBtn);
-
-  const gearBtn = toElement(
-    <button className="btn btn-xs settings-gear" title="Settings"><IconGear /></button>
-  );
-  gearBtn.addEventListener("click", () => {
-    void import("./settings/dialog.js").then((m) => {
-      m.showSettingsDialog();
-    });
-  });
-  sidebarHeader.appendChild(gearBtn);
-}
-
 async function navigateToEntry(entry: { fileId: string | null; filePath: string | null; scrollLine: number }) {
   setNavigating(true);
   try {
@@ -132,7 +78,7 @@ async function navigateToEntry(entry: { fileId: string | null; filePath: string 
       // `setRawDiffContent()` handles highlighting + toolbar visibility via
       // the post-render effect; we just need to clear sidebar selection and
       // update the nav path label.
-      const res = await fetch("/file-raw?path=" + encodeURIComponent(entry.filePath));
+      const res = await fetch("/file-raw?path=" + encodeURIComponent(entry.filePath) + "&reviewId=" + encodeURIComponent(document.body.dataset.reviewId ?? ""));
       if (res.ok) {
         document.querySelectorAll(".file-item.active").forEach((el) => { el.classList.remove("active"); });
         reviewStore.actions.update({ currentFileId: null });
@@ -184,9 +130,9 @@ function bindNavButtons() {
 }
 
 async function init() {
+  initWorkspace();
   await initDebug();
   await initAISorting();
-  bindSidebarHeaderButtons();
   await loadFiles();
   // Image comparisons retain their ordered sets and hide-identical controls.
   if (isGroundTruthReview()) aiStore.actions.update({ sortMode: 'folder' });
@@ -200,10 +146,17 @@ async function init() {
   const deepLink = parseDeepLink(window.location.search);
 
   // Auto-select the first file if none is selected (and no deep-link overrides it)
+  try {
+    const hidden: unknown = JSON.parse(localStorage.getItem(`glassbox.hidden.${reviewStore.state.value.reviewId}`) ?? '[]');
+    if (Array.isArray(hidden) && hidden.every(id => typeof id === 'string')) reviewStore.actions.update({ hiddenFileIds: new Set(hidden) });
+  } catch { /* optional persistence */ }
   const review = reviewStore.state.value;
   const order = visibleFileOrder.value;
-  if (deepLink === null && review.currentFileId === null && order.length > 0) {
-    void selectFile(order[0]);
+  if (deepLink === null && review.currentFileId === null) {
+    let lastFile: string | null = null;
+    try { lastFile = localStorage.getItem(`glassbox.lastFile.${review.reviewId}`); } catch { /* optional persistence */ }
+    const next = review.files.find(file => file.id === lastFile)?.id ?? order.at(0) ?? review.files.at(-1)?.id;
+    if (next !== undefined) void selectFile(next);
   }
 
   // Auto-start analysis if resuming in an AI mode with no cached results
@@ -229,7 +182,7 @@ async function init() {
   // jump again and the address bar stays tidy.
   if (deepLink !== null) {
     void navigateToLocation(deepLink.file, deepLink.line);
-    window.history.replaceState(null, '', window.location.pathname);
+    window.history.replaceState(null, '', window.location.pathname + "?reviewId=" + encodeURIComponent(document.body.dataset.reviewId ?? ""));
   }
 
   bindToolbar();
@@ -288,8 +241,3 @@ async function checkForUpdate() {
 
 void init();
 void checkForUpdate();
-
-// Share prompt — detect demo mode from the review's mode field
-void getCurrentReview().then((review) => {
-  initSharePrompt(review?.mode === 'demo');
-}).catch(() => { /* ignore */ });
