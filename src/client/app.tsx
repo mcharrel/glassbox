@@ -25,6 +25,7 @@ import { aiStore, diffViewStore, dragStore, isGroundTruthReview, reviewStore, vi
 import { getTauriInvoke, showUpdateBanner } from "./tauri.js";
 import { SCROLL_SAVE_DEBOUNCE_MS, UPDATE_POLL_DELAYS_MS } from './timing.js';
 import { initWorkspace } from "./workspace/index.js";
+import { initReviewSessions } from "./workspace/reviewSessions.js";
 
 async function initAISorting() {
   try {
@@ -203,6 +204,8 @@ async function init() {
       d.classList.remove("drag-over");
     });
   });
+
+  initReviewSessions();
 
   // Navigation stack: back/forward buttons
   bindNavButtons();

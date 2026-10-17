@@ -448,3 +448,10 @@ describe('DiffView', () => {
   });
 
 });
+
+it('preserves both source coordinates on unified context rows for remote comment anchoring', () => {
+  const html = DiffView({ file: makeFile(), annotations: [], mode: 'unified',
+    diff: makeDiff({ hunks: [makeHunk([{ type: 'context', oldNum: 10, newNum: 25, content: 'unchanged code' }])] }),
+  }).toString();
+  expect(html).toContain('data-line="25" data-side="new" data-old-line="10" data-new-line="25"');
+});

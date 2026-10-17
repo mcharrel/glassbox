@@ -7,6 +7,7 @@ import { refreshFind } from '../diff/find.js';
 import { asTextarea, toElement } from '../dom.js';
 import { reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
+import { commentAnchor } from './commentAnchor.js';
 import { activeTab, mutate, workspace } from './state.js';
 
 export function messageHtml(message: ThreadMessage) {
@@ -92,7 +93,8 @@ export function bindThreads(): void {
   function render(): void {
     const tab = activeTab();
     const view = pane.querySelector<HTMLElement>('.diff-view');
-    if (!tab || !view) return;
+    if (!tab || !view || tab.reviewId !== reviewStore.state.value.reviewId
+      || view.dataset.fileId !== reviewStore.state.value.currentFileId) return;
     const signature = JSON.stringify(tab.comments);
     if (view === previousView && signature === previous) return;
     if (pane.querySelector('textarea:focus')) return;
@@ -166,24 +168,13 @@ export function bindThreads(): void {
         local.after(details);
         continue;
       }
+      const line = commentAnchor(view, root);
+      // Outdated/unanchored remote comments belong to history, not the current code.
+      if (!line) continue;
       const holder = toElement(
         <div className="annotation-row pr-inline-thread">{threadHtml(root, comments)}</div>,
       );
-      const line =
-        (root.line ?? 0) > 0
-          ? view.querySelector(`.diff-line[data-line="${root.line}"][data-side="${root.side ?? 'new'}"]`)
-          : null;
-      if (line) (line.closest('.split-row') ?? line).after(holder);
-      else {
-        holder.prepend(
-          toElement(
-            <div className="outdated-comment">
-              {(root.line ?? 0) > 0 ? 'Comment on an earlier revision' : 'File comment'}
-            </div>,
-          ),
-        );
-        view.prepend(holder);
-      }
+      (line.closest('.split-row') ?? line).after(holder);
     }
     refreshFind();
   }

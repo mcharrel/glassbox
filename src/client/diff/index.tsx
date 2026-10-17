@@ -17,7 +17,7 @@ import { applyHighlighting, detectLanguage } from './highlight.js';
 import { handleHunkExpand } from './hunkExpander.js';
 import { bindImageDiff } from './imageDiff/index.js';
 import { bindNoteArtifactRegions } from './noteArtifactRegions.js';
-import { loadOutline } from './outline.js';
+import { invalidateOutlineCache, loadOutline } from './outline.js';
 import { selectFile } from './selection.js';
 import { syncSplitColumnHeights } from './splitSync.js';
 
@@ -25,6 +25,7 @@ const DRAG_THRESHOLD = 5; // pixels — movement beyond this is a text selection
 
 interface DiffContent {
   generation: number;
+  cacheKey?: string;
   fileId: string | null;
   filePath: string | null;
   html: string;
@@ -45,7 +46,26 @@ let fetchGen = 0;
 // run input (`{ fileId }`) rides through to `value.input` for the failed state
 // too — so the error branch can key its chrome to the file that actually
 // failed without any module-scope bookkeeping.
-const diffResource = resource<{ html: string; kind: DiffContent['kind'] }, { fileId: string }>();
+interface CachedDiff { html: string; kind: DiffContent['kind']; node?: HTMLElement; scrollTop?: number }
+const diffCache = new Map<string, CachedDiff>();
+const diffLoads = new Map<string, Promise<CachedDiff>>();
+const reviewVersions = new Map<string, number>();
+const diffResource = resource<CachedDiff, { fileId: string; reviewId: string; key: string }>();
+
+export function saveDiffScroll(): void {
+  if (document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add') return;
+  const key = diffContentSignal.peek().cacheKey;
+  const cached = key === undefined ? undefined : diffCache.get(key);
+  const pane = document.getElementById('diff-container');
+  if (cached && pane) cached.scrollTop = pane.scrollTop;
+}
+
+export function restoreDiffScroll(): void {
+  const key = diffContentSignal.peek().cacheKey;
+  const cached = key === undefined ? undefined : diffCache.get(key);
+  const pane = document.getElementById('diff-container');
+  if (cached && pane) pane.scrollTop = cached.scrollTop ?? 0;
+}
 
 export function initDiffView(): void {
   const container = document.getElementById('diff-container');
@@ -76,6 +96,7 @@ function setupFetchEffect(): void {
     if (fileId === null) {
       if (lastFetchKey === '') return;
       lastFetchKey = '';
+      diffResource.reset();
       diffContentSignal.value = { generation: ++fetchGen, fileId: null, filePath: null, html: '', kind: 'empty' };
       return;
     }
@@ -97,21 +118,37 @@ function setupFetchEffect(): void {
     // and clobbered any DOM the user had imperatively inserted (open
     // annotation forms, the language picker popup). Net result: visible
     // flicker + click-through impossible.
-    const key = fileId + '|' + diffMode + '|' + String(ignoreWhitespace) + '|' + String(svgRendered);
+    const reviewId = reviewStore.state.value.reviewId;
+    const key = reviewId + '|' + String(reviewVersions.get(reviewId) ?? 0) + '|' + fileId + '|' + diffMode + '|' + String(ignoreWhitespace) + '|' + String(svgRendered);
     if (key === lastFetchKey) return;
     lastFetchKey = key;
+    const cached = diffCache.get(key);
+    if (cached) {
+      diffResource.reset();
+      diffContentSignal.value = { generation: ++fetchGen, cacheKey: key, fileId, filePath: null, html: cached.html, kind: cached.kind };
+      return;
+    }
 
     let params = '?reviewId=' + encodeURIComponent(document.body.dataset.reviewId ?? '') + '&mode=' + diffMode + (ignoreWhitespace ? '&ignoreWhitespace=1' : '');
     if (svgRendered) params += '&view=rendered';
 
     // kerf's resource owns the stale-response guard: only the latest run
     // resolves. The `{ fileId }` input rides through to `value.input` (below).
-    void diffResource.run({ fileId }, async () => {
-      const res = await fetch('/file/' + fileId + params);
-      if (!res.ok) throw new Error(`/file/${fileId} returned ${String(res.status)}`);
-      const html = await res.text();
-      const kind: DiffContent['kind'] = html.includes('class="image-diff"') ? 'image' : 'text';
-      return { html, kind };
+    void diffResource.run({ fileId, reviewId, key }, () => {
+      let pending = diffLoads.get(key);
+      if (!pending) {
+        pending = (async () => {
+          const res = await fetch('/file/' + fileId + params);
+          if (!res.ok) throw new Error(`/file/${fileId} returned ${String(res.status)}`);
+          const html = await res.text();
+          const kind: DiffContent['kind'] = html.includes('class="image-diff"') ? 'image' : 'text';
+          const value = { html, kind };
+          diffCache.set(key, value);
+          return value;
+        })().finally(() => { diffLoads.delete(key); });
+        diffLoads.set(key, pending);
+      }
+      return pending;
     });
   });
 
@@ -122,13 +159,14 @@ function setupFetchEffect(): void {
   // still keys to a real file (the post-render effect skips `fileId === null`).
   effect(() => {
     const { status, data, input } = diffResource.value;
+    if (input?.reviewId !== document.body.dataset.reviewId) return;
     if (status === 'completed' && data !== undefined) {
-      diffContentSignal.value = { generation: ++fetchGen, fileId: input?.fileId ?? null, filePath: null, html: data.html, kind: data.kind };
+      diffContentSignal.value = { generation: ++fetchGen, cacheKey: input?.key, fileId: input?.fileId ?? null, filePath: null, html: data.html, kind: data.kind };
     } else if (status === 'failed') {
       // Surface the failure instead of freezing the prior diff. Clear the dedupe
       // key so re-selecting another file (then this one) retries.
       lastFetchKey = '';
-      diffContentSignal.value = { generation: ++fetchGen, fileId: input?.fileId ?? null, filePath: null, html: DIFF_LOAD_ERROR_HTML, kind: 'error' };
+      diffContentSignal.value = { generation: ++fetchGen, cacheKey: input?.key, fileId: input?.fileId ?? null, filePath: null, html: DIFF_LOAD_ERROR_HTML, kind: 'error' };
     }
   });
 }
@@ -165,16 +203,29 @@ function setupMount(container: HTMLElement, onDiffRendered: (fileId: string | nu
         const content = diffContentSignal.value;
         if (content.kind === 'empty') return;
         if (content.kind !== 'raw' && content.fileId === null) return;
+        const cached = content.cacheKey === undefined ? undefined : diffCache.get(content.cacheKey);
+        const reused = cached?.node !== undefined;
+        if (cached?.node) container.replaceChildren(cached.node);
+        const node = container.querySelector<HTMLElement>('.diff-content');
+        container.scrollTop = cached?.scrollTop ?? 0;
         queueMicrotask(() => {
-          runPostRender(container, content);
+          if (diffContentSignal.value !== content) return;
+          runPostRender(container, content, reused);
+          container.scrollTop = cached?.scrollTop ?? 0;
           onDiffRendered(content.fileId);
         });
+        return () => {
+          if (cached && node) {
+            cached.node = node;
+            if (document.body.dataset.workspaceView !== 'main' && document.body.dataset.workspaceView !== 'add') cached.scrollTop = container.scrollTop;
+          }
+        };
       },
     },
   );
 }
 
-function runPostRender(container: HTMLElement, content: DiffContent): void {
+function runPostRender(container: HTMLElement, content: DiffContent, reused = false): void {
   const { fileId, filePath, kind } = content;
   if (kind === 'empty') return;
   // A failed fetch: just show the inline error message; no toolbar, highlight,
@@ -196,9 +247,9 @@ function runPostRender(container: HTMLElement, content: DiffContent): void {
 
   if (kind === 'image') {
     adaptImageToolbar(container, imageToolbar);
-    bindImageDiff();
+    if (!reused) bindImageDiff();
   } else {
-    runTextPostRender(container, kind, fileId, effectiveFilePath);
+    runTextPostRender(container, kind, fileId, effectiveFilePath, reused);
   }
 
   // Reading guidance is rendered reactively in the sidebar, independently of this diff.
@@ -264,7 +315,7 @@ function applyDiffChrome(container: HTMLElement, kind: DiffContent['kind'], isSv
 
 /** Post-render work for a text/raw diff: language detection + highlight, toolbar
  *  language label, split-column height sync, outline load, attachment hydration. */
-function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fileId: string | null, effectiveFilePath: string): void {
+function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fileId: string | null, effectiveFilePath: string, reused: boolean): void {
   const diffView = container.querySelector<HTMLElement>('.diff-view');
   const dvPath = diffView?.dataset.filePath ?? effectiveFilePath;
   const detectedLang = detectLanguage(dvPath);
@@ -272,7 +323,7 @@ function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fi
     detectedLang,
     ...(diffViewStore.state.value.highlightAuto ? { highlightLang: detectedLang } : {}),
   });
-  applyHighlighting();
+  if (!reused) applyHighlighting();
   refreshFind();
   document.dispatchEvent(new Event('glassbox-diff-ready'));
   updateToolbarLanguage();
@@ -283,7 +334,7 @@ function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fi
   // fire for server-rendered annotation rows by `data-action` match. Fill each
   // annotation row's attachment chips (doc 25): the rows are server-rendered
   // with empty `[data-att-list]` containers; one bulk fetch populates them all.
-  void hydrateAttachments(container);
+  if (!reused) void hydrateAttachments(container);
 }
 
 /** Imperatively render a raw repo file (used by go-to-definition for files
@@ -609,9 +660,14 @@ export function updateNavFilePath(filePath: string): void {
  *  unchanged. Use after a server-side mutation that affects the diff —
  *  the refresh button (`/review/refresh`), an annotation drag-drop move,
  *  etc. */
-export function invalidateDiffCache(): void {
-  lastFetchKey = '';
-  refetchTrigger.value = refetchTrigger.value + 1;
+export function invalidateDiffCache(reviewId = reviewStore.state.value.reviewId): void {
+  invalidateOutlineCache(reviewId);
+  reviewVersions.set(reviewId, (reviewVersions.get(reviewId) ?? 0) + 1);
+  for (const key of diffCache.keys()) if (key.startsWith(reviewId + '|')) diffCache.delete(key);
+  if (reviewId === reviewStore.state.value.reviewId) {
+    lastFetchKey = '';
+    refetchTrigger.value = refetchTrigger.value + 1;
+  }
 }
 
 // Used by hunkExpander to trigger re-highlight/sync after surgical mutations.

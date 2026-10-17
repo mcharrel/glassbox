@@ -9,13 +9,14 @@ import { asEl, asElement, asInput, asSelect, toElement } from '../dom.js';
 import type { SortMode } from '../state.js';
 import { aiStore, diffViewStore, folderModeFiles, reviewStore, visibleFileOrder, visibleNoteLines } from '../stores/index.js';
 import { FILTER_DEBOUNCE_MS } from '../timing.js';
+import { bindDivider } from '../workspace/resize.js';
 import { setFileView } from '../workspace/state.js';
 import { ACTIONS } from './actions.js';
 import { sidebarNotesJsx } from './aiNotes.js';
 import { bindFileContextMenu } from './contextMenu.js';
 import { fileListJsx } from './fileListView.js';
 import { noteStorageFolderKeys } from './folderTree.js';
-import { bindGuideLearnResize, bindNotesResize } from './notesResize.js';
+import { bindNotesResize } from './notesResize.js';
 import { bindNoteVisibility } from './noteVisibility.js';
 import { showRiskPopover } from './riskPopover.js';
 import { sortControlJsx } from './sortControl.js';
@@ -33,7 +34,6 @@ export function initSidebar(): void {
   if (notes) {
     mount(notes, () => sidebarNotesJsx());
     bindNotesResize(sidebar, notes);
-    bindGuideLearnResize(notes);
     effect(() => { void visibleNoteLines.value; notes.scrollTop = 0; });
     const diff = document.getElementById('diff-container');
     if (diff) bindNoteVisibility(diff);
@@ -162,46 +162,9 @@ function bindDelegatedEvents(sidebar: HTMLElement): void {
 }
 
 function bindSidebarResize(): void {
-  const handle = document.getElementById('sidebar-resize');
+  const handle = document.querySelector<HTMLElement>('.sidebar-resize');
   const sidebar = document.querySelector<HTMLElement>('.sidebar');
-  if (handle === null || sidebar === null) return;
-
-  let dragging = false;
-  let startX = 0;
-  let startWidth = 0;
-  let moveListener: ((e: MouseEvent) => void) | null = null;
-  let upListener: (() => void) | null = null;
-
-  void delegate(handle, 'mousedown', '*', (e) => {
-    const me = e as MouseEvent;
-    dragging = true;
-    startX = me.clientX;
-    startWidth = sidebar.offsetWidth;
-    handle.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    me.preventDefault();
-
-    moveListener = (ev: MouseEvent) => {
-      if (!dragging) return;
-      let newWidth = startWidth + (ev.clientX - startX);
-      newWidth = Math.max(200, Math.min(newWidth, window.innerWidth * 0.6));
-      sidebar.style.width = String(newWidth) + 'px';
-    };
-    upListener = () => {
-      if (!dragging) return;
-      dragging = false;
-      handle.classList.remove('dragging');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      if (moveListener !== null) document.removeEventListener('mousemove', moveListener);
-      if (upListener !== null) document.removeEventListener('mouseup', upListener);
-      moveListener = null;
-      upListener = null;
-    };
-    document.addEventListener('mousemove', moveListener);
-    document.addEventListener('mouseup', upListener);
-  });
+  if (handle && sidebar) bindDivider(handle, sidebar, 'width', 'glassbox.sidebarWidth', 200, sidebar.offsetWidth || 300);
 }
 
 function bindKeyboardNav(): void {

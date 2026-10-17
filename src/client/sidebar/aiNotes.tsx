@@ -15,7 +15,7 @@ export function sidebarNotesJsx(): SafeHtml {
   const learn = ai.guidedReviewEnabled ? ai.guidedNotes[file.id] : undefined;
   const guideSection = noteSection(guide, ai.sortMode === 'risk' ? 'risk' : 'narrative', file.file_path, visible.lines);
   const learnSection = noteSection(learn, 'guided', file.file_path, visible.lines);
-  return <>{guideSection}{guideSection && learnSection && <div className="guide-learn-divider workspace-divider" role="separator" aria-label="Resize guide and learn" aria-orientation="horizontal" tabIndex={0} />}{learnSection}</>;
+  return <>{guideSection}{learnSection}</>;
 
 }
 

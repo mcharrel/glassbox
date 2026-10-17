@@ -11,11 +11,21 @@ import { showToast } from '../toast.js';
 
 export const workspace = signal<Workspace>({ tabs: [], active: null });
 export const addingPull = signal(false);
+let mutationVersion = 0;
+function receive(state: Workspace, preserveSelection: boolean): void {
+  const local = workspace.value;
+  workspace.value = { ...state,
+    active: preserveSelection && state.tabs.some(tab => tab.key === local.active) ? local.active : state.active,
+    tabs: state.tabs.map(tab => ({ ...tab, view: local.tabs.find(item => item.key === tab.key)?.view ?? tab.view })),
+  };
+}
 export function activeTab(): PullTab | undefined {
   return workspace.value.tabs.find((t) => t.key === workspace.value.active);
 }
 export async function refreshWorkspace(): Promise<void> {
+  const version = mutationVersion;
   const state = await getWorkspace();
+  if (version !== mutationVersion) return;
   // Keep editors intact while background synchronization continues on the server.
   if (
     document.querySelector(
@@ -24,11 +34,13 @@ export async function refreshWorkspace(): Promise<void> {
     [...document.querySelectorAll('textarea')].some((input) => input.value.length > 0 && !input.disabled)
   )
     return;
-  workspace.value = state;
+  receive(state, true);
 }
 export async function mutate(input: WorkspaceMutation): Promise<boolean> {
+  const version = ++mutationVersion;
   try {
-    workspace.value = await changeWorkspace(input);
+    const result = await changeWorkspace(input);
+    if (version === mutationVersion) receive(result, input.op !== 'open' && input.op !== 'close');
     return true;
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Request failed');

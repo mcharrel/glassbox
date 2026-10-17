@@ -4,6 +4,7 @@ import { delegate, effect, morph, signal } from 'kerfjs';
 import { getOutline } from '../../api/index.js';
 import { asEl, toElement } from '../dom.js';
 import { dismissOnOutsideClick } from '../popup.js';
+import { reviewStore } from '../stores/index.js';
 
 interface OutlineSymbol {
   name: string;
@@ -24,12 +25,21 @@ const scrollHandlers = new WeakMap<HTMLElement, () => void>();
 const symbolsSignal = signal<OutlineSymbol[]>([]);
 const topLineSignal = signal<number | null>(null);
 let scrollRafId = 0;
+const outlineCache = new Map<string, Promise<OutlineSymbol[]>>();
+let outlineGeneration = 0;
+
+export function invalidateOutlineCache(reviewId: string): void {
+  for (const key of outlineCache.keys()) if (key.startsWith(reviewId + '|')) outlineCache.delete(key);
+}
+
 // Disposer for the current breadcrumb effect. Held so a file switch (which
 // removes the bar element + creates a fresh one) can release the previous
 // effect's signal subscriptions instead of leaking them.
 let disposeOutlineEffect: (() => void) | null = null;
 
 export async function loadOutline(fileId: string) {
+  const generation = ++outlineGeneration;
+  const reviewId = document.body.dataset.reviewId ?? '';
   // Tear down the previous breadcrumb effect BEFORE clearing the signals it
   // reads. On a file switch, kerf may have already replaced `.diff-content`
   // (which removes the previous bar), so the previous effect is bound to a
@@ -44,9 +54,16 @@ export async function loadOutline(fileId: string) {
   document.querySelectorAll('.outline-bar').forEach(el => { el.remove(); });
 
   try {
-    const data = await getOutline({ fileId });
-    if (data.symbols.length === 0) return;
-    symbolsSignal.value = data.symbols;
+    const key = reviewId + '|' + fileId;
+    let pending = outlineCache.get(key);
+    if (!pending) {
+      pending = getOutline({ fileId }).then(data => data.symbols).catch((error: unknown) => { outlineCache.delete(key); throw error; });
+      outlineCache.set(key, pending);
+    }
+    const symbols = await pending;
+    if (generation !== outlineGeneration || document.body.dataset.reviewId !== reviewId
+      || reviewStore.state.value.currentFileId !== fileId || symbols.length === 0) return;
+    symbolsSignal.value = symbols;
   } catch {
     return;
   }

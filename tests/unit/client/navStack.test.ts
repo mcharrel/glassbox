@@ -160,3 +160,15 @@ describe('navStack transitions', () => {
     expect(nav.navBack()).toMatchObject({ fileId: 'A', scrollLine: 5 });
   });
 });
+
+it('retains separate histories when switching PRs', () => {
+  document.body.dataset.reviewId = 'review-a';
+  nav.navPush(file('a1')); nav.navPush(file('a2'));
+  document.body.dataset.reviewId = 'review-b';
+  expect(nav.navBack()).toBeNull();
+  nav.navPush(file('b1')); nav.navPush(file('b2'));
+  document.body.dataset.reviewId = 'review-a';
+  expect(nav.navBack()?.fileId).toBe('a1');
+  document.body.dataset.reviewId = 'review-b';
+  expect(nav.navBack()?.fileId).toBe('b1');
+});

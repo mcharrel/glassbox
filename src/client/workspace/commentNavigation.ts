@@ -79,7 +79,7 @@ export function createCommentNavigator(): (direction: number) => Promise<void> {
       const fileId = order[(current + (backward ? -offset : offset) + order.length) % order.length];
       const file = files.find(item => item.id === fileId);
       if (!file || activeTab()?.comments.some(message => !message.deleted && message.kind === 'review'
-        && message.parentId === undefined && message.path === file.file_path) !== true) continue;
+        && message.parentId === undefined && (message.line ?? 0) > 0 && message.path === file.file_path) !== true) continue;
       const request = { fileId, reviewId };
       pending = request;
       const hiddenFileIds = new Set(reviewStore.state.value.hiddenFileIds);

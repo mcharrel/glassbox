@@ -30,6 +30,7 @@ const ACTIVE_HIGHLIGHT_CLASS = 'find-highlight-active';
 const MATCH_INDEX_ATTR = 'data-match-index';
 
 export function bindFind() {
+  document.addEventListener('glassbox-review-selected', () => { controller?.hide(); });
   bindReviewKeys(direction => { controller?.goToMatch(direction); });
   // Use the same review search in desktop and browser windows.
   const tauri = getTauriGlobal();

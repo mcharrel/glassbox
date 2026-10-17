@@ -370,6 +370,8 @@ function UnifiedDiff({ hunks, annotationsByLine, reviewNotesByLine, repliesByNot
                   {...changeMarkers.get(line)}
                   data-line={lineNum}
                   data-side={side}
+                  data-old-line={line.oldNum ?? undefined}
+                  data-new-line={line.newNum ?? undefined}
                 >
                   <span className="gutter-new" data-line-number={line.newNum ?? ''}></span>
                   <span className="code">{renderLineContent(line.content)}</span>

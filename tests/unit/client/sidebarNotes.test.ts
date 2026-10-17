@@ -48,6 +48,8 @@ describe('sidebar guidance', () => {
     expect(html.indexOf('aria-label="Guide"')).toBeLessThan(html.indexOf('aria-label="Learn"'));
     expect(html).toContain('data-note-path="src/z.go" data-note-line="7"');
     expect(html).toContain('Learn detail');
+    expect(html).not.toContain('guide-learn-divider');
+    expect(html).not.toContain('role="separator"');
   });
 
   it('updates when analysis arrives, a file changes, or the guided toggle changes', () => {

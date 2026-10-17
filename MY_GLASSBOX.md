@@ -66,3 +66,10 @@ This is my personal review workspace, based on upstream Glassbox 1.2.3. The fork
 ## Local data
 
 PR tabs, cached metadata, comment queue and agent threads persist in `workspace.json` beside the active review database. Managed PR checkouts and agent worktrees live under that same local data directory. Tokens remain in GitHub CLI/OS credential storage and are never written to workspace state or repository remotes. Panel sizes and remaining-file progress are stored locally by the client.
+
+## Workspace stability
+
+- GUIDE and LEARN stay together in one scrolling section; only the divider above the combined section resizes it.
+- All panel widths and section heights persist. Temporary hiding or limited space does not overwrite the chosen size. The title section cannot shrink below its content, including wrapped titles and action buttons.
+- PR tabs switch within the same page. Files, AI guidance, loaded diff DOM, inline drafts, scroll positions, remaining-file lists, and navigation history remain in memory per PR. The first load stays asynchronous; background GitHub synchronization continues. Explicit refresh or a changed reviewed revision invalidates the affected cached content.
+- Remote inline comments appear only at a valid current source line, including old-side coordinates on unified context lines. Threads without a matching current line are hidden, with no fallback at the file top.

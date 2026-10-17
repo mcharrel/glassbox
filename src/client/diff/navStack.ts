@@ -13,51 +13,56 @@ export interface NavEntry {
   scrollLine: number;
 }
 
-const stack: NavEntry[] = [];
-let cursor = -1; // Index of the current entry
+const histories = new Map<string, { stack: NavEntry[]; cursor: number }>();
+function history() {
+  const key = document.body.dataset.reviewId ?? '';
+  let value = histories.get(key);
+  if (!value) { value = { stack: [], cursor: -1 }; histories.set(key, value); }
+  return value;
+}
 let navigating = false; // True when back/forward navigation is in progress
 
 /** Push a new entry. Clears the forward stack unless we're navigating. */
 export function navPush(entry: NavEntry) {
   if (navigating) return;
   // If the current entry is the same file, just update scroll position
-  if (cursor >= 0 && isSameFile(stack[cursor], entry)) {
-    stack[cursor].scrollLine = entry.scrollLine;
+  if (history().cursor >= 0 && isSameFile(history().stack[history().cursor], entry)) {
+    history().stack[history().cursor].scrollLine = entry.scrollLine;
     updateButtons();
     return;
   }
   // Clear forward stack
-  stack.length = cursor + 1;
-  stack.push({ ...entry });
-  cursor = stack.length - 1;
+  history().stack.length = history().cursor + 1;
+  history().stack.push({ ...entry });
+  history().cursor = history().stack.length - 1;
   updateButtons();
 }
 
 /** Update the scroll position of the current entry without pushing. */
 export function navUpdateScroll(scrollLine: number) {
-  if (cursor >= 0) {
-    stack[cursor].scrollLine = scrollLine;
+  if (history().cursor >= 0) {
+    history().stack[history().cursor].scrollLine = scrollLine;
   }
 }
 
 /** Go back in the stack. Returns the entry to navigate to, or null. */
 export function navBack(): NavEntry | null {
-  if (cursor <= 0) return null;
-  cursor--;
+  if (history().cursor <= 0) return null;
+  history().cursor--;
   updateButtons();
-  return { ...stack[cursor] };
+  return { ...history().stack[history().cursor] };
 }
 
 /** Go forward in the stack. Returns the entry to navigate to, or null. */
 export function navForward(): NavEntry | null {
-  if (cursor >= stack.length - 1) return null;
-  cursor++;
+  if (history().cursor >= history().stack.length - 1) return null;
+  history().cursor++;
   updateButtons();
-  return { ...stack[cursor] };
+  return { ...history().stack[history().cursor] };
 }
 
-export function canGoBack(): boolean { return cursor > 0; }
-export function canGoForward(): boolean { return cursor < stack.length - 1; }
+export function canGoBack(): boolean { return history().cursor > 0; }
+export function canGoForward(): boolean { return history().cursor < history().stack.length - 1; }
 
 /** Set the navigating flag to prevent navPush during back/forward. */
 export function setNavigating(v: boolean) { navigating = v; }

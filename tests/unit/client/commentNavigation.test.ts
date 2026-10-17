@@ -167,7 +167,7 @@ describe('page-aware comment navigation', () => {
   it.each([1, -1])('waits for the next file, reveals it, and selects the correct edge in direction %s', async direction => {
     const f = fixture([]);
     allFileOrder.value = ['f1', 'f2'];
-    f.tab.comments = [{ kind: 'review', path: 'two.ts', line: 0 }];
+    f.tab.comments = [{ kind: 'review', path: 'two.ts', line: 35 }];
     const pending = f.navigate(direction);
     await f.navigate(direction);
     expect(selectFile).toHaveBeenCalledExactlyOnceWith('f2');
@@ -189,6 +189,7 @@ describe('page-aware comment navigation', () => {
       { kind: 'review', path: 'two.ts', parentId: 123 },
       { kind: 'ai', path: 'two.ts' },
       { kind: 'review', path: 'missing.ts' },
+      { kind: 'review', path: 'two.ts', line: null },
     ];
     await f.navigate(1);
     expect(selectFile).not.toHaveBeenCalled();
@@ -197,7 +198,7 @@ describe('page-aware comment navigation', () => {
   it('abandons pending scrolling when the user switches PRs', async () => {
     const f = fixture([]);
     allFileOrder.value = ['f1', 'f2'];
-    f.tab.comments = [{ kind: 'review', path: 'two.ts' }];
+    f.tab.comments = [{ kind: 'review', path: 'two.ts', line: 35 }];
     const pending = f.navigate(1);
     reviewStore.state.value.reviewId = 'another';
     f.render('f2', [[700, 780]]);
@@ -209,7 +210,7 @@ describe('page-aware comment navigation', () => {
   it('releases the pending request after a failed load so navigation can be retried', async () => {
     const f = fixture([]);
     allFileOrder.value = ['f1', 'f2'];
-    f.tab.comments = [{ kind: 'review', path: 'two.ts' }];
+    f.tab.comments = [{ kind: 'review', path: 'two.ts', line: 35 }];
     const pending = f.navigate(1);
     await vi.advanceTimersByTimeAsync(10000);
     await pending;

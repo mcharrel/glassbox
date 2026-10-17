@@ -1,0 +1,37 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { bindDivider } from '../../../src/client/workspace/resize.js';
+
+function fixture(saved: string | null = null) {
+  const storage = new Map(saved === null ? [] : [['size', saved]]);
+  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
+  vi.stubGlobal('window', { innerWidth: 1200, innerHeight: 900 });
+  const observers: (() => void)[] = [];
+  vi.stubGlobal('ResizeObserver', class { constructor(fn: () => void) { observers.push(fn); } observe() {} });
+  vi.stubGlobal('MutationObserver', class { constructor(fn: () => void) { observers.push(fn); } observe() {} });
+  const handlers = new Map<string, (event: any) => void>();
+  const panel = { style: {} as Record<string, string>, classList: { toggle: vi.fn() }, parentElement: { clientHeight: 900 },
+    getBoundingClientRect: () => ({ width: parseFloat(panel.style.width), height: parseFloat(panel.style.height) }) };
+  const handle = { setAttribute: vi.fn(), addEventListener: (name: string, fn: (event: any) => void) => handlers.set(name, fn) };
+  let minimum = 130;
+  bindDivider(handle as never, panel as never, 'height', 'size', 130, 180, () => minimum);
+  return { panel, storage, resize: () => observers.forEach(fn => fn()), setMinimum: (value: number) => { minimum = value; },
+    key: (key: string) => handlers.get('keydown')?.({ key, preventDefault() {}, stopPropagation() {} }) };
+}
+afterEach(() => vi.unstubAllGlobals());
+describe('persistent section dividers', () => {
+  it('cannot shrink below all title content, including after wrapping changes its height', () => {
+    const f = fixture(); f.setMinimum(260); f.resize();
+    expect(f.panel.style.height).toBe('260px');
+    f.key('ArrowUp'); expect(f.panel.style.height).toBe('260px');
+    f.setMinimum(340); f.resize(); expect(f.panel.style.height).toBe('340px');
+  });
+  it('retains the requested size while the parent is hidden or temporarily smaller', () => {
+    const f = fixture('420');
+    f.panel.parentElement.clientHeight = 0; f.resize();
+    expect(f.panel.style.height).toBe('130px');
+    expect(f.storage.get('size')).toBe('420');
+    f.panel.parentElement.clientHeight = 900; f.resize();
+    expect(f.panel.style.height).toBe('420px');
+    f.key('ArrowDown'); expect(f.storage.get('size')).toBe('440');
+  });
+});

@@ -9,7 +9,7 @@ import type { AnalysisHooks } from '../analysisEngine.js';
 import { resumePolling, stopPolling, triggerAnalysisFor } from '../analysisEngine.js';
 import { clientLog } from '../api.js';
 import type { SortMode } from '../state.js';
-import { aiStore, getAnalysisModeState } from '../stores/index.js';
+import { aiStore, getAnalysisModeState,reviewStore } from '../stores/index.js';
 
 function hooksFor(mode: 'risk' | 'narrative'): AnalysisHooks {
   return {
@@ -105,7 +105,9 @@ export function invalidateAnalysisCache(): void {
 }
 
 export async function loadAnalysisResults(mode: 'risk' | 'narrative', partial: boolean = false): Promise<void> {
+  const reviewId = reviewStore.state.value.reviewId;
   const data = await getAnalysis({ type: mode });
+  if (reviewStore.state.value.reviewId !== reviewId) return;
 
   clientLog(`loadAnalysisResults(${mode}, partial=${String(partial)}): status=${data.status}, ${String(data.scores.length)} scores`);
 

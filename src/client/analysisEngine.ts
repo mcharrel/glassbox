@@ -159,7 +159,9 @@ function pollStatus(type: AnalysisType, gen: number, hooks: AnalysisHooks): void
         clientLog(`poll(${type}): completed, loading final results`);
         try {
           await hooks.loadResults(false);
+          if (gen !== pollGenerations[type]) return;
         } catch (err: unknown) {
+          if (gen !== pollGenerations[type]) return;
           const raw = err instanceof Error ? err.message : String(err);
           clientLog(`poll(${type}): final load failed — ${raw}`);
           aiStore.actions.setAnalysisState(type, {

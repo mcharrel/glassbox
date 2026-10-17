@@ -45,10 +45,10 @@ function currentReviewId(): string {
 export async function apiCall<T>(
   responseSchema: z.ZodType<T>,
   path: string,
-  opts: { method?: string; body?: unknown } = {},
+  opts: { method?: string; body?: unknown; reviewId?: string } = {},
 ): Promise<T> {
   const separator = path.includes('?') ? '&' : '?';
-  const url = '/api' + path + separator + 'reviewId=' + encodeURIComponent(currentReviewId());
+  const url = '/api' + path + separator + 'reviewId=' + encodeURIComponent(opts.reviewId ?? currentReviewId());
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
     method: opts.method,

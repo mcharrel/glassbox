@@ -5,7 +5,7 @@ import { parseDiffData } from '../../git/parseDiffData.js';
 import { IconGear, IconX } from '../../icons.js';
 import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
 import { refreshFind } from '../diff/find.js';
-import { invalidateDiffCache } from '../diff/index.js';
+import { invalidateDiffCache, restoreDiffScroll, saveDiffScroll } from '../diff/index.js';
 import { asEl, asInput, asTextarea, toElement } from '../dom.js';
 import { loadFiles } from '../sidebar/fileTree.js';
 import { filePriority } from '../sidebar/readingOrder.js';
@@ -214,7 +214,12 @@ export function initWorkspace(): void {
     ></div>,
   );
   oldHeader.after(headerDivider);
-  bindDivider(headerDivider, oldHeader, 'height', 'glassbox.headerHeight', 130, 180);
+  bindDivider(headerDivider, oldHeader, 'height', 'glassbox.headerHeight', 130, 180, () => {
+    const style = getComputedStyle(oldHeader);
+    return [...oldHeader.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0)
+      + (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+      + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+  });
   const mainSections = toElement(
     <div className="pr-main-sections">
       <section className="pr-reviewers"></section>
@@ -276,38 +281,20 @@ export function initWorkspace(): void {
   main.append(description);
   body.append(add);
   let mountedHeader = false;
-  let navigationTarget: string | null = null;
-  let renderedHead: string | null = null;
   effect(() => {
     const tab = activeTab();
     const adding = addingPull.value || workspace.value.tabs.length === 0;
+    saveDiffScroll();
     document.body.dataset.workspaceView = adding ? 'add' : (tab?.view ?? 'file');
-    if (tab !== undefined && tab.reviewId === document.body.dataset.reviewId) {
-      if (renderedHead !== null && renderedHead !== tab.reviewedHead) {
-        void loadFiles().then(() => {
-          invalidateDiffCache();
-        });
-      }
-      renderedHead = tab.reviewedHead;
-    }
+    if (tab?.view === 'file' && !adding) restoreDiffScroll();
     if (tab && !mountedHeader) {
       mountedHeader = true;
       mount(oldHeader, () => {
         const current = activeTab();
-        return current ? header(current) : <></>;
+        return <div className="pr-header-content">{current ? header(current) : null}</div>;
       });
     }
-    if (
-      tab !== undefined &&
-      tab.reviewId !== null &&
-      tab.reviewId !== document.body.dataset.reviewId &&
-      !adding
-    ) {
-      if (navigationTarget !== tab.reviewId) {
-        navigationTarget = tab.reviewId;
-        window.location.assign(`/?reviewId=${encodeURIComponent(tab.reviewId)}`);
-      }
-    }
+
   });
   mount(reviewerSection, () => {
     const tab = activeTab();
@@ -331,8 +318,17 @@ export function initWorkspace(): void {
     );
   });
   let editingDescription = false;
+  let descriptionKey: string | undefined;
+  const descriptionDrafts = new Map<string, Node[]>();
   effect(() => {
     const tab = activeTab();
+    if (descriptionKey !== tab?.key) {
+      if (descriptionKey !== undefined && editingDescription) descriptionDrafts.set(descriptionKey, [...description.childNodes]);
+      descriptionKey = tab?.key;
+      const draft = descriptionKey === undefined ? undefined : descriptionDrafts.get(descriptionKey);
+      editingDescription = draft !== undefined;
+      if (draft) description.replaceChildren(...draft);
+    }
     if (!editingDescription)
       description.replaceChildren(
         toElement(
@@ -363,7 +359,8 @@ export function initWorkspace(): void {
     textarea.focus();
     const finish = async (save: boolean) => {
       if (save && !(await mutate({ op: 'edit', key: tab.key, body: textarea.value }))) return;
-      editingDescription = false;
+      descriptionDrafts.delete(tab.key);
+      if (descriptionKey === tab.key) editingDescription = false;
       workspace.value = { ...workspace.value };
     };
     asEl(form.querySelector('[data-save]')).addEventListener('click', (e) => {
@@ -591,9 +588,9 @@ function bindWorkspaceKeys(): void {
       event.preventDefault();
       if (tab)
         void mutate({ op: 'refresh', key: tab.key })
-          .then(() => loadFiles())
+          .then(() => activeTab()?.key === tab.key ? loadFiles() : undefined)
           .then(() => {
-            invalidateDiffCache();
+            if (activeTab()?.key === tab.key) invalidateDiffCache();
           });
       return;
     }

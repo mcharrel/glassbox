@@ -6,33 +6,42 @@ export function bindDivider(
   key: string,
   min: number,
   initial: number,
+  contentMinimum: () => number = () => min,
 ): void {
-  const apply = (size: number) => {
+  let requested = initial;
+  try {
+    const saved = Number(localStorage.getItem(key));
+    if (Number.isFinite(saved) && saved > 0) requested = saved;
+  } catch { /* optional persistence */ }
+  const apply = () => {
+    const minimum = Math.max(min, contentMinimum());
     const max =
       axis === 'width'
         ? Math.max(min, window.innerWidth - 450)
         : Math.max(min, (panel.parentElement?.clientHeight ?? window.innerHeight) - 160);
-    const value = Math.min(max, Math.max(min, size));
+    const value = Math.max(minimum, Math.min(max, requested));
     panel.style[axis] = `${value}px`;
     panel.style.flexBasis = `${value}px`;
     panel.style.flexGrow = '0';
     panel.style.flexShrink = '0';
     panel.classList.toggle('compact', axis === 'width' && value <= min + 30);
     handle.setAttribute('aria-valuenow', String(Math.round(value)));
+    handle.setAttribute('aria-valuemin', String(Math.ceil(minimum)));
+  };
+  const resize = (size: number) => {
+    requested = Math.max(min, size);
+    apply();
     try {
-      localStorage.setItem(key, String(value));
+      localStorage.setItem(key, String(requested));
     } catch {
       /* optional persistence */
     }
   };
-  let size = initial;
-  try {
-    const saved = Number(localStorage.getItem(key));
-    if (saved > 0) size = saved;
-  } catch {
-    /* optional persistence */
-  }
-  apply(size);
+  apply();
+  const observer = new ResizeObserver(apply);
+  observer.observe(panel);
+  if (panel.parentElement) observer.observe(panel.parentElement);
+  new MutationObserver(apply).observe(panel, { childList: true, subtree: true, characterData: true });
   handle.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -40,7 +49,7 @@ export function bindDivider(
     const start = axis === 'width' ? event.clientX : event.clientY;
     const original = panel.getBoundingClientRect()[axis];
     const move = (e: PointerEvent) => {
-      apply(original + (axis === 'width' ? e.clientX : e.clientY) - start);
+      resize(original + (axis === 'width' ? e.clientX : e.clientY) - start);
     };
     const stop = () => {
       handle.removeEventListener('pointermove', move);
@@ -57,6 +66,6 @@ export function bindDivider(
     if (event.key !== minus && event.key !== plus) return;
     event.preventDefault();
     event.stopPropagation();
-    apply(panel.getBoundingClientRect()[axis] + (event.key === plus ? 20 : -20));
+    resize(panel.getBoundingClientRect()[axis] + (event.key === plus ? 20 : -20));
   });
 }
