@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../src/client/stores/index.js', () => ({ reviewStore: {}, allFileOrder: {} }));
 vi.mock('../../../src/client/diff/selection.js', () => ({ selectFile: vi.fn() }));
-vi.mock('../../../src/client/tauri.js', () => ({ getTauriGlobal: () => undefined }));
+const native = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock('../../../src/client/tauri.js', () => ({ getTauriGlobal: native.get }));
 vi.mock('../../../src/client/diff/reviewKeys.js', () => ({ bindReviewKeys: vi.fn() }));
 const render = vi.hoisted(() => vi.fn());
 vi.mock('../../../src/client/dom.js', () => ({ toElement: render }));
@@ -10,7 +11,9 @@ afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => vi.resetModules());
 
 describe('find focus shortcut', () => {
-  it.each(['metaKey', 'ctrlKey'])('toggles %s+F between the search and file without clearing the query', async modifier => {
+  it.each([['metaKey', false], ['ctrlKey', false], ['metaKey', true], ['ctrlKey', true]] as const)('toggles %s+F (native menu: %s) without clearing the query', async (modifier, desktop) => {
+    let menuFind: (() => void) | undefined;
+    native.get.mockReturnValue(desktop ? { event: { listen: (_name: string, callback: () => void) => { menuFind = callback; } } } : undefined);
     const listeners = new Map<string, (event: unknown) => void>();
     const page = { activeElement: null as unknown, body: { dataset: {} },
       addEventListener: (name: string, fn: (event: unknown) => void) => listeners.set(name, fn),
@@ -24,7 +27,11 @@ describe('find focus shortcut', () => {
     vi.stubGlobal('navigator', { userAgent: 'Mac' });
     const { bindFind } = await import('../../../src/client/diff/find.js');
     bindFind();
-    const key = () => listeners.get('keydown')?.({ key: 'f', [modifier]: true, preventDefault() {} });
+    const key = () => {
+      const before = page.activeElement;
+      listeners.get('keydown')?.({ key: 'f', [modifier]: true, preventDefault() {} });
+      if (desktop) { expect(page.activeElement).toBe(before); menuFind?.(); }
+    };
     key(); expect(page.activeElement).toBe(input);
     input.value = 'rewriteFragmentIdKeys';
     key(); expect(page.activeElement).toBe(pane);

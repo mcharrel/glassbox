@@ -78,4 +78,4 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 - The PR tab rail shrinks to the width of the longest compact PR ID, with only the status dot and small padding around it. Longer IDs increase that minimum so they remain readable.
 - Newly opened PRs show a pending indicator until their own file list is available. Their file view, file names, and GUIDE/LEARN never display the previous PR. A cold file also shows a loading indicator instead of the previous file. Failed file-list loads offer Retry.
-- Model selections discovered from the provider, including `gpt-5.5-pro`, persist across settings opens and app restarts. The fallback model catalog no longer silently substitutes GPT-4o. This fix is also contributed upstream.
+- Model selections discovered from the provider, including `gpt-5.5-pro`, persist across settings opens and app restarts. The fallback model catalog no longer silently substitutes GPT-4o. GPT-5.5 Pro and its dated snapshots use their required Responses API for analysis, with response storage disabled. Both model fixes are contributed upstream.

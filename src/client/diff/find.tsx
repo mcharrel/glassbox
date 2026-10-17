@@ -16,7 +16,6 @@ import { selectFile } from './selection.js';
  *  match cursor) lives inside the controller closure — not at module scope
  *  (GB-1087) — so the module carries no live UI state of its own. */
 interface FindController {
-  show(): void;
   toggleFocus(): void;
   hide(): void;
   goToMatch(direction: number): void;
@@ -34,14 +33,14 @@ export function bindFind() {
   document.addEventListener('glassbox-review-selected', () => { controller?.hide(); });
   bindReviewKeys(direction => { controller?.goToMatch(direction); });
   // Use the same review search in desktop and browser windows.
-  const tauri = getTauriGlobal();
+  const nativeFind = getTauriGlobal()?.event;
 
 
   document.addEventListener('keydown', (e) => {
-    // Cmd/Ctrl+F: open find bar
+    // The desktop menu owns its accelerator; avoid toggling twice for one press.
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
       e.preventDefault();
-      (controller ??= createFindController()).toggleFocus();
+      if (nativeFind === undefined) (controller ??= createFindController()).toggleFocus();
       return;
     }
     if (controller === null || !controller.isOpen()) return;
@@ -62,8 +61,8 @@ export function bindFind() {
   }, true);
 
   // Listen for Tauri menu event (Edit > Find)
-  tauri?.event?.listen('menu-find', () => {
-    (controller ??= createFindController()).show();
+  nativeFind?.listen('menu-find', () => {
+    (controller ??= createFindController()).toggleFocus();
   });
 }
 
@@ -275,11 +274,6 @@ function createFindController(): FindController {
         findInput?.focus();
         findInput?.select();
       }
-    },
-    show(): void {
-      findBar.style.display = 'flex';
-      findInput?.focus();
-      findInput?.select();
     },
     hide,
     search(query, line, side): void {
