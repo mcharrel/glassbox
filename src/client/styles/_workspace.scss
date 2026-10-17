@@ -178,6 +178,11 @@
 }
 .pr-action-select { appearance: none; padding-right: 26px; }
 .pr-action-select option { background: var(--bg-surface); color: var(--text); }
+.pr-actions .pr-merged-status {
+  background: #238636;
+  opacity: 1;
+  cursor: default;
+}
 .pr-branches { overflow-wrap: anywhere; }
 .pr-main-sections {
   display: flex;

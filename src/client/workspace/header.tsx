@@ -25,7 +25,7 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
         {!['prod', 'main'].includes(info.baseRefName) && <div>{'-> '}{info.baseRefName}</div>}</> : 'Loading…'}
     </div>
     <div className="pr-actions">
-      {info?.state === 'MERGED' ? <button className="selected" disabled>Merged</button> :
+      {info?.state === 'MERGED' ? <button className="pr-merged-status" disabled>Merged</button> :
         <select className="pr-action-select" aria-label={own ? 'PR status' : 'Review PR'} data-pr-action="" disabled={!info}>
           {!own && <option value="" selected disabled>Review</option>}
           {options.map(([action, label]) => <option value={action} selected={selected === action}>{label}</option>)}
