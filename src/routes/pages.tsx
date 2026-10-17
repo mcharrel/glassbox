@@ -62,7 +62,7 @@ pageRoutes.get('/', async (c) => {
   );
 
   const html = (
-    <Layout title={`MyReview - ${review.repo_name}`} reviewId={reviewId} difftool={isDifftool}>
+    <Layout title={`rev - ${review.repo_name}`} reviewId={reviewId} difftool={isDifftool}>
       <ReviewShell reviewId={reviewId} review={review} files={files} annotationCounts={annotationCounts} staleCounts={{}} notedFileIds={notedFileIds} footer={footer} />
     </Layout>
   );
@@ -285,7 +285,7 @@ pageRoutes.get('/review/:reviewId', async (c) => {
   );
 
   const html = (
-    <Layout title={`MyReview - ${review.repo_name}`} reviewId={reviewId}>
+    <Layout title={`rev - ${review.repo_name}`} reviewId={reviewId}>
       <ReviewShell reviewId={reviewId} review={review} files={files} annotationCounts={annotationCounts} staleCounts={{}} notedFileIds={notedFileIds} footer={footer} />
     </Layout>
   );

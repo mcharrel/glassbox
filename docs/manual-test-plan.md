@@ -230,3 +230,10 @@ Both items came from GitHub #59.
   e2e caught + drove the fix for a real bug: the preference-change delegate's
   `asInput` threw on a `<select>`, so **no** select preference (including graphviz's
   `engine`) actually saved from the UI. Previously all manual.
+
+## rev and originating Codex chat
+
+- With a shared-server desktop session, create a draft PR in Codex and run `rev open <URL>` from that chat. Confirm the existing rev window selects the new PR, with its loading state and correct files.
+- Add a normal comment while Codex is busy: it must enter that chat’s queue. Add `[steer]` feedback: it must reach the current turn immediately. When idle, either should start the next turn with existing settings. These checks require a compatible shared-server desktop; they cannot be verified against a private-stdio desktop.
+- With the currently unsupported private-stdio desktop, confirm comments remain visibly pending and no isolated agent starts. Restart rev and check pending comments remain; GitHub sync should still work independently.
+- Automated tests cover local state transitions, source context, no dispatch of imported/deleted comments, ambiguous acknowledgement recovery, server request methods, unloaded-chat refusal and external tab selection. No live messages or GitHub writes are made by these tests.

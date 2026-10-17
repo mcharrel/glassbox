@@ -10,6 +10,17 @@ import { showToast } from '../toast.js';
 import { commentAnchor } from './commentAnchor.js';
 import { activeTab, mutate, workspace } from './state.js';
 
+export function codexStatus(message: ThreadMessage) {
+  const delivery = message.codex;
+  if (!delivery) return null;
+  return <div className="agent-status" title={delivery.error ?? ''}>
+    <a href={`codex://threads/${delivery.threadId}`}>Codex</a>{' · '}
+    {delivery.status === 'sent' ? 'Delivered to chat' : delivery.status === 'sending' ? 'Sending…'
+      : delivery.status === 'uncertain' ? 'Check chat before resending'
+      : delivery.error ?? (delivery.mode === 'steer' ? 'Waiting to steer' : 'Queued')}
+    {delivery.status === 'uncertain' && <button className="btn btn-xs" data-comment-action="retry-codex" data-message-id={message.id}>Resend</button>}
+  </div>;
+}
 export function messageHtml(message: ThreadMessage) {
   const pending = message.status === 'pending' || message.status === 'error';
   return (
@@ -48,6 +59,7 @@ export function messageHtml(message: ThreadMessage) {
           )}
         </span>
       </div>
+      {codexStatus(message)}
       <div className="pr-message-body">{renderNoteMarkdown(message.body)}</div>
       {message.status === 'working' && <div className="agent-status">AI working…</div>}
       {Boolean(message.error) && (
@@ -154,6 +166,7 @@ export function bindThreads(): void {
         );
         const details = toElement(
           <div className="local-thread-details">
+            {codexStatus(root)}
             {replies.map((reply) => (
               <>
                 {messageHtml(reply)}
@@ -195,12 +208,14 @@ export function bindThreads(): void {
     event.stopPropagation();
     const item = element.closest<HTMLElement>('[data-message]');
     const tab = activeTab();
-    const message = tab?.comments.find((m) => m.id === item?.dataset.message);
+    const message = tab?.comments.find((m) => m.id === ((element as HTMLElement).dataset.messageId ?? item?.dataset.message));
     if (!tab || !message) return;
     if ((element as HTMLElement).dataset.commentAction === 'share')
       void navigator.clipboard.writeText(message.url).then(() => {
         showToast('Comment link copied');
       });
+    else if ((element as HTMLElement).dataset.commentAction === 'retry-codex')
+      void mutate({ op: 'retry-codex', key: tab.key, id: message.id });
     else if ((element as HTMLElement).dataset.commentAction === 'retry')
       void mutate({ op: 'retry-agent', key: tab.key, id: message.id });
     else void mutate({ op: 'delete-comment', key: tab.key, id: message.id });

@@ -19,8 +19,8 @@ import {
   updateAnnotation,
 } from '../db/queries.js';
 import { parseDiffData } from '../git/parseDiffData.js';
-import { startCommentAgent } from './agent.js';
 import { ensureCheckout, importPull } from './checkout.js';
+import { flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment } from './codex.js';
 import {
   github,
   loadComments,
@@ -161,7 +161,7 @@ async function syncComments(tab: PullTab): Promise<void> {
   for (const message of tab.comments)
     if (message.remoteId !== undefined && !knownRemoteIds.has(message.remoteId)) pendingIds.add(message.id);
   const local = tab.comments.filter(
-    (m) => m.kind === 'ai' || pendingIds.has(m.id) || m.annotationId !== undefined,
+    (m) => m.kind === 'ai' || pendingIds.has(m.id) || m.annotationId !== undefined || m.codex !== undefined,
   );
   tab.comments = [
     ...local,
@@ -189,6 +189,7 @@ async function syncComments(tab: PullTab): Promise<void> {
       }
       Object.assign(message, match, {
         id: message.id,
+        codex: message.codex,
         annotationId,
         body,
         ...(annotationId !== undefined ? { line, side } : {}),
@@ -203,6 +204,7 @@ function needsInitialSync(tab: PullTab): boolean {
 }
 export function startWorkspace(pinnedRoot?: string): () => void {
   const data = workspaceData();
+  recoverCodexComments();
   for (const tab of [...data.tabs, ...data.archived]) {
     for (const message of tab.comments)
       if (message.kind === 'ai' && message.status === 'working') {
@@ -219,9 +221,11 @@ export function startWorkspace(pinnedRoot?: string): () => void {
   // Only pending writes retry in the background; cached PRs refresh on demand.
   const timer = setInterval(() => {
     void flushOutbox();
+    void flushCodexComments();
   }, 10_000);
   timer.unref();
   void flushOutbox();
+  void flushCodexComments();
   const stopCleanup = startWorkspaceCleanup(pinnedRoot);
   return () => {
     clearInterval(timer);
@@ -252,7 +256,7 @@ function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'ed
 export async function queueAnnotation(
   reviewId: string,
   annotation: Annotation,
-  runAgent = true,
+  forwardToCodex = true,
 ): Promise<void> {
   const tab = tabForReview(reviewId);
   if (!tab) return;
@@ -283,7 +287,7 @@ export async function queueAnnotation(
   };
   tab.comments.push(message);
   enqueue(tab, message, 'create');
-  if (runAgent) startCommentAgent(tab, message);
+  if (forwardToCodex) queueCodexComment(tab, message);
 }
 export function queueAnnotationChange(
   reviewId: string,
@@ -466,11 +470,16 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   }
   const tab = requireTab(input.key);
   tab.lastUsedAt = Date.now();
+  if (input.op === 'retry-codex') {
+    const message = tab.comments.find(item => item.id === input.id && !item.deleted);
+    if (!message) throw new Error('Comment not found');
+    retryCodexComment(message);
+  }
   if (input.op === 'retry-agent') {
     const reply = tab.comments.find((message) => message.id === input.id && message.kind === 'ai');
     const original = tab.comments.find((message) => message.id === reply?.parentKey);
     if (reply?.status !== 'error' || !original) throw new Error('No failed agent job to retry');
-    startCommentAgent(tab, original);
+    queueCodexComment(tab, original);
   }
   if (input.op === 'select') {
     data.active = tab.key;
@@ -492,7 +501,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   }
   if (input.op === 'edit') {
     if (input.title !== undefined && (!tab.info || tab.info.author.login !== tab.viewer))
-      throw new Error('Only the PR author can edit its title in MyReview');
+      throw new Error('Only the PR author can edit its title in rev');
     await github(tab.ref, `${repoApi(tab.ref)}/pulls/${tab.ref.number}`, 'PATCH', {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.body !== undefined ? { body: input.body } : {}),
@@ -529,7 +538,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     };
     tab.comments.push(message);
     enqueue(tab, message, 'create');
-    startCommentAgent(tab, message);
+    queueCodexComment(tab, message);
   }
   if (input.op === 'edit-comment' || input.op === 'delete-comment') {
     const message = tab.comments.find((m) => m.id === input.id);

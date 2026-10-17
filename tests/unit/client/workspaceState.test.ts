@@ -3,7 +3,7 @@ import { PullTabSchema } from '../../../src/api/workspace.js';
 const remote = vi.hoisted(() => ({ get: vi.fn(), change: vi.fn() }));
 vi.mock('../../../src/api/workspace.js', async original => ({ ...(await original<typeof import('../../../src/api/workspace.js')>()), getWorkspace: remote.get, changeWorkspace: remote.change }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
-const { workspace, mutate, refreshWorkspace } = await import('../../../src/client/workspace/state.js');
+const { workspace, mutate, refreshWorkspace, addingPull } = await import('../../../src/client/workspace/state.js');
 const tab = (key: string) => PullTabSchema.parse({ key, reviewId: key, repoRoot: '/', info: null, ref: { owner: 'a', repo: 'b', number: 1, url: '' } });
 beforeEach(() => {
   vi.stubGlobal('document', { querySelector: () => null, querySelectorAll: () => [] });
@@ -38,4 +38,12 @@ it('opening a new PR and closing the active PR still accept the resulting select
   remote.change.mockResolvedValueOnce({ tabs: workspace.value.tabs.filter(t => t.key !== 'c'), active: 'a' });
   await mutate({ op: 'close', key: 'c' });
   expect(workspace.value.active).toBe('a');
+});
+it('selects a PR opened externally without losing the stored view', async () => {
+  const state = { ...structuredClone(workspace.value), active: 'b', externalSelection: 1 };
+  addingPull.value = true;
+  remote.get.mockResolvedValue(state);
+  await refreshWorkspace(); expect(workspace.value.active).toBe('b'); expect(addingPull.value).toBe(false);
+  workspace.value = { ...workspace.value, active: 'a' };
+  await refreshWorkspace(); expect(workspace.value.active).toBe('a');
 });

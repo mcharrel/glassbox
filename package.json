@@ -1,13 +1,13 @@
 {
   "name": "glassbox",
   "version": "1.2.3",
-  "description": "A local code review tool for AI-generated code. Review diffs, annotate lines, and export structured feedback that AI tools can act on.",
+  "description": "A local GitHub PR review workspace with keyboard navigation and feedback routed to your original Codex chat.",
   "type": "module",
   "license": "MIT",
   "author": "westphal",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mcharrel/MyReview"
+    "url": "https://github.com/mcharrel/rev"
   },
   "keywords": [
     "code-review",
@@ -26,7 +26,8 @@
   },
   "bin": {
     "glassbox": "./dist/cli.js",
-    "glassbox-difftool": "./dist/cli-difftool.js"
+    "glassbox-difftool": "./dist/cli-difftool.js",
+    "rev": "./dist/rev.js"
   },
   "scripts": {
     "dev": "npm run build:client && npm run build:plugins && tsx --tsconfig tsconfig.json src/cli.ts",

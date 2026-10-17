@@ -11,7 +11,7 @@ vi.mock('../../../src/workspace/storage.js', () => ({
   workspaceData: () => mocks.data,
   saveWorkspace: mocks.save,
 }));
-vi.mock('../../../src/workspace/agent.js', () => ({ startCommentAgent: mocks.agent }));
+vi.mock('../../../src/workspace/codex.js', () => ({ queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
 vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
 vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
@@ -53,7 +53,7 @@ beforeEach(() => {
   mocks.data.active = 'example/project#1';
 });
 describe('durable comment outbox', () => {
-  it('posts once, records the link and starts the configured agent job', async () => {
+  it('posts once, records the link and routes the new comment to its originating chat', async () => {
     mocks.github.mockResolvedValue(remote(10));
     await mutateWorkspace(
       { op: 'comment', key: 'example/project#1', body: 'Please simplify this' },
@@ -303,4 +303,15 @@ it('recovers interrupted agents in closed tabs so they cannot block retention fo
     expect(archived.comments[0].status).toBe('error');
     expect(archived.comments[0].error).toContain('local edits were preserved');
   } finally { stop(); }
+});
+it('preserves the original chat and local comment identity when GitHub refreshes a general PR comment', async () => {
+  const tab = mocks.data.tabs[0];
+  const info = { id: 'pr', author: { login: 'alice' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' };
+  tab.info = info; vi.mocked(loadPull).mockResolvedValue(info as any);
+  const original = { id: 'local-comment', remoteId: 42, kind: 'issue', body: 'Please fix this', author: 'alice', date: '', url: '', deleted: false, status: 'synced', editable: true, codex: { threadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', status: 'queued', mode: 'queue' } };
+  tab.comments.push(original);
+  vi.mocked(loadComments).mockResolvedValueOnce([{ ...original, id: 'remote-comment', codex: undefined, body: 'Updated from GitHub' }] as any);
+  await syncTab(tab);
+  expect(tab.comments[0]).toMatchObject({ id: 'local-comment', body: 'Updated from GitHub', codex: original.codex });
+  expect(tab.comments[0].codex?.threadId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 });

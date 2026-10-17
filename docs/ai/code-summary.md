@@ -966,4 +966,12 @@ Personal PR loading/header controls: workspace requests are independent of the s
 
 Managed source retention: `workspace/retention.ts` expires safe PR/agent workspaces after 14 days, at startup/hourly. `workspace/lifecycle.ts` serializes checkout mutation; `lastUsedAt`/`checkoutEvicted` persist review use/expiry and agent messages record completion plus a known safe HEAD. Cleanup retains local work, active jobs/offline writes, shared Git providers and review history; `ensureCheckout` restores the exact saved source on selection without rewriting annotations. Client sessions skip preloading expired reviews and show pending source during restoration. See storage §9.7 and MY_GLASSBOX.md.
 
-Personal branding: the fork is `mcharrel/MyReview`, and its desktop app is MyReview. Tauri product/menu/window labels, loading screens, web page titles, settings copy and share URL use the new name. Preserve `.glassbox` data, bundle identity and legacy CLI names for compatibility; MY_GLASSBOX.md remains the customization record.
+Personal branding: the fork is `mcharrel/rev`, and its desktop app is rev. Tauri product/menu/window labels, loading screens, web page titles, settings copy and share URL use the new name. Preserve `.glassbox` data, bundle identity and legacy CLI names for compatibility; MY_GLASSBOX.md remains the customization record.
+
+### rev workspace and Codex feedback
+
+The fork is now named `rev` and `main` contains the current personal app. `src/rev.ts` adds a standalone workspace server and `rev open <PR URL>`. A mode-0600 local connection file authenticates `/api/workspace/codex-open`; `CODEX_THREAD_ID` binds a PR to its originating chat. `externalSelection` lets the existing client select a PR opened by the CLI.
+
+New local comments use `src/workspace/codex.ts` for durable queue/steer delivery, replacing automatic isolated comment agents. The optional `codex-client.ts` adapter uses an existing shared app-server proxy and refuses unloaded threads rather than starting another agent. Private-stdio desktop sessions are unsupported and show pending delivery. Imported GitHub comments do not dispatch; ambiguous sends are never automatically retried. GitHub writes remain independent. GUIDE/LEARN settings no longer advertise comment-agent model/access controls.
+
+`rev reply` and authenticated `/api/workspace/codex-reply` let the originating chat return a concise answer to the same inline/PR comment thread. Chat and PR/comment bindings are checked; identical retries are deduplicated. Replies are local, with no extra GitHub publication.

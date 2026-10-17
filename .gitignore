@@ -9,7 +9,6 @@ playwright-report/
 .mcp.json
 .claude/settings.local.json
 /.hotsheet/*
-!/.hotsheet/settings.json
 /.glassbox/*
 !/.glassbox/settings.json
 
@@ -38,3 +37,11 @@ external/
 
 # Stray npm cache (never commit)
 .npmcache/
+
+# Local credentials and review state
+.env
+.env.*
+!.env.example
+.rev/
+*.pem
+*.key

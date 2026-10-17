@@ -6,14 +6,14 @@ Requirements for the Tauri desktop application and platform distribution.
 
 ### 10.1 Native Window
 
-The personal app is named MyReview, from the `mcharrel/MyReview` fork. Native menu/window names, loading screens, settings copy and sharing use this name. Existing bundle/storage identifiers and CLI entrypoints remain unchanged to retain saved settings and integrations.
+The personal app is named rev, from the `mcharrel/rev` fork. Native menu/window names, loading screens, settings copy and sharing use this name. Existing bundle/storage identifiers and CLI entrypoints remain unchanged to retain saved settings and integrations.
 
 The personal fork exposes a View menu with Zoom In, Zoom Out, and Actual Size, using native webview zoom for the entire interface. The local frontend may invoke `set_app_zoom` with a finite scale between 0.5 and 2.0.
 
 The personal fork's desktop icon uses the supplied portrait with rounded corners and transparent margins. Legacy ICNS packaging includes this silhouette in the image itself. `scripts/build-personal-icon.swift` creates the padded source PNG from the unchanged original artwork; Tauri generates the packaged icon sizes from it.
 
 - The desktop app shall wrap the Node.js server in a native window using Tauri v2.
-- The window title shall display the project name, configurable via `.glassbox/settings.json` (`appName` field), defaulting to "MyReview — {folder name}."
+- The window title shall display the project name, configurable via `.glassbox/settings.json` (`appName` field), defaulting to "rev — {folder name}."
 - On macOS, each project shall get its own Dock/Cmd+Tab identity via a stub `.app` bundle.
 - The app shall provide a native application menu bar, including an **Edit ▸ Find** item bound to `Cmd/Ctrl+F` — it emits a `menu-find` event that opens the in-diff find bar (`src-tauri/src/lib.rs`).
 
@@ -81,3 +81,5 @@ Beyond opening a review window, the CLI wrapper also **forwards other CLI invoca
 - The Windows shims locate the app in three steps: relative to their own location (`%~dp0..`, correct inside the bundle's `resources\` folder and the CI build layout), then an absolute `set` that `install_cli` bakes in by replacing the `REM @@GLASSBOX_APP_DIR@@` marker line with the directory of the running `glassbox.exe`, then the standard per-user (`%LOCALAPPDATA%\Glassbox`) and per-machine (`%ProgramFiles%\Glassbox`) install directories for a hand-copied shim. A verbatim copy used to keep only the relative lookup and failed with "`…\Programs\glassbox\..\glassbox.exe` cannot be found" (GitHub #59).
 - On **Linux and Windows** the launcher shim execs the Tauri binary, which spawns the sidecar itself and must forward **every** CLI argument to it (`build_sidecar_args` in `src-tauri/src/lib.rs`). An earlier allowlist (`--project-dir`, `--diff`, `--difftool-serve`) dropped the review-mode flags, so `glassbox --commit <sha>` opened the default uncommitted review (GitHub #59). macOS is unaffected: its launcher pre-starts the server with the full argument list.
 - `--browser` is a launcher-level flag; the CLI parser accepts it as a no-op because the Windows shim forwards its untouched `%*` and cmd can't drop one token without re-quoting every argument.
+
+The fork’s native display name is `rev`; its legacy bundle identifier and internal executable remain stable to preserve WebView storage and launch compatibility. See the root README for current source installation and optional Codex shared-server integration. `main` is the current customized app, with upstream updates integrated separately.

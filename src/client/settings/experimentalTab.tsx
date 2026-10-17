@@ -173,13 +173,7 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
         </select>
       </div>
       <div className="settings-section">
-        <label className="settings-label" htmlFor="settings-agent-access">Comment agent access</label>
-        <select className="settings-select" id="settings-agent-access">
-          <option value="read-only" selected={ctx.agentAccess === 'read-only'}>Read only</option>
-          <option value="local" selected={ctx.agentAccess === 'local'}>Local edits</option>
-          <option value="push" selected={ctx.agentAccess === 'push'}>Signed commit &amp; push</option>
-        </select>
-        <p className="settings-hint">Applies to new comments. Pushes require a verified signature and never overwrite newer PR commits.</p>
+        <p className="settings-hint">Review comments are saved for the Codex chat linked by <code>rev open</code>, using that chat’s history, model and permissions. Ordinary comments wait until Codex is idle; prefix a comment with [steer] to send it immediately. Delivery requires Codex’s shared app server; unsupported desktop sessions keep comments pending. These model settings only control GUIDE/LEARN.</p>
       </div>
 
       {!isApple && (
@@ -193,7 +187,7 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
       <div className="settings-section">
         <label className="settings-label">Fallback model</label>
         <p className="settings-hint">
-          The on-device model has a small context window and can’t analyze large diffs. When a file is too big (or on-device analysis otherwise fails), MyReview uses this model for that file instead.
+          The on-device model has a small context window and can’t analyze large diffs. When a file is too big (or on-device analysis otherwise fails), rev uses this model for that file instead.
         </p>
         <select className="settings-select" id="settings-fallback-platform">
           <option value="" selected={!hasFallback}>None — skip files too large for on-device</option>

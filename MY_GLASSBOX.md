@@ -1,6 +1,6 @@
-# MyReview
+# rev
 
-[MyReview](https://github.com/mcharrel/MyReview) is my personal review workspace, based on upstream Glassbox 1.2.3. The fork's `main` follows upstream; the installed customizations live on `mc/local-customizations`. Upstream bug fixes can be merged or cherry-picked without giving up these preferences.
+[rev](https://github.com/mcharrel/rev) is my personal review workspace, based on upstream Glassbox 1.2.3. The fork's `main` follows upstream; the installed customizations live on `mc/local-customizations`. Upstream bug fixes can be merged or cherry-picked without giving up these preferences.
 
 ## Workspace and PR tabs
 
@@ -12,7 +12,7 @@
 - New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; there is no idle GitHub polling. Cmd/Ctrl+R refreshes the selected PR, including source changes.
 - Closing a tab only removes it from the tab list. Pending comments keep syncing, and reopening restores the PR.
 
-The desktop app, native menu, loading screens, and share link use the MyReview name. Existing `.glassbox` data, settings, bundle identity, and `glassbox` commands remain compatible; the local `myreview` command opens the saved PR workspace.
+The desktop app, native menu, loading screens, and share link use the rev name. Existing `.glassbox` data, settings, bundle identity, and `glassbox` commands remain compatible; the local `myreview` command opens the saved PR workspace.
 
 ## Shared header and Main view
 
@@ -64,7 +64,7 @@ The desktop app, native menu, loading screens, and share link use the MyReview n
 
 - Changed and unchanged code lines share the same text alignment. Added/removed markers do not shift code indentation.
 - Disable character-level change highlighting, retaining whole-line diff colors. Navigation uses an outline effect instead of replacing the red/green background.
-- All contributions, including bug fixes and personal customizations, stay in `mcharrel/MyReview`. Do not open or update upstream contribution PRs. The earlier upstream PRs (#73–77) are closed; their fixes remain in this fork. Reading and pulling upstream updates is still allowed.
+- All contributions, including bug fixes and personal customizations, stay in `mcharrel/rev`. Do not open or update upstream contribution PRs. The earlier upstream PRs (#73–77) are closed; their fixes remain in this fork. Reading and pulling upstream updates is still allowed.
 
 ## Local data
 
@@ -116,3 +116,12 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 - Remove only disposable directories created inside this review data directory’s `workspaces/` and `agents/`. Preserve the selected PR, running work, queued offline comments, dirty/untracked/ignored files, unpublished commits, user branches, locked worktrees and initialized submodules. Never delete my ordinary clones or the checkout hosting the running app.
 - Shared Git providers stay while another checkout needs them; expired borrowers are removed first. Agent worktrees are unregistered with Git, without force.
 - Keep PR tabs, comments, annotations, attachments and reading state. Selecting an expired PR shows loading while recreating its exact saved source revision; it does not refresh GitHub metadata or rewrite annotations. Cleanup makes no GitHub API requests.
+
+## rev name, publication, and originating Codex chat
+
+- Renamed the app and public repository to `rev` (formerly MyReview). Repository: https://github.com/mcharrel/rev. `main` is now the verified personal app; retain an `upstream` remote for future Glassbox updates. Legacy executable/data names stay compatible.
+- Replaced the upstream README with source installation, GitHub account setup, keyboard navigation, updates and Codex integration instructions. The portrait icon is intentionally public. Local credentials, connection files, workspace state and private PR data are excluded. Removed the inherited Hotsheet credential from the tracked tree; already-public upstream history is unchanged.
+- `rev open <PR URL>` opens/selects a tab in the running app and captures `CODEX_THREAD_ID` when run from the originating Codex chat. External opens are reflected by the existing window without losing per-PR reading state. Existing chat bindings cannot be silently replaced.
+- New local comments are queued for that original chat as `new comment: ...` plus PR/source context. `[steer]` requests immediate steering. GitHub synchronization remains independent. Imported comments and old annotations never dispatch automatically. No new isolated comment agents are started; GUIDE/LEARN still use the model settings.
+- Delivery uses an existing shared Codex app server only when explicitly enabled. The currently installed desktop session uses a private stdio server, so live forwarding is unavailable and comments remain visibly pending. No second agent is resumed as a fallback. The adapter is protocol-tested; live delivery awaits a compatible desktop connection.
+- Delivery state survives restarts. Ambiguous acknowledgements require checking the original chat before manually resending. The same chat can post answers back into the original rev thread with `rev reply <URL> --comment <ID> --body-file <FILE>`. Replies are local, attributed to Codex, and preserve the existing thread appearance. Repeated identical submissions are deduplicated.

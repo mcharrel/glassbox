@@ -6,6 +6,7 @@ export default defineConfig([
   {
     entry: {
       cli: 'src/cli.ts',
+      rev: 'src/rev.ts',
       'cli-difftool': 'src/cli-difftool.ts',
       channel: 'src/channel.ts',
     },

@@ -58,6 +58,12 @@ export const PullInfoSchema = z.object({
     .default([]),
 });
 export type PullInfo = z.infer<typeof PullInfoSchema>;
+export const CodexDeliverySchema = z.object({
+  threadId: z.uuid(),
+  mode: z.enum(['queue', 'steer']),
+  status: z.enum(['queued', 'sending', 'sent', 'uncertain']),
+  error: z.string().optional(),
+});
 export const ThreadMessageSchema = z.object({
   id: z.string(),
   body: z.string(),
@@ -78,6 +84,7 @@ export const ThreadMessageSchema = z.object({
   error: z.string().optional(),
   editable: z.boolean().default(false),
   deleted: z.boolean().default(false),
+  codex: CodexDeliverySchema.optional(),
   workspaceUpdatedAt: z.number().optional(),
   workspaceSafeHead: z.string().optional(),
 });
@@ -102,14 +109,17 @@ export const PullTabSchema = z.object({
   reviewedHead: z.string().default(''),
   reviewedBase: z.string().default(''),
   importLocalComments: z.boolean().default(false),
+  codexThreadId: z.uuid().optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
 export const WorkspaceSchema = z.object({
   tabs: z.array(PullTabSchema),
   active: z.string().nullable(),
+  externalSelection: z.number().optional(),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 export const WorkspaceMutationSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('retry-codex'), key: z.string(), id: z.string() }),
   z.object({ op: z.literal('retry-agent'), key: z.string(), id: z.string() }),
   z.object({
     op: z.literal('open'),

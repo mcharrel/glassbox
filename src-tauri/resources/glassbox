@@ -1,12 +1,12 @@
 #!/bin/bash
-# CLI launcher for MyReview desktop app.
+# CLI launcher for rev desktop app.
 # Symlink this to your PATH:
-#   ln -sf "/Applications/MyReview.app/Contents/Resources/resources/glassbox" /usr/local/bin/glassbox
+#   ln -sf "/Applications/rev.app/Contents/Resources/resources/glassbox" /usr/local/bin/glassbox
 
 set -e
 
 # Resolve the app bundle from this script's location
-# Script lives at: MyReview.app/Contents/Resources/resources/glassbox
+# Script lives at: rev.app/Contents/Resources/resources/glassbox
 SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
 CONTENTS_DIR="$(dirname "$(dirname "$(dirname "$SCRIPT_PATH")")")"
 NODE_BIN="$CONTENTS_DIR/MacOS/glassbox-node"
@@ -78,7 +78,7 @@ fi
 # Fall back to folder name
 if [[ -z "$APP_NAME" ]]; then
   FOLDER_NAME="$(basename "$PROJECT_DIR")"
-  APP_NAME="MyReview — $FOLDER_NAME"
+  APP_NAME="rev — $FOLDER_NAME"
 fi
 
 # --- Create/update stub .app for unique Dock/Cmd+Tab identity ---

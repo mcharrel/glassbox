@@ -11,7 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const SHARE_URL = 'https://github.com/mcharrel/MyReview';
+const SHARE_URL = 'https://github.com/mcharrel/rev';
 
 interface FakeEl {
   className: string;

@@ -17,6 +17,7 @@ import { themeApiRoutes } from './routes/theme-api.js';
 import type { AppEnv } from './types.js';
 import { openOS } from './utils/openOS.js';
 import { ensureCheckout } from './workspace/checkout.js';
+import { registerControl } from './workspace/control.js';
 import { workspaceRoutes } from './workspace/routes.js';
 import { startWorkspace, tabForReview } from './workspace/service.js';
 import { saveWorkspace } from './workspace/storage.js';
@@ -42,6 +43,16 @@ function tryServe(appFetch: Hono<AppEnv>['fetch'], port: number): Promise<{ port
 export async function startServer(port: number, reviewId: string, repoRoot: string, options?: { noOpen?: boolean; strictPort?: boolean; onComplete?: string | null }): Promise<{ port: number; server: ServerType }> {
   const app = new Hono<AppEnv>();
   const onCompleteCommand = options?.onComplete ?? null;
+
+  // Browser pages must not be able to submit commands to the local review workspace.
+  app.use('/api/*', async (c, next) => {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+      const origin = c.req.header('origin');
+      if ((origin !== undefined && origin !== new URL(c.req.url).origin) || c.req.header('sec-fetch-site') === 'cross-site')
+        return c.json({ error: 'Cross-origin writes are not allowed' }, 403);
+    }
+    await next();
+  });
 
   // Inject context
   app.use('*', async (c, next) => {
@@ -134,7 +145,7 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
   }
 
   const url = `http://localhost:${actualPort}`;
-  console.log(`\n  Glassbox running at ${url}\n`);
+  console.log(`\n  rev running at ${url}\n`);
 
   // Discover + load installed content plugins (doc 29), honoring per-project +
   // global enablement. Fail-soft: never throws, never blocks startup.
@@ -162,6 +173,8 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
     try { openOS(url, 'url'); } catch { /* best-effort */ }
   }
 
+  const unregisterControl = registerControl(actualPort);
+  server.on('close', unregisterControl);
   const stopWorkspace = startWorkspace(repoRoot);
   server.on('close', stopWorkspace);
   return { port: actualPort, server };

@@ -24,8 +24,10 @@ export function activeReviewReady(): boolean {
 let mutationVersion = 0;
 function receive(state: Workspace, preserveSelection: boolean): void {
   const local = workspace.value;
+  const openedExternally = (state.externalSelection ?? 0) !== (local.externalSelection ?? 0);
+  if (openedExternally) addingPull.value = false;
   workspace.value = { ...state,
-    active: preserveSelection && state.tabs.some(tab => tab.key === local.active) ? local.active : state.active,
+    active: preserveSelection && !openedExternally && state.tabs.some(tab => tab.key === local.active) ? local.active : state.active,
     tabs: state.tabs.map(tab => ({ ...tab, view: local.tabs.find(item => item.key === tab.key)?.view ?? tab.view })),
   };
 }

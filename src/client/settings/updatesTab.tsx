@@ -9,7 +9,7 @@ function renderUpdatesTab(): SafeHtml {
       <div className="settings-section-header">
         <span className="settings-heading">Software Updates</span>
       </div>
-      <p className="settings-disclaimer">Check for new versions of the MyReview desktop app.</p>
+      <p className="settings-disclaimer">Check for new versions of the rev desktop app.</p>
       <button className="btn btn-sm" id="check-updates-btn">Check for Updates</button>
       <p className="settings-hint" id="check-updates-status"></p>
     </div>

@@ -28,12 +28,12 @@ function renderDifftoolSection(ctx: TabContext): SafeHtml {
               : <>Not registered.</>}
           </span>
           <div className="settings-difftool-actions">
-            <button className="btn btn-sm" id="difftool-register-btn">Set MyReview as git difftool</button>
+            <button className="btn btn-sm" id="difftool-register-btn">Set rev as git difftool</button>
           </div>
         </div>
       )}
       <p className="settings-hint">
-        Lets you run <code>git difftool --dir-diff &lt;range&gt;</code> from any repo and review the change set in MyReview.
+        Lets you run <code>git difftool --dir-diff &lt;range&gt;</code> from any repo and review the change set in rev.
         {conflictTool !== null ? <> This updates your Git <code>diff.tool</code> setting; you can unregister anytime.</> : null}
       </p>
     </div>
@@ -99,7 +99,7 @@ function renderBackupsSection(ctx: TabContext): SafeHtml {
  *
  * Listed separately from the backups above, with no Delete. The distinction is
  * the point: a backup is redundant by construction, whereas this is data
- * MyReview could not read and may be the user's only copy. Offering the same
+ * rev could not read and may be the user's only copy. Offering the same
  * one-click delete would flatten that difference, so the only action here is to
  * reveal it in the file manager — an invitation to try to recover it, not to
  * discard it.
@@ -127,8 +127,8 @@ function renderQuarantinedSection(ctx: TabContext): SafeHtml {
           </div>
         ))}
         <p className="settings-hint">
-          A database MyReview could not open. It was kept rather than deleted, because it may hold
-          reviews that exist nowhere else. MyReview won't remove it — open it in your file manager
+          A database rev could not open. It was kept rather than deleted, because it may hold
+          reviews that exist nowhere else. rev won't remove it — open it in your file manager
           if you want to try recovering it, or delete it yourself once you're sure you don't need it.
         </p>
       </div>
@@ -164,7 +164,7 @@ function renderGeneralTab(ctx: TabContext): SafeHtml {
       {isTauri && (
         <div className="settings-section">
           <label className="settings-label">App Name</label>
-          <input type="text" className="settings-input" id="settings-app-name" value={appName} placeholder="MyReview — project-name" />
+          <input type="text" className="settings-input" id="settings-app-name" value={appName} placeholder="rev — project-name" />
           <p className="settings-hint">Custom window title for the desktop app. Leave blank for the default.</p>
         </div>
       )}
@@ -174,7 +174,7 @@ function renderGeneralTab(ctx: TabContext): SafeHtml {
       {renderQuarantinedSection(ctx)}
       <div className="settings-divider"></div>
       <div className="settings-section">
-        <a className="settings-share-link" id="settings-share-link" href="#">Know someone who'd love this? <strong>Share MyReview</strong></a>
+        <a className="settings-share-link" id="settings-share-link" href="#">Know someone who'd love this? <strong>Share rev</strong></a>
       </div>
     </>
   );

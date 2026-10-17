@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>MyReview</title>
+  <title>rev</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -45,7 +45,7 @@
 <body>
   <div class="loading" id="view-loading">
     <div class="spinner"></div>
-    <p>Starting MyReview&hellip;</p>
+    <p>Starting rev&hellip;</p>
   </div>
   <div class="message hidden" id="view-message">
     <p id="message-title">No changes to review</p>
@@ -66,10 +66,10 @@
       if (h) h.textContent = hint;
     }
     function showNoChanges() {
-      showMessage('No changes to review', 'This repo has no pending changes. Launch MyReview with uncommitted changes, a specific commit, or a branch — then reopen it.');
+      showMessage('No changes to review', 'This repo has no pending changes. Launch rev with uncommitted changes, a specific commit, or a branch — then reopen it.');
     }
     function showExited() {
-      showMessage("MyReview didn't start", 'The server exited before it was ready. Check the terminal output for errors.');
+      showMessage("rev didn't start", 'The server exited before it was ready. Check the terminal output for errors.');
     }
   </script>
 </body>

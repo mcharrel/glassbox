@@ -1,3 +1,4 @@
+vi.mock('../../src/workspace/control.js', () => ({ registerControl: vi.fn(() => () => {}) }));
 vi.mock('../../src/workspace/service.js', () => ({ startWorkspace: vi.fn(() => () => {}), mutateWorkspace: vi.fn(), tabForReview: vi.fn() }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -207,7 +208,7 @@ describe('startServer', () => {
 
     await startServer(4183, 'review-123', '/tmp/repo', { noOpen: true });
 
-    expect(logSpy).toHaveBeenCalledWith('\n  Glassbox running at http://localhost:4183\n');
+    expect(logSpy).toHaveBeenCalledWith('\n  rev running at http://localhost:4183\n');
     logSpy.mockRestore();
   });
 
@@ -235,7 +236,7 @@ describe('startServer', () => {
 
     // First port (4183) in use -> falls back to 4184 and logs the notice.
     expect(logSpy).toHaveBeenCalledWith('  Port 4183 in use, using 4184 instead.');
-    expect(logSpy).toHaveBeenCalledWith('\n  Glassbox running at http://localhost:4184\n');
+    expect(logSpy).toHaveBeenCalledWith('\n  rev running at http://localhost:4184\n');
     logSpy.mockRestore();
   });
 

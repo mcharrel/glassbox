@@ -1,5 +1,5 @@
 #!/bin/bash
-# CLI launcher for MyReview desktop app (Linux).
+# CLI launcher for rev desktop app (Linux).
 # Symlink this to your PATH:
 #   ln -sf /path/to/glassbox-linux ~/.local/bin/glassbox
 
@@ -9,12 +9,12 @@ set -e
 # layout (GB-856):
 #   <res>/resources/glassbox-linux   <- this script  ($RESOURCES_DIR)
 #   <res>/server/cli.js              <- Node server bundle
-#   /usr/bin/glassbox                <- Tauri binary   (res is /usr/lib/MyReview,
+#   /usr/bin/glassbox                <- Tauri binary   (res is /usr/lib/rev,
 #   /usr/bin/glassbox-node           <- Node binary     so the bins are ../../../bin)
-# The same relative shape holds for the AppImage ($APPDIR/usr/{bin,lib/MyReview}).
+# The same relative shape holds for the AppImage ($APPDIR/usr/{bin,lib/rev}).
 SCRIPT_PATH="$(readlink -f "$0")"
 RESOURCES_DIR="$(dirname "$SCRIPT_PATH")"
-APP_ROOT="$(dirname "$RESOURCES_DIR")"          # .../usr/lib/MyReview
+APP_ROOT="$(dirname "$RESOURCES_DIR")"          # .../usr/lib/rev
 BIN_DIR="$(cd "$RESOURCES_DIR/../../../bin" 2>/dev/null && pwd || echo "$APP_ROOT/bin")"
 NODE_BIN="$BIN_DIR/glassbox-node"
 TAURI_BIN="$BIN_DIR/glassbox"
