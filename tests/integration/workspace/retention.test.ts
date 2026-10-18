@@ -75,6 +75,17 @@ it('honors the exact fourteen-day boundary and both open and archived PRs', asyn
   expect((await cleanupWorkspaces(now - 1)).reviews).toBe(0);
   expect((await cleanupWorkspaces(now)).reviews).toBe(1);
 });
+it('does not keep an unused checkout alive just because metadata was refreshed', async () => {
+  const tab = fixture(); tab.updatedAt = now;
+  expect((await cleanupWorkspaces(now)).reviews).toBe(1);
+  expect(tab.checkoutEvicted).toBe(true);
+});
+it('uses the last saved update for legacy tabs without an activity timestamp', async () => {
+  const tab = fixture(); tab.lastUsedAt = 0; tab.updatedAt = now;
+  expect((await cleanupWorkspaces(now)).reviews).toBe(0);
+  tab.updatedAt = old;
+  expect((await cleanupWorkspaces(now)).reviews).toBe(1);
+});
 it('keeps a shared provider until its last borrower expires, then removes dependents first', async () => {
   const provider = fixture(1), borrower = fixture(2);
   writeFileSync(join(borrower.repoRoot!, '.git/objects/info/alternates'), join(provider.repoRoot!, '.git/objects') + '\n');

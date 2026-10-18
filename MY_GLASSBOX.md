@@ -9,7 +9,7 @@
 - The + immediately after the PR tabs opens a URL field. A GitHub PR URL may include `/files`, query parameters, or a fragment. Reopening a tracked PR selects the existing tab.
 - New own PRs appear above other people's PRs. Related stacked PRs are placed together, parent before child. Manual ordering persists.
 - Each PR initially opens its Main view and remembers its last selected view. `r` switches Main and File views.
-- New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; there is no idle GitHub polling. Cmd/Ctrl+R refreshes the selected PR, including source changes.
+- New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; every open tab refreshes metadata and conversations in the background every five minutes. Cmd/Ctrl+R refreshes the selected PR immediately, including source changes.
 - Closing a tab only removes it from the tab list. Pending comments keep syncing, and reopening restores the PR.
 
 The desktop app, native menu, loading screens, and share link use the rev name. Existing `.glassbox` data, settings, bundle identity, and `glassbox` commands remain compatible; the local `myreview` command opens the saved PR workspace.
@@ -17,7 +17,7 @@ The desktop app, native menu, loading screens, and share link use the rev name. 
 ## Shared header and Main view
 
 - The shared header shows the GitHub title, Settings, and a close-tab icon. Only my own PR titles are editable. Editing keeps the displayed font size, and clicking away immediately restores the normal title while saving. Added lines are blue, removed lines orange; totals exclude tests and generated protos and appear above the branch names. Show the PR branch first, followed by a separate `-> <base>` line only when the target is neither `prod` nor `main`.
-- Use one compact purple dropdown. Own PRs show their current Draft, Ready for Review, or Close state. Other PRs show Review with Approve, Request code change, and Make explanations more human. The last choice submits a GitHub Request changes review with exactly: “Could you make the explanations (description, in-line comments) easier to digest for a human ?” Merged PRs replace the dropdown with a green, non-clickable Merged button. GitHub merge status is picked up on Cmd/Ctrl+R, following the manual-refresh preference.
+- Use one compact purple dropdown. Own PRs show their current Draft, Ready for Review, or Close state. Other PRs show Review with Approve, Request code change, and Make explanations more human. The last choice submits a GitHub Request changes review with exactly: “Could you make the explanations (description, in-line comments) easier to digest for a human ?” Merged PRs replace the dropdown with a green, non-clickable Merged button. GitHub merge status is picked up by the five-minute background refresh or immediately on Cmd/Ctrl+R.
 - Cmd/Ctrl+R refreshes the PR. New source revisions are fetched on explicit refresh, preserving annotations through Glassbox's re-anchoring logic. Repeated shortcuts during an in-flight refresh do not queue another full refresh.
 - Main content is the PR description. Click to edit; Save or Cmd/Ctrl+Enter publishes the edit. Escape/Cancel discards it.
 - The mid panel contains reviewers, CI checks ordered failed/pending/succeeded, then the PR conversation with newest comments first. Every section scrolls and its divider resizes. Merged PRs replace CI with the Deployment section; deployment details are intentionally undecided.
@@ -74,7 +74,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 - GUIDE and LEARN stay together in one scrolling section; only the divider above the combined section resizes it.
 - All panel widths and section heights persist. Temporary hiding or limited space does not overwrite the chosen size. The title section cannot shrink below its content, including wrapped titles and action buttons.
-- PR tabs switch within the same page. Files, AI guidance, loaded diff DOM, inline drafts, scroll positions, remaining-file lists, and navigation history remain in memory per PR. The first load stays asynchronous; later remote changes wait for Cmd/Ctrl+R. Posting comments, edits, and review actions remains immediate, and offline comments still retry every five minutes. Explicit refresh or a changed reviewed revision invalidates the affected cached content.
+- PR tabs switch within the same page. Files, AI guidance, loaded diff DOM, inline drafts, scroll positions, remaining-file lists, and navigation history remain in memory per PR. The first load stays asynchronous; metadata and comments refresh every five minutes without switching views or replacing the source snapshot; new commits wait for Cmd/Ctrl+R. Posting comments, edits, and review actions remains immediate, and offline comments still retry every five minutes. Explicit refresh or a changed reviewed revision invalidates the affected cached content.
 - Remote inline comments appear only at a valid current source line, including old-side coordinates on unified context lines. Threads without a matching current line are hidden, with no fallback at the file top.
 
 ## Loading and input fixes
@@ -97,22 +97,23 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 ## GitHub request budget
 
-- Cached PRs make zero idle GitHub requests, including after an app restart. The local client still checks its own server for import, comment, and agent progress; those requests never contact GitHub.
-- A normal explicit refresh uses one GraphQL request for metadata and three REST requests for issue comments, inline comments, and submitted review bodies. More than 99 entries in a collection require extra pagination requests; first-time account identification and source fetches add work.
-- New PRs and unfinished imports load once. Existing cached tabs wait for Cmd/Ctrl+R. Duplicate in-flight explicit refreshes are coalesced, and holding the shortcut does not repeatedly refresh.
+- All open tabs, including inactive tabs and merged/closed PRs still in the tab list, refresh metadata and comments every five minutes. Removed tabs do not poll. Startup, switching tabs and reopening use the cache immediately. The local client also checks its own server for import, comment, and agent progress; those local reads never contact GitHub.
+- A normal background or explicit refresh uses one GraphQL request for metadata and three REST requests for issue comments, inline comments, and submitted review bodies. More than 99 entries in a collection require extra pagination requests; first-time account identification and source fetches add work.
+- At four requests per refresh, the background budget is about 48 GitHub requests per hour per open PR, plus pagination, explicit actions and retries. No background Git fetches run for cached PRs.
+- New PRs and unfinished imports load immediately. Overlapping requests are coalesced; Cmd/Ctrl+R during a background read waits for one subsequent full refresh, including source changes. Failures retain cached data and retry at the next five-minute tick; closing the app stops polling.
 - Comments, title/description edits, review actions, and agent pushes still contact GitHub when requested. Failed comment publication keeps its five-minute retry schedule.
-- Without background metadata polling, changes made by other people and associated desktop notifications are discovered on refresh. There are no continuous background status notifications.
+- Reviewer, mergeability and merge changes are discovered within the next background refresh. Desktop notifications remain suppressed while the app is visible and focused.
 
 ## Import reliability and app zoom
 
 - Workspace updates, adding PRs, and visibility reports do not depend on the selected review ID. An importing tab cannot block its own progress updates or prevent opening another PR. Non-JSON HTTP failures show a useful request/status message.
 - Reuse matching local repositories found under Go workspaces and common source folders, validating their GitHub remotes (including SSH aliases). Optional explicit paths live in `~/.glassbox/workspace-config.json` under `repositories` keyed by `owner/repo`. Preserve the source checkout's files/index/branch and protect borrowed commits from garbage collection.
-- Cold imports fetch the exact PR/base snapshots with depth 1, using GitHub's reported merge base. Do not guess with depth 100 or deepen by 1,000 commits. Completely new repositories still require downloading source snapshots; metadata and comments can display independently. Poll local import progress more frequently while an import is running; cached tabs still make no idle GitHub requests.
+- Cold imports fetch the exact PR/base snapshots with depth 1, using GitHub's reported merge base. Do not guess with depth 100 or deepen by 1,000 commits. Completely new repositories still require downloading source snapshots; metadata and comments can display independently. Poll local import progress more frequently while an import is running; cached tabs poll GitHub only every five minutes.
 - Cmd/Ctrl+= (or +) and Cmd/Ctrl+- zoom the entire desktop app, in 10% steps from 50% to 200%. Cmd/Ctrl+0 resets to 100%. The preference persists and applies to every PR; standard browser zoom remains unchanged when running outside the desktop shell.
 
 ## Workspace retention
 
-- Automatically check on startup and hourly for PR checkouts and comment-agent worktrees inactive for 14 days. Selection, imports, edits and agent completion count as activity; local workspace polling does not.
+- Automatically check on startup and hourly for PR checkouts and comment-agent worktrees inactive for 14 days. Selection, imports, edits and agent completion count as activity; local workspace polling and background GitHub metadata refresh do not. Background refresh never recreates an expired checkout.
 - Remove only disposable directories created inside this review data directory’s `workspaces/` and `agents/`. Preserve the selected PR, running work, queued offline comments, dirty/untracked/ignored files, unpublished commits, user branches, locked worktrees and initialized submodules. Never delete my ordinary clones or the checkout hosting the running app.
 - Shared Git providers stay while another checkout needs them; expired borrowers are removed first. Agent worktrees are unregistered with Git, without force.
 - Keep PR tabs, comments, annotations, attachments and reading state. Selecting an expired PR shows loading while recreating its exact saved source revision; it does not refresh GitHub metadata or rewrite annotations. Cleanup makes no GitHub API requests.

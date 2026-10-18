@@ -37,8 +37,9 @@ import { notify } from './notifications.js';
 import { startWorkspaceCleanup } from './retention.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
-const syncing = new Map<string, boolean>();
-const pendingRefresh = new Set<string>();
+type SyncMode = 'initial' | 'refresh' | 'background';
+const syncing = new Map<string, { mode: SyncMode; promise: Promise<void> }>();
+const BACKGROUND_REFRESH_MS = 5 * 60 * 1000;
 let flushing = false;
 export function tabForReview(reviewId: string): PullTab | undefined {
   const data = workspaceData();
@@ -84,13 +85,25 @@ function notifyChanges(before: PullTab['info'], tab: PullTab): void {
     notify(after.title, 'Ready to merge');
   if (before.state !== 'MERGED' && after.state === 'MERGED') notify(after.title, 'PR merged');
 }
-export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> {
-  if (syncing.has(tab.key)) {
-    if (refreshDiff && syncing.get(tab.key) === false) pendingRefresh.add(tab.key);
-    return;
+export function syncTab(tab: PullTab, mode: SyncMode = 'initial'): Promise<void> {
+  const existing = syncing.get(tab.key);
+  if (existing) {
+    if (mode === 'refresh' && existing.mode !== 'refresh') {
+      return existing.promise.then(() => {
+        if (workspaceData().tabs.includes(tab)) return syncTab(tab, 'refresh');
+      });
+    }
+    return existing.promise;
   }
-  syncing.set(tab.key, refreshDiff);
-  tab.loading = true;
+  const promise = performSync(tab, mode).finally(() => { syncing.delete(tab.key); });
+  syncing.set(tab.key, { mode, promise });
+  return promise;
+}
+async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
+  const background = mode === 'background';
+  if (!background) tab.loading = true;
+  // Migrate legacy activity before updating the metadata timestamp in the background.
+  tab.lastUsedAt ||= tab.updatedAt;
   try {
     const before = tab.info;
     const [info, viewer] = await Promise.all([
@@ -124,9 +137,9 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
       syncComments(tab),
       (async () => {
         if (
-          tab.reviewId === null || tab.checkoutEvicted ||
-          ((refreshDiff || tab.importLocalComments) &&
-            (tab.reviewedHead !== info.headRefOid || tab.reviewedBase !== info.baseRefOid))
+          !background && (tab.reviewId === null || tab.checkoutEvicted ||
+          ((mode === 'refresh' || tab.importLocalComments) &&
+            (tab.reviewedHead !== info.headRefOid || tab.reviewedBase !== info.baseRefOid)))
         ) await importPull(tab);
         saveWorkspace();
       })(),
@@ -142,11 +155,11 @@ export async function syncTab(tab: PullTab, refreshDiff = false): Promise<void> 
   } catch (error) {
     tab.error = error instanceof Error ? error.message : 'Sync failed';
   } finally {
-    tab.loading = false;
-    tab.lastUsedAt = Date.now();
-    syncing.delete(tab.key);
+    if (!background) {
+      tab.loading = false;
+      tab.lastUsedAt = Date.now();
+    }
     saveWorkspace();
-    if (pendingRefresh.delete(tab.key) && workspaceData().tabs.includes(tab)) void syncTab(tab, true);
   }
 }
 async function syncComments(tab: PullTab): Promise<void> {
@@ -222,7 +235,14 @@ export function startWorkspace(pinnedRoot?: string): () => void {
     else if (tab.key === data.active) void ensureCheckout(tab).catch(() => {});
   }
   saveWorkspace();
-  // Only pending writes retry in the background; cached PRs refresh on demand.
+  const refreshTimer = setInterval(() => {
+    for (const tab of workspaceData().tabs) {
+      const mode = needsInitialSync(tab) && !tab.checkoutEvicted ? 'initial' : 'background';
+      void syncTab(tab, mode);
+    }
+  }, BACKGROUND_REFRESH_MS);
+  refreshTimer.unref();
+  // Pending writes have their own retry deadlines, independent of background reads.
   const timer = setInterval(() => {
     void flushOutbox();
     void flushCodexComments();
@@ -232,6 +252,7 @@ export function startWorkspace(pinnedRoot?: string): () => void {
   void flushCodexComments();
   const stopCleanup = startWorkspaceCleanup(pinnedRoot);
   return () => {
+    clearInterval(refreshTimer);
     clearInterval(timer);
     stopCleanup();
   };
@@ -529,7 +550,8 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   if (input.op === 'refresh') {
     tab.loading = true;
     saveWorkspace();
-    await syncTab(tab, true);
+    await syncTab(tab, 'refresh');
+    tab.loading = false;
   }
   if (input.op === 'edit') {
     if (input.title !== undefined && (!tab.info || tab.info.author.login !== tab.viewer))

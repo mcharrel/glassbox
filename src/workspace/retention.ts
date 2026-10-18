@@ -12,7 +12,8 @@ const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 function idle(tab: PullTab, cutoff: number): boolean {
   const data = workspaceData();
-  return tab.key !== data.active && !tab.loading && Math.max(tab.updatedAt, tab.lastUsedAt) <= cutoff
+  // Metadata polling is not checkout activity; updatedAt is only a legacy fallback.
+  return tab.key !== data.active && !tab.loading && (tab.lastUsedAt || tab.updatedAt) <= cutoff
     && !tab.comments.some(message => message.kind === 'ai' && message.status === 'working')
     && !data.outbox.some(item => item.tab === tab.key);
 }

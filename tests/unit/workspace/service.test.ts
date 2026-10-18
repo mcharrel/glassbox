@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   github: vi.fn(),
   save: vi.fn(),
   agent: vi.fn(),
+  notify: vi.fn(),
 }));
 vi.mock('../../../src/workspace/storage.js', () => ({
   workspaceData: () => mocks.data,
@@ -15,6 +16,7 @@ vi.mock('../../../src/workspace/storage.js', () => ({
 vi.mock('../../../src/workspace/codex.js', () => ({ queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
 vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
+vi.mock('../../../src/workspace/notifications.js', () => ({ notify: mocks.notify }));
 vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/workspace/github.js')>()),
   github: mocks.github,
@@ -47,6 +49,7 @@ function remote(id: number, body = 'comment') {
 beforeEach(() => {
   vi.restoreAllMocks();
   mocks.github.mockReset();
+  mocks.notify.mockReset();
   mocks.agent.mockReset().mockImplementation((tab, message) => {
     if (tab.codexThreadId && !message.codex && !message.deleted)
       message.codex = { threadId: tab.codexThreadId, mode: 'queue', status: 'queued' };
@@ -198,7 +201,7 @@ it('rejects title edits on another author’s PR before calling GitHub', async (
 });
 
 
-describe('manual GitHub refresh', () => {
+describe('GitHub refresh', () => {
   let stop: (() => void) | undefined;
   function cached(number = 1) {
     const value = tab(number);
@@ -219,11 +222,11 @@ describe('manual GitHub refresh', () => {
   });
   afterEach(() => { stop?.(); vi.useRealTimers(); });
 
-  it.each([0, 1, 5])('makes zero idle GitHub requests with %i cached tabs, including startup and reopening', async count => {
+  it.each([0, 1, 5])('uses cached data for %i tabs before the five-minute refresh, including startup and reopening', async count => {
     vi.useFakeTimers();
     mocks.data.tabs = Array.from({ length: count }, (_, index) => cached(index + 1));
     stop = startWorkspace();
-    await vi.advanceTimersByTimeAsync(3600000);
+    await vi.advanceTimersByTimeAsync(299999);
     for (const tab of [...mocks.data.tabs]) {
       await mutateWorkspace({ op: 'select', key: tab.key }, 'review');
       await mutateWorkspace({ op: 'open', url: tab.ref.url }, 'review');
@@ -234,6 +237,96 @@ describe('manual GitHub refresh', () => {
     expect(loadComments).not.toHaveBeenCalled();
     expect(mocks.github).not.toHaveBeenCalled();
     expect(importPull).not.toHaveBeenCalled();
+  });
+  it.each([0, 1, 5])('refreshes all %i open tabs every five minutes and stops when the workspace stops', async count => {
+    vi.useFakeTimers();
+    mocks.data.tabs = Array.from({ length: count }, (_, index) => cached(index + 1));
+    for (const [index, tab] of mocks.data.tabs.entries()) tab.info.state = ['OPEN', 'MERGED', 'CLOSED'][index % 3];
+    mocks.data.archived = [cached(99)];
+    vi.mocked(loadPull).mockImplementation(async ref => ({ ...cached(ref.number).info!, title: `Refreshed ${ref.number}` }));
+    stop = startWorkspace();
+    await vi.advanceTimersByTimeAsync(300000);
+    expect(vi.mocked(loadPull).mock.calls.map(([ref]) => ref.number)).toEqual(mocks.data.tabs.map(tab => tab.ref.number));
+    expect(loadComments).toHaveBeenCalledTimes(count);
+    for (const tab of mocks.data.tabs) expect(tab.info.title).toBe(`Refreshed ${tab.ref.number}`);
+    expect(mocks.data.archived[0].info.title).toBe('PR');
+    await vi.advanceTimersByTimeAsync(300000);
+    expect(loadPull).toHaveBeenCalledTimes(count * 2);
+    expect(loadComments).toHaveBeenCalledTimes(count * 2);
+    expect(importPull).not.toHaveBeenCalled();
+    stop(); stop = undefined;
+    await vi.advanceTimersByTimeAsync(600000);
+    expect(loadPull).toHaveBeenCalledTimes(count * 2);
+  });
+  it('refreshes silently without changing source, reading state, local comments, or checkout activity', async () => {
+    vi.useFakeTimers();
+    const tab = mocks.data.tabs[0];
+    const activity = Date.now() - 15 * 24 * 60 * 60 * 1000;
+    tab.lastUsedAt = activity; tab.updatedAt = activity; tab.view = 'file';
+    const local = { id: 'local', body: 'Private', destination: 'local', kind: 'issue', status: 'done' };
+    tab.comments.push(local);
+    let finish!: (value: any) => void;
+    vi.mocked(loadPull).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const remote = { id: 'remote', remoteId: 42, body: 'New feedback', kind: 'issue', status: 'synced' };
+    vi.mocked(loadComments).mockResolvedValue([remote] as any);
+    stop = startWorkspace(); await vi.advanceTimersByTimeAsync(300000);
+    expect(tab.loading).toBe(false);
+    finish({ ...tab.info, headRefOid: 'new-head', state: 'MERGED' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tab.info.state).toBe('MERGED'); expect(tab.info.headRefOid).toBe('new-head');
+    expect(mocks.notify).toHaveBeenCalledWith('PR', 'PR merged');
+    expect(tab.comments).toEqual([local, remote]);
+    expect(tab.reviewedHead).toBe('head'); expect(tab.view).toBe('file');
+    expect(tab.lastUsedAt).toBe(activity); expect(tab.updatedAt).toBe(Date.now());
+    expect(tab.loading).toBe(false); expect(importPull).not.toHaveBeenCalled();
+    expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.github).not.toHaveBeenCalled();
+  });
+  it('keeps an expired checkout expired during refresh and migrates legacy activity', async () => {
+    vi.useFakeTimers();
+    const expired = cached(2); expired.checkoutEvicted = true;
+    expired.lastUsedAt = 0; expired.updatedAt = Date.now() - 15 * 24 * 60 * 60 * 1000;
+    const activity = expired.updatedAt;
+    mocks.data.tabs.push(expired); vi.mocked(ensureCheckout).mockClear();
+    stop = startWorkspace(); await vi.advanceTimersByTimeAsync(600000);
+    expect(expired.checkoutEvicted).toBe(true);
+    expect(expired.lastUsedAt).toBe(activity); expect(expired.updatedAt).toBe(Date.now());
+    expect(ensureCheckout).not.toHaveBeenCalledWith(expired);
+    expect(importPull).not.toHaveBeenCalled(); expect(loadComments).toHaveBeenCalledWith(expired);
+  });
+  it('keeps cached data after failure and retries on the next five-minute tick', async () => {
+    vi.useFakeTimers();
+    const tab = mocks.data.tabs[0], info = tab.info;
+    vi.mocked(loadPull).mockRejectedValueOnce(new Error('offline'));
+    stop = startWorkspace(); await vi.advanceTimersByTimeAsync(300000);
+    expect(tab.error).toBe('offline'); expect(tab.info).toBe(info); expect(tab.loading).toBe(false);
+    await vi.advanceTimersByTimeAsync(299999); expect(loadPull).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1); expect(loadPull).toHaveBeenCalledTimes(2);
+    expect(tab.error).toBeUndefined(); expect(loadComments).toHaveBeenCalledTimes(1);
+  });
+  it.each([false, true])('coalesces slow polls and waits for a requested full refresh (closed: %s)', async closed => {
+    vi.useFakeTimers();
+    const tab = mocks.data.tabs[0];
+    let finish!: (value: any) => void;
+    vi.mocked(loadPull).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    stop = startWorkspace(); await vi.advanceTimersByTimeAsync(600000);
+    expect(loadPull).toHaveBeenCalledTimes(1);
+    const latest = { ...tab.info, headRefOid: 'new-head' };
+    vi.mocked(loadPull).mockResolvedValue(latest);
+    vi.mocked(importPull).mockImplementation(async tab => { tab.reviewedHead = 'new-head'; });
+    let settled = false;
+    const refresh = mutateWorkspace({ op: 'refresh', key: tab.key }, 'review').then(() => { settled = true; });
+    const repeated = mutateWorkspace({ op: 'refresh', key: tab.key }, 'review');
+    await Promise.resolve(); expect(settled).toBe(false);
+    if (closed) await mutateWorkspace({ op: 'close', key: tab.key }, 'review');
+    finish(latest); await Promise.all([refresh, repeated]);
+    expect(loadPull).toHaveBeenCalledTimes(closed ? 1 : 2);
+    expect(importPull).toHaveBeenCalledTimes(closed ? 0 : 1);
+    expect(tab.reviewedHead).toBe(closed ? 'head' : 'new-head');
+    expect(tab.loading).toBe(false);
+    if (closed) {
+      await vi.advanceTimersByTimeAsync(300000);
+      expect(loadPull).toHaveBeenCalledTimes(1); expect(mocks.data.tabs).toHaveLength(0);
+    }
   });
   it('restores an expired checkout only on selection, without refreshing cached GitHub metadata', async () => {
     vi.useFakeTimers();
@@ -246,13 +339,13 @@ describe('manual GitHub refresh', () => {
     expect(expired.lastUsedAt).toBe(Date.now());
     expect(loadPull).not.toHaveBeenCalled(); expect(loadComments).not.toHaveBeenCalled();
   });
-  it('initializes an unfinished PR once alongside cached tabs without periodic refresh', async () => {
+  it('initializes an unfinished PR immediately alongside cached tabs', async () => {
     vi.useFakeTimers();
     const pending = cached(2); pending.info = null; pending.reviewId = null;
     mocks.data.tabs.push(pending);
     vi.mocked(importPull).mockImplementation(async tab => { tab.reviewId = 'imported'; });
     stop = startWorkspace();
-    await vi.advanceTimersByTimeAsync(3600000);
+    await vi.advanceTimersByTimeAsync(299999);
     expect(loadPull).toHaveBeenCalledTimes(1);
     expect(loadPull).toHaveBeenCalledWith(pending.ref);
     expect(loadComments).toHaveBeenCalledTimes(1);
@@ -269,8 +362,8 @@ describe('manual GitHub refresh', () => {
     await Promise.resolve();
     expect(settled).toBe(false);
     expect(tab.loading).toBe(true);
-    await mutateWorkspace({ op: 'refresh', key: tab.key }, 'review');
-    finish(latest); await refresh;
+    const repeated = mutateWorkspace({ op: 'refresh', key: tab.key }, 'review');
+    finish(latest); await Promise.all([refresh, repeated]);
     expect(loadPull).toHaveBeenCalledTimes(1);
     expect(loadComments).toHaveBeenCalledTimes(1);
     expect(importPull).toHaveBeenCalledTimes(1);
@@ -282,6 +375,7 @@ describe('manual GitHub refresh', () => {
     vi.useFakeTimers();
     const tab = mocks.data.tabs[0];
     tab.info.author.login = 'bob';
+    vi.mocked(loadPull).mockResolvedValue(tab.info);
     tab.comments.push({ id: 'offline', author: 'alice', body: 'Retry me', kind: 'issue', status: 'error', date: '', url: '' });
     mocks.data.outbox.push({ id: 'queued', tab: tab.key, message: 'offline', operation: 'create', nextAttempt: Date.now() + 300000, attempted: false });
     mocks.github.mockResolvedValue(remote(40));
@@ -292,8 +386,8 @@ describe('manual GitHub refresh', () => {
     expect(mocks.github).toHaveBeenCalledTimes(1);
     expect(mocks.github.mock.calls[0][2]).toBe('POST');
     expect(mocks.data.outbox).toHaveLength(0);
-    expect(loadPull).not.toHaveBeenCalled();
-    expect(loadComments).not.toHaveBeenCalled();
+    expect(loadPull).toHaveBeenCalledTimes(1);
+    expect(loadComments).toHaveBeenCalledTimes(1);
   });
 });
 

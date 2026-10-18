@@ -53,7 +53,7 @@ rev uses `gh` credentials; never put tokens in this repository. For multiple acc
 }
 ```
 
-Existing local checkouts can speed up first imports. GitHub metadata stays cached until **Cmd/Ctrl+R**. Comments on other people’s PRs publish immediately; offline writes retry every five minutes. Comments on your own PRs stay local. Disposable managed checkouts expire after two weeks without use or updates, with unpublished work preserved.
+Existing local checkouts can speed up first imports. Every open PR tab refreshes GitHub status, reviewers, CI checks, description and comments in the background every five minutes. **Cmd/Ctrl+R** refreshes immediately and loads new source revisions; background refresh keeps the code snapshot stable while you read. Comments on other people’s PRs publish immediately; offline writes retry every five minutes. Comments on your own PRs stay local. Disposable managed checkouts expire after two weeks without use or updates, with unpublished work preserved.
 
 ### GUIDE and LEARN
 
