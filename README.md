@@ -2,7 +2,7 @@
 
 **rev** (formerly MyReview) is a local GitHub pull-request review app, built on [Glassbox](https://github.com/brianwestphal/glassbox). Keep several PRs open, read full-file unified diffs, navigate with the keyboard, and post comments to GitHub without leaving the app.
 
-The `main` branch contains the current personal app, including its purple portrait icon. Legacy `glassbox` commands and data directories remain compatible. This fork is not the upstream `glassbox` npm package.
+The `main` branch contains the current personal app, including its Git-graph icon. Legacy `glassbox` commands and data directories remain compatible. This fork is not the upstream `glassbox` npm package.
 
 ## Install from source
 
