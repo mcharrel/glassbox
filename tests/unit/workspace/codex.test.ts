@@ -85,3 +85,11 @@ it('does not deliver public comments or a message whose chat binding changed', a
   m.destination = 'local'; delete t.codexThreadId; await flushCodexComments();
   expect(mocks.send).not.toHaveBeenCalled();
 });
+it('never dispatches Main comments, including a legacy local comment queued before the routing fix', async () => {
+  const t = mocks.data.tabs[0], m = message(); m.kind = 'issue'; delete m.path;
+  t.comments.push(m); queueCodexComment(t, m);
+  expect(m.codex).toBeUndefined();
+  m.codex = { threadId: chat, status: 'queued', mode: 'queue' };
+  await flushCodexComments(); expect(mocks.connect).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
+  m.codex.status = 'uncertain'; expect(() => retryCodexComment(t, m)).toThrow('local comments');
+});

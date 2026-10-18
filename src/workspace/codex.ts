@@ -8,7 +8,7 @@ export function commentPrompt(tab: PullTab, message: ThreadMessage): string {
   return `new comment: ${body}\n\nPR: ${tab.ref.url}${location}\nrev comment: ${message.id}\n\nAfter handling this comment, post a concise answer into its rev thread with:\nrev reply ${tab.ref.url} --comment ${message.id} --body-file <reply-file>\nKeep CODEX_THREAD_ID unchanged. Use the existing chat context and normal verification/signing workflow.`;
 }
 export function queueCodexComment(tab: PullTab, message: ThreadMessage): void {
-  if (commentDestination(tab) !== 'local' || message.destination !== 'local') return;
+  if (commentDestination(tab, message) !== 'local' || message.destination !== 'local') return;
   if (tab.codexThreadId === undefined || message.codex || message.deleted || message.kind === 'ai') return;
   message.codex = {
     threadId: tab.codexThreadId,
@@ -19,7 +19,7 @@ export function queueCodexComment(tab: PullTab, message: ThreadMessage): void {
   void flushCodexComments();
 }
 export function retryCodexComment(tab: PullTab, message: ThreadMessage): void {
-  if (commentDestination(tab) !== 'local' || message.destination !== 'local') throw new Error('Codex only handles local comments on your own PRs');
+  if (commentDestination(tab, message) !== 'local' || message.destination !== 'local') throw new Error('Codex only handles local comments on your own PRs');
   if (!message.codex || message.codex.status !== 'uncertain') throw new Error('No uncertain delivery to retry');
   message.codex.status = 'queued';
   delete message.codex.error;
@@ -44,7 +44,7 @@ export async function flushCodexComments(): Promise<void> {
     const connections = new Map<string, Awaited<ReturnType<typeof codexConnection>> | null>();
     // Steers bypass queued ordinary comments, including ones in another PR bound to this chat.
     const pending = [...data.tabs, ...data.archived].flatMap(tab => tab.comments.map(message => ({ tab, message })))
-      .filter(({ tab, message }) => commentDestination(tab) === 'local' && message.destination === 'local'
+      .filter(({ tab, message }) => commentDestination(tab, message) === 'local' && message.destination === 'local'
         && !message.deleted && message.codex?.status === 'queued' && message.codex.threadId === tab.codexThreadId)
       .sort((a, b) => Number(b.message.codex?.mode === 'steer') - Number(a.message.codex?.mode === 'steer'));
     for (const { tab, message } of pending) {
@@ -63,7 +63,7 @@ export async function flushCodexComments(): Promise<void> {
         delivery.error ??= 'Waiting for Codex. Open the originating chat.';
         continue;
       }
-      if (message.deleted || delivery.status !== 'queued' || commentDestination(tab) !== 'local'
+      if (message.deleted || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
         || message.destination !== 'local' || tab.codexThreadId !== delivery.threadId) continue;
       delete delivery.error;
       // Persist before dispatch: a lost acknowledgement must never cause an automatic duplicate.

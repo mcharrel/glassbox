@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import {
+  codeCommentDestination,
   commentDestination,
   type PullTab,
   PullTabSchema,
@@ -280,12 +281,15 @@ function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'ed
   void flushOutbox();
 }
 export function reconcileCommentRouting(tab: PullTab): void {
-  const destination = commentDestination(tab);
+  const codeDestination = codeCommentDestination(tab);
   const data = workspaceData();
-  if (destination === 'github') delete tab.codexThreadId;
+  if (codeDestination === 'github') delete tab.codexThreadId;
   for (const message of tab.comments) {
+    const destination = commentDestination(tab, message);
     const queued = data.outbox.some(item => item.tab === tab.key && item.message === message.id);
-    if (message.destination === 'local' || (destination === 'local' &&
+    // Keep previously private Main conversations private when correcting their routing.
+    const privateHistory = message.destination === 'local' || (message.kind === 'issue' && message.codex !== undefined);
+    if (privateHistory || (destination === 'local' &&
       (queued || message.kind === 'ai' || message.codex))) {
       message.destination = 'local';
       data.outbox = data.outbox.filter(item => item.tab !== tab.key || item.message !== message.id);
@@ -294,13 +298,13 @@ export function reconcileCommentRouting(tab: PullTab): void {
         delete message.error;
       }
     } else if (destination === 'github' && queued) message.destination = 'github';
-    if (destination === 'github') delete message.codex;
+    if (codeDestination === 'github' || message.kind === 'issue') delete message.codex;
     if (destination === 'local' && message.destination === 'local' && message.codexRequested === true && !message.codex)
       queueCodexComment(tab, message);
   }
 }
 function canPublishComment(tab: PullTab, message: ThreadMessage): boolean {
-  return commentDestination(tab) === 'github' && message.destination !== 'local';
+  return commentDestination(tab, message) === 'github' && message.destination !== 'local';
 }
 export async function queueAnnotation(
   reviewId: string,
@@ -576,14 +580,17 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
       tab.comments.find(m => !m.deleted && (input.parentKey !== undefined ? m.id === input.parentKey
         : input.parentId !== undefined && m.remoteId === input.parentId));
     if ((input.parentId !== undefined || input.parentKey !== undefined) && !parent) throw new Error('Comment thread not found');
-    if (input.parentKey !== undefined && commentDestination(tab) !== 'local') throw new Error('Local replies are only available on your own PRs');
+    if (parent?.kind === 'issue' || (parent?.kind === 'ai' && parent.path === undefined))
+      throw new Error('Use the Main view composer to post a PR comment on GitHub');
+    if (input.parentKey !== undefined && codeCommentDestination(tab) !== 'local') throw new Error('Local replies are only available on your own PRs');
     const message: ThreadMessage = {
       id: randomUUID(),
       body: input.body,
       author: tab.viewer || 'You',
       date: new Date().toISOString(),
       url: '',
-      kind: parent?.path !== undefined ? 'review' : 'issue',
+      kind: parent !== undefined ? 'review' : 'issue',
+      destination: input.parentKey !== undefined || parent?.destination === 'local' ? 'local' : undefined,
       parentId: input.parentKey === undefined ? parent?.parentId ?? parent?.remoteId : undefined,
       parentKey: input.parentKey,
       path: parent?.path,
@@ -593,7 +600,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
       status: 'pending',
       editable: true,
       deleted: false,
-      codexRequested: true,
+      codexRequested: parent !== undefined,
     };
     tab.comments.push(message);
     enqueue(tab, message, 'create');

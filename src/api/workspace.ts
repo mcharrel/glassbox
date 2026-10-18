@@ -115,10 +115,15 @@ export const PullTabSchema = z.object({
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
 // Unknown ownership must never default to publishing a private comment.
-export function commentDestination(tab: Pick<PullTab, 'info' | 'viewer'>): 'local' | 'github' | null {
+export function codeCommentDestination(tab: Pick<PullTab, 'info' | 'viewer'>): 'local' | 'github' | null {
   const author = tab.info?.author.login;
   if (!tab.viewer || author === undefined || author === '') return null;
   return tab.viewer.toLowerCase() === author.toLowerCase() ? 'local' : 'github';
+}
+export function commentDestination(tab: Pick<PullTab, 'info' | 'viewer'>, message: Pick<ThreadMessage, 'kind'>): 'local' | 'github' | null {
+  if (message.kind === 'ai') return 'local';
+  if (message.kind === 'issue') return tab.viewer ? 'github' : null;
+  return codeCommentDestination(tab);
 }
 export const WorkspaceSchema = z.object({
   tabs: z.array(PullTabSchema),

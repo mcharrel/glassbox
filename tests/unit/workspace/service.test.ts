@@ -23,7 +23,7 @@ vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   loadPull: vi.fn(),
   loadComments: vi.fn().mockResolvedValue([]),
 }));
-import { flushOutbox, insertTab, mutateWorkspace, startWorkspace, syncTab } from '../../../src/workspace/service.js';
+import { flushOutbox, insertTab, mutateWorkspace, queueAnnotation, startWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
 import { ensureCheckout, importPull } from '../../../src/workspace/checkout.js';
 
@@ -403,11 +403,11 @@ it('recovers interrupted agents in closed tabs so they cannot block retention fo
     expect(archived.comments[0].error).toContain('local edits were preserved');
   } finally { stop(); }
 });
-it('migrates an existing Codex conversation to local-only and preserves it on GitHub refresh', async () => {
+it('migrates an existing code conversation to local-only and preserves it on GitHub refresh', async () => {
   const tab = mocks.data.tabs[0];
   const info = { id: 'pr', author: { login: 'alice' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' };
   tab.info = info; vi.mocked(loadPull).mockResolvedValue(info as any);
-  const original = { id: 'local-comment', remoteId: 42, kind: 'issue', body: 'Please fix this', author: 'alice', date: '', url: '', deleted: false, status: 'synced', editable: true, codex: { threadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', status: 'queued', mode: 'queue' } };
+  const original = { id: 'local-comment', remoteId: 42, kind: 'review', path: 'file.ts', body: 'Please fix this', author: 'alice', date: '', url: '', deleted: false, status: 'synced', editable: true, codex: { threadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', status: 'queued', mode: 'queue' } };
   tab.comments.push(original);
   vi.mocked(loadComments).mockResolvedValueOnce([{ ...original, id: 'remote-comment', codex: undefined, body: 'Updated from GitHub' }] as any);
   await syncTab(tab);
@@ -415,7 +415,7 @@ it('migrates an existing Codex conversation to local-only and preserves it on Gi
   expect(tab.comments[0].codex?.threadId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 });
 
-describe('ownership-based comment routing', () => {
+describe('comment scope and ownership routing', () => {
   const chat = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   function own() {
     const t = mocks.data.tabs[0]; t.info = pullInfo('ALICE'); t.codexThreadId = chat;
@@ -423,14 +423,69 @@ describe('ownership-based comment routing', () => {
     vi.mocked(loadComments).mockResolvedValue([]);
     return t;
   }
-  it('keeps own PR comments, replies, edits and deletes local through refresh', async () => {
+  async function codeComment(t: any, body: string) {
+    const queries = await import('../../../src/db/queries.js');
+    vi.spyOn(queries, 'getReviewFile').mockResolvedValue({ review_id: t.reviewId, file_path: 'file.ts', diff_data: null } as any);
+    await queueAnnotation(t.reviewId, { id: crypto.randomUUID(), content: body, review_file_id: 'file', side: 'new', line_number: 8, created_at: '' } as any);
+  }
+  it.each(['alice', 'bob', null])('publishes Main comments to GitHub for author %s without delivering to Codex', async author => {
+    const t = own(); t.info = author === null ? null : pullInfo(author);
+    mocks.github.mockResolvedValue(remote(120));
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'PR update' }, 'review');
+    await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
+    expect(t.comments[0]).toMatchObject({ kind: 'issue', destination: 'github', status: 'synced', remoteId: 120, codexRequested: false });
+    expect(mocks.github.mock.calls[0][1]).toBe('repos/example/project/issues/1/comments');
+    expect(t.comments[0].codex).toBeUndefined(); expect(mocks.agent).not.toHaveBeenCalled();
+    if (author === 'alice') expect(t.codexThreadId).toBe(chat);
+  });
+  it('publishes edits and deletes of own Main comments and receives remote edits', async () => {
+    const t = own(); mocks.github.mockResolvedValue(remote(121));
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Status update' }, 'review');
+    await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
+    const original = t.comments[0];
+    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Updated status' }, 'review');
+    await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
+    expect(mocks.github.mock.calls[1].slice(1, 3)).toEqual(['repos/example/project/issues/comments/121', 'PATCH']);
+    vi.mocked(loadComments).mockResolvedValue([{ ...original, body: 'Edited on GitHub' }]);
+    await syncTab(t); expect(t.comments[0].body).toBe('Edited on GitHub');
+    await mutateWorkspace({ op: 'delete-comment', key: t.key, id: original.id }, 'review');
+    await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
+    expect(mocks.github.mock.calls[2].slice(1, 3)).toEqual(['repos/example/project/issues/comments/121', 'DELETE']);
+    expect(mocks.agent).not.toHaveBeenCalled();
+  });
+  it('holds Main comments for authentication, then retries offline publication on own PRs', async () => {
+    const t = own(); t.viewer = '';
+    let now = 1000; vi.spyOn(Date, 'now').mockImplementation(() => now);
+    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Public update' }, 'review');
+    await flushOutbox(); expect(mocks.github).not.toHaveBeenCalled();
+    mocks.github.mockRejectedValueOnce(new Error('offline'));
+    t.viewer = 'alice'; await flushOutbox();
+    expect(t.comments[0]).toMatchObject({ destination: 'github', status: 'error' });
+    now += 299999; await flushOutbox(); expect(mocks.github).toHaveBeenCalledTimes(1);
+    mocks.github.mockResolvedValueOnce([]).mockResolvedValueOnce(remote(122));
+    now++; await flushOutbox();
+    expect(t.comments[0].status).toBe('synced'); expect(mocks.data.outbox).toHaveLength(0);
+    expect(mocks.agent).not.toHaveBeenCalled();
+  });
+  it.each(['local', undefined])('does not republish or forward historical private Main conversations (saved destination: %s)', async destination => {
     const t = own();
-    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Please change this' }, 'review');
+    const legacy = { id: 'legacy', kind: 'issue', body: 'Private history', destination, status: 'done', editable: true,
+      codexRequested: true, codex: { threadId: chat, mode: 'queue', status: 'queued' } };
+    t.comments.push(legacy);
+    await flushOutbox(); await syncTab(t);
+    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: legacy.id, body: 'Still private' }, 'review');
+    expect(t.comments[0]).toMatchObject({ destination: 'local', body: 'Still private' });
+    expect(t.comments[0].codex).toBeUndefined(); expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
+    await expect(mutateWorkspace({ op: 'comment', key: t.key, body: 'Reply', parentKey: legacy.id }, 'review')).rejects.toThrow('Main view composer');
+  });
+  it('keeps own PR code comments, replies, edits and deletes local through refresh', async () => {
+    const t = own();
+    await codeComment(t, 'Please change this');
     const first = t.comments[0];
     expect(first).toMatchObject({ destination: 'local', status: 'done', codex: { threadId: chat } });
     await mutateWorkspace({ op: 'comment', key: t.key, body: 'And keep the API', parentKey: first.id }, 'review');
     const reply = t.comments[1];
-    expect(reply).toMatchObject({ destination: 'local', kind: 'issue', parentKey: first.id });
+    expect(reply).toMatchObject({ destination: 'local', kind: 'review', path: 'file.ts', parentKey: first.id });
     await mutateWorkspace({ op: 'edit-comment', key: t.key, id: first.id, body: 'Clarified request' }, 'review');
     await mutateWorkspace({ op: 'delete-comment', key: t.key, id: reply.id }, 'review');
     await syncTab(t);
@@ -441,7 +496,7 @@ describe('ownership-based comment routing', () => {
   });
   it.each(['alice', 'bob'])('waits for ownership and then routes to author %s exactly once', async author => {
     const t = mocks.data.tabs[0]; t.info = null; t.codexThreadId = chat;
-    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Wait for metadata' }, 'review');
+    await codeComment(t, 'Wait for metadata');
     await flushOutbox();
     expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
     expect(mocks.data.outbox).toHaveLength(1);
@@ -457,7 +512,7 @@ describe('ownership-based comment routing', () => {
   });
   it('holds writes when the authenticated viewer is unknown', async () => {
     const t = mocks.data.tabs[0]; t.viewer = '';
-    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Private until identified' }, 'review');
+    await codeComment(t, 'Private until identified');
     await flushOutbox();
     expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
     t.viewer = 'bob'; await flushOutbox();
@@ -466,7 +521,7 @@ describe('ownership-based comment routing', () => {
   it('cancels delayed and ambiguous own-PR writes, including archived edits/deletes, while publishing other PR comments', async () => {
     const mine = own(); const other = tab(2); other.codexThreadId = chat;
     for (const t of [mine, other]) {
-      t.comments.push({ id: `message-${t.key}`, body: 'Saved', author: 'alice', date: '', url: '', kind: 'issue', status: 'pending', codex: { threadId: chat, mode: 'queue', status: 'queued' } });
+      t.comments.push({ id: `message-${t.key}`, body: 'Saved', author: 'alice', date: '', url: '', kind: 'review', path: 'file.ts', status: 'pending', codex: { threadId: chat, mode: 'queue', status: 'queued' } });
       for (const operation of t === mine ? ['create', 'edit', 'delete'] : ['create'])
         mocks.data.outbox.push({ id: `${t.key}-${operation}`, tab: t.key, message: t.comments[0].id, operation, nextAttempt: t === mine ? Date.now() + 300000 : 0, attempted: t === mine });
     }
@@ -479,7 +534,7 @@ describe('ownership-based comment routing', () => {
   });
   it('never publishes a private message if the account subsequently changes', async () => {
     const t = own();
-    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Private' }, 'review');
+    await codeComment(t, 'Private');
     const message = t.comments[0]; t.viewer = 'another-account';
     await mutateWorkspace({ op: 'edit-comment', key: t.key, id: message.id, body: 'Still private' }, 'review');
     await mutateWorkspace({ op: 'delete-comment', key: t.key, id: message.id }, 'review');
@@ -487,7 +542,7 @@ describe('ownership-based comment routing', () => {
     expect(mocks.data.outbox).toHaveLength(0); expect(mocks.github).not.toHaveBeenCalled();
   });
   it('keeps edits of already-public comments local on own PRs without losing them on refresh', async () => {
-    const t = own(); const original = { id: 'existing', remoteId: 106, body: 'Published earlier', kind: 'issue', author: 'alice', date: '', url: 'https://github.com/example/project/pull/1', status: 'synced', editable: true };
+    const t = own(); const original = { id: 'existing', remoteId: 106, body: 'Published earlier', kind: 'review', path: 'file.ts', author: 'alice', date: '', url: 'https://github.com/example/project/pull/1', status: 'synced', editable: true };
     t.comments.push(original); vi.mocked(loadComments).mockResolvedValue([{ ...original } as any]);
     await mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Local correction' }, 'review');
     await syncTab(t); expect(t.comments[0].body).toBe('Local correction');
@@ -497,7 +552,7 @@ describe('ownership-based comment routing', () => {
   });
   it('retains unlinked private comments and only queues fresh requests when their chat is linked later', async () => {
     const t = own(); delete t.codexThreadId;
-    await mutateWorkspace({ op: 'comment', key: t.key, body: 'New request' }, 'review');
+    await codeComment(t, 'New request');
     t.comments.push({ id: 'imported', kind: 'review', body: 'Historical annotation', destination: 'local', status: 'done' });
     await syncTab(t);
     expect(t.comments).toHaveLength(2); expect(t.comments[0].codex).toBeUndefined();
@@ -508,7 +563,7 @@ describe('ownership-based comment routing', () => {
   it('rejects invalid local replies and never turns them into public replies', async () => {
     const t = own();
     await expect(mutateWorkspace({ op: 'comment', key: t.key, body: 'Reply', parentKey: 'missing' }, 'review')).rejects.toThrow('not found');
-    await mutateWorkspace({ op: 'comment', key: t.key, body: 'Root' }, 'review');
+    await codeComment(t, 'Root');
     t.info = pullInfo('bob');
     await expect(mutateWorkspace({ op: 'comment', key: t.key, body: 'Reply', parentKey: t.comments[0].id }, 'review')).rejects.toThrow('own PRs');
     expect(mocks.github).not.toHaveBeenCalled();

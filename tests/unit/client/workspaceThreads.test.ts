@@ -6,7 +6,7 @@ vi.mock('../../../src/client/workspace/state.js', () => ({ activeTab: mocks.acti
 vi.mock('../../../src/client/diff/find.js', () => ({ refreshFind: vi.fn() }));
 vi.mock('../../../src/client/stores/index.js', () => ({ reviewStore: {} }));
 import { threadHtml } from '../../../src/client/workspace/threads.js';
-const root = () => ThreadMessageSchema.parse({ id: 'root', author: 'alice', body: 'Request', date: '', kind: 'issue', status: 'done', destination: 'local' });
+const root = () => ThreadMessageSchema.parse({ id: 'root', author: 'alice', body: 'Request', date: '', kind: 'review', path: 'file.ts', status: 'done', destination: 'local' });
 beforeEach(() => mocks.active.mockReturnValue(PullTabSchema.parse({ key: 'example/project#1', info: pullInfo(), viewer: 'alice', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: null })));
 it('shows local follow-ups and Codex answers without a GitHub ID, share button or offline marker', () => {
   const r = root(); const followup = { ...r, id: 'followup', parentKey: r.id, body: 'Follow-up' };
@@ -23,4 +23,12 @@ it('uses GitHub reply IDs on another PR and does not expose local reply controls
   const html = String(threadHtml(r, [r]));
   expect(html).toContain('data-reply-to="123"'); expect(html).toContain('Reply on GitHub');
   expect(html).toContain('comment-share'); expect(html).not.toContain('data-parent-key');
+});
+it('shows Main comments on own PRs as public without local reply controls', () => {
+  const r = { ...root(), kind: 'issue' as const, path: undefined, destination: 'github' as const,
+    remoteId: 124, status: 'synced' as const, url: 'https://github.com/example/project/pull/1#issuecomment-124' };
+  const html = String(threadHtml(r, [r]));
+  expect(html).toContain('comment-share');
+  expect(html).not.toContain('Reply locally'); expect(html).not.toContain('data-parent-key');
+  expect(html).not.toContain('>Local<'); expect(html).not.toContain('Codex');
 });

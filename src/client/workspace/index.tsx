@@ -265,8 +265,8 @@ export function initWorkspace(): void {
   mount(conversation, () => {
     const tab = activeTab();
     const input = mainSections.querySelector<HTMLTextAreaElement>('.pr-comment-input');
-    if (input) input.placeholder = tab && commentDestination(tab) === 'local' ? 'Comment locally ...'
-      : tab && commentDestination(tab) === 'github' ? 'Comment on GitHub ...' : 'Comment (waiting for PR ownership) ...';
+    if (input) input.placeholder = tab && commentDestination(tab, { kind: 'issue' }) === 'github'
+      ? 'Comment on GitHub ...' : 'Comment (waiting for GitHub authentication) ...';
     queueMicrotask(refreshFind);
     return (
       <>

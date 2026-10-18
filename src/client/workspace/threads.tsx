@@ -97,7 +97,7 @@ export function threadHtml(root: ThreadMessage, comments: ThreadMessage[]) {
 }
 function replyInput(root: ThreadMessage) {
   const tab = activeTab();
-  if (tab && commentDestination(tab) === 'local')
+  if (tab && commentDestination(tab, root) === 'local')
     return <textarea className="pr-reply-input" data-parent-key={root.id} placeholder="Reply locally ..." />;
   if (root.destination !== 'local' && root.kind === 'review' && root.remoteId !== undefined)
     return <textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder="Reply on GitHub ..." />;

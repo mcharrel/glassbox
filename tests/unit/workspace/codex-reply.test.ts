@@ -38,3 +38,8 @@ it.each(['bob', null])('rejects Codex replies on another or unidentified PR (%s)
   expect(() => postCodexReply(input)).toThrow('own PRs');
   expect(mocks.data.tabs[0].comments).toHaveLength(1);
 });
+it('rejects Codex replies to Main comments even when a legacy chat binding remains', () => {
+  mocks.data.tabs[0].comments[0].kind = 'issue';
+  expect(() => postCodexReply(input)).toThrow('local comments');
+  expect(mocks.data.tabs[0].comments).toHaveLength(1);
+});

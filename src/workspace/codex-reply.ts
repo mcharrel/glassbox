@@ -10,7 +10,7 @@ export function postCodexReply(input: { url: string; threadId: string; commentId
   const tab = [...data.tabs, ...data.archived].find(item => item.key === key);
   const original = tab?.comments.find(item => item.id === input.commentId && !item.deleted && item.kind !== 'ai');
   if (!tab || !original) throw new Error('Comment not found in this PR');
-  if (commentDestination(tab) !== 'local' || original.destination !== 'local')
+  if (commentDestination(tab, original) !== 'local' || original.destination !== 'local')
     throw new Error('Codex only handles local comments on your own PRs');
   if (tab.codexThreadId !== input.threadId || original.codex?.threadId !== input.threadId)
     throw new Error('Only the originating Codex chat can answer this comment');
