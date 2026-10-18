@@ -70,7 +70,6 @@ function reviewers(tab: PullTab) {
   const states = tab.info ? reviewerStates(tab.info) : new Map<string, string>();
   return (
     <>
-      <h3>Reviewers</h3>
       {[...states]
         .filter(([name]) => name)
         .map(([name, state]) => (
@@ -91,7 +90,7 @@ function reviewers(tab: PullTab) {
   );
 }
 function checks(tab: PullTab) {
-  if (tab.info?.state === 'MERGED') return <h3>Deployment</h3>;
+  if (tab.info?.state === 'MERGED') return <></>;
   const rank = (check: NonNullable<NonNullable<PullTab['info']>['statusCheckRollup']>[number]) => {
     const state = check.conclusion ?? check.state ?? check.status;
     return ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED'].includes(state ?? '')
@@ -102,7 +101,6 @@ function checks(tab: PullTab) {
   };
   return (
     <>
-      <h3>CI checks</h3>
       {[...(tab.info?.statusCheckRollup ?? [])]
         .sort((a, b) => rank(a) - rank(b))
         .map((check) => (
@@ -168,7 +166,7 @@ export function initWorkspace(): void {
   });
   const mainSections = toElement(
     <div className="pr-main-sections">
-      <section className="pr-reviewers"></section>
+      <section className="pr-reviewers" aria-label="Reviewers"></section>
       <div
         className="workspace-divider"
         role="separator"
@@ -176,7 +174,7 @@ export function initWorkspace(): void {
         aria-label="Resize reviewers"
         tabIndex={0}
       ></div>
-      <section className="pr-checks"></section>
+      <section className="pr-checks" aria-label="Checks"></section>
       <div
         className="workspace-divider"
         role="separator"
@@ -184,8 +182,7 @@ export function initWorkspace(): void {
         aria-label="Resize CI checks"
         tabIndex={0}
       ></div>
-      <section className="pr-conversation">
-        <h3>Comments</h3>
+      <section className="pr-conversation" aria-label="Comments">
         <textarea className="pr-comment-input" placeholder="Comment ..."></textarea>
         <div className="pr-conversation-list"></div>
       </section>

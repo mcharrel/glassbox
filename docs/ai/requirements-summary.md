@@ -1343,3 +1343,5 @@ New local comments use `src/workspace/codex.ts` for durable queue/steer delivery
 `rev reply` and authenticated `/api/workspace/codex-reply` let the originating chat return a concise answer to the same inline/PR comment thread. Chat and PR/comment bindings are checked; identical retries are deduplicated. Replies are local, with no extra GitHub publication.
 
 Personal topbar: Settings lives at the far right of the persistent `ReviewShell` topbar, outside the scrolling diff, instead of beside the PR title. `client/diff/outline.tsx` reconciles only its breadcrumb slot, clears stale outlines when content changes, and binds the dropdown once. Settings remains available in Main/File views and for loading, failed, empty or non-code files. Existing viewport calculations use the diff pane bounds, which already exclude this topbar.
+
+Personal Main view: reviewers, checks/deployment and the PR conversation have no visible section titles; accessible section labels and resizable dividers remain.
