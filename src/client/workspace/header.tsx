@@ -1,5 +1,5 @@
 import type { PullTab } from '../../api/workspace.js';
-import { IconGear, IconX } from '../../icons.js';
+import { IconX } from '../../icons.js';
 
 /** Shared Main/File header; unavailable totals stay pending instead of looking empty. */
 export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null) {
@@ -14,7 +14,6 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
       <h2 data-workspace={own ? 'title' : undefined} title={own ? 'Click to edit PR title' : undefined}>
         {info?.title ?? `${tab.ref.owner}/${tab.ref.repo} #${tab.ref.number}`}
       </h2>
-      <button className="btn btn-xs" data-workspace="settings" title="Settings"><IconGear /></button>
       <button className="btn btn-xs" data-workspace="close" title="Remove PR tab"><IconX /></button>
     </div>
     <div className="pr-counts">

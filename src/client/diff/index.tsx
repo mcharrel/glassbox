@@ -17,7 +17,7 @@ import { applyHighlighting, detectLanguage } from './highlight.js';
 import { handleHunkExpand } from './hunkExpander.js';
 import { bindImageDiff } from './imageDiff/index.js';
 import { bindNoteArtifactRegions } from './noteArtifactRegions.js';
-import { invalidateOutlineCache, loadOutline } from './outline.js';
+import { clearOutline, invalidateOutlineCache, loadOutline } from './outline.js';
 import { selectFile } from './selection.js';
 import { syncSplitColumnHeights } from './splitSync.js';
 
@@ -203,6 +203,7 @@ function setupMount(container: HTMLElement, onDiffRendered: (fileId: string | nu
       // the previous `queueMicrotask` provided, which the image-region geometry
       // depends on.
       onMount: () => {
+        clearOutline();
         const content = diffContentSignal.value;
         if (content.kind === 'loading') { container.style.display = 'flex'; return; }
         if (content.kind === 'empty') return;

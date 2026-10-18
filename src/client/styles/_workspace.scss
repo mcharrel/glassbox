@@ -309,6 +309,22 @@ body[data-workspace-view='file'] .pr-main-sections,
 body[data-workspace-view='file'] .pr-description {
   display: none !important;
 }
+.workspace-topbar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding-right: 8px;
+
+  .outline-context { flex: 1; min-width: 0; }
+  .outline-breadcrumb { overflow: hidden; white-space: nowrap; }
+  .topbar-settings { flex: 0 0 auto; margin-left: auto; }
+}
+body[data-workspace-view='main'] .workspace-topbar .outline-context,
+body[data-workspace-view='main'] .workspace-topbar .outline-dropdown,
+body[data-review-pending='true'] .workspace-topbar .outline-context,
+body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
+  visibility: hidden;
+}
 .file-filter,
 .sort-mode-container,
 .sidebar-share,

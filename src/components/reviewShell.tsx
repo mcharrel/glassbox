@@ -1,7 +1,7 @@
 import type { SafeHtml } from 'kerfjs';
 
 import type { Review, ReviewFile } from '../db/queries.js';
-import { IconActualSize, IconFit, IconZoomIn, IconZoomOut } from '../icons.js';
+import { IconActualSize, IconFit, IconGear, IconZoomIn, IconZoomOut } from '../icons.js';
 import { formatReviewMode } from '../utils/formatReviewMode.js';
 import { FileList } from './fileList.js';
 
@@ -55,6 +55,10 @@ export function ReviewShell({ reviewId, review, files, annotationCounts, staleCo
         </aside>
         <div className="sidebar-resize" id="sidebar-resize"></div>
         <main className="main-content">
+          <div className="outline-bar workspace-topbar" id="outline-bar">
+            <div className="outline-context"></div>
+            <button className="btn btn-xs topbar-settings" data-workspace="settings" title="Settings" aria-label="Settings"><IconGear /></button>
+          </div>
           <div className="welcome-message">
             <h3>Select a file to begin reviewing</h3>
             <p>{files.length} file(s) to review</p>

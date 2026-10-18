@@ -17,6 +17,7 @@ interface OutlineSymbol {
 // Per-container scroll handler, keyed in a WeakMap (same pattern as
 // imageDiff/zoom.ts) instead of poking a mystery expando property on the node.
 const scrollHandlers = new WeakMap<HTMLElement, () => void>();
+const boundBars = new WeakSet<HTMLElement>();
 
 // Reactive sources for the breadcrumb: the file's symbol tree and the
 // currently top-most visible line. The effect() in `loadOutline()` reads both
@@ -32,26 +33,26 @@ export function invalidateOutlineCache(reviewId: string): void {
   for (const key of outlineCache.keys()) if (key.startsWith(reviewId + '|')) outlineCache.delete(key);
 }
 
-// Disposer for the current breadcrumb effect. Held so a file switch (which
-// removes the bar element + creates a fresh one) can release the previous
-// effect's signal subscriptions instead of leaking them.
+// Release the previous file's subscriptions before resetting the breadcrumb.
 let disposeOutlineEffect: (() => void) | null = null;
 
-export async function loadOutline(fileId: string) {
-  const generation = ++outlineGeneration;
-  const reviewId = document.body.dataset.reviewId ?? '';
-  // Tear down the previous breadcrumb effect BEFORE clearing the signals it
-  // reads. On a file switch, kerf may have already replaced `.diff-content`
-  // (which removes the previous bar), so the previous effect is bound to a
-  // now-detached element. Writing to the signals before disposing would fire
-  // the dead effect and call `morph()` on the orphan node.
+export function clearOutline(): void {
+  outlineGeneration++;
   if (disposeOutlineEffect !== null) {
     disposeOutlineEffect();
     disposeOutlineEffect = null;
   }
   symbolsSignal.value = [];
   topLineSignal.value = null;
-  document.querySelectorAll('.outline-bar').forEach(el => { el.remove(); });
+  document.querySelectorAll('.outline-bar:not(.workspace-topbar), .outline-dropdown').forEach(el => { el.remove(); });
+  const context = document.querySelector<HTMLElement>('.workspace-topbar .outline-context');
+  if (context) morph(context, renderBreadcrumb([], null));
+}
+
+export async function loadOutline(fileId: string) {
+  clearOutline();
+  const generation = outlineGeneration;
+  const reviewId = document.body.dataset.reviewId ?? '';
 
   try {
     const key = reviewId + '|' + fileId;
@@ -68,34 +69,26 @@ export async function loadOutline(fileId: string) {
     return;
   }
 
-  // Inject outline bar after the diff-header inside diff-container.
-  const container = document.getElementById('diff-container');
-  const header = container?.querySelector('.diff-header');
-  if (header === undefined || header === null) return;
-
-  const bar = toElement(<div className="outline-bar" id="outline-bar"></div>);
-  header.after(bar);
-
-  // The bar lives inside `#diff-container`, which itself has a `mount()` (see
-  // `setupMount()` in `diff/index.tsx`). kerf forbids nested `mount()` calls
-  // — `assertNotInsideMountedTree` walks ancestors and throws as soon as it
-  // sees the outer mount marker. So we drive the breadcrumb with a plain
-  // `effect()` + `morph()` instead: the effect subscribes to both signals,
-  // and each run reconciles the bar's contents against the latest template.
-  // (`data-morph-skip` on the parent `.diff-content` only affects morph
-  // traversal, not the mount-ancestry check — see GB-800.)
-  // The dropdown is a transient overlay appended to `bar` (see `showDropdown`
-  // below); morph leaves out-of-template children at the tail intact.
+  let bar = document.querySelector<HTMLElement>('.workspace-topbar');
+  if (!bar) {
+    const header = document.getElementById('diff-container')?.querySelector('.diff-header');
+    if (!header) return;
+    bar = toElement(<div className="outline-bar" id="outline-bar"></div>);
+    header.after(bar);
+  }
+  // Reconcile only the breadcrumb so Settings survives file and PR switches.
+  const context = bar.querySelector<HTMLElement>('.outline-context') ?? bar;
   disposeOutlineEffect = effect(() => {
-    morph(bar, renderBreadcrumb(symbolsSignal.value, topLineSignal.value));
+    morph(context, renderBreadcrumb(symbolsSignal.value, topLineSignal.value));
   });
 
-  // Delegate clicks on the breadcrumb up to the bar root so the handler
-  // survives every morph reconciliation.
-  void delegate(bar, 'click', '.outline-breadcrumb', (e) => {
-    e.stopPropagation();
-    toggleDropdown();
-  });
+  if (!boundBars.has(bar)) {
+    boundBars.add(bar);
+    void delegate(bar, 'click', '.outline-breadcrumb', (e) => {
+      e.stopPropagation();
+      toggleDropdown();
+    });
+  }
 
   // Initial top-line snapshot + scroll tracker.
   topLineSignal.value = getTopVisibleLine();
@@ -135,7 +128,6 @@ function getTopVisibleLine(): number | null {
 }
 
 function renderBreadcrumb(symbols: OutlineSymbol[], line: number | null): SafeHtml {
-  if (symbols.length === 0) return <></>;
   const path = line !== null ? findSymbolPath(symbols, line) : [];
   return (
     <div className="outline-breadcrumb">
