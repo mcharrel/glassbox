@@ -144,6 +144,23 @@ const baseLaunch = {
 };
 
 describe('launchReview', () => {
+  it.each(['empty', 'archived', 'loading'])('resumes a %s PR workspace without recreating a closed launch review', async (state) => {
+    workspaceData.mockReturnValueOnce({
+      tabs: state === 'loading' ? [{ key: 'example/project#2', reviewId: null }] : [],
+      archived: state === 'archived' ? [{ key: 'example/project#1', reviewId: 'closed' }] : [],
+      active: null, hasOpenedPullRequest: true,
+    } as any);
+    dbQueries.getLatestInProgressReview.mockResolvedValue(undefined);
+    dbQueries.createReview.mockResolvedValue({ id: 'empty' });
+
+    await launchReview({ ...baseLaunch, resume: true });
+
+    expect(dbQueries.getReview).not.toHaveBeenCalled();
+    expect(dbQueries.getLatestInProgressReview).toHaveBeenCalledWith('/repo', 'workspace');
+    expect(dbQueries.createReview).toHaveBeenCalledWith('/repo', 'rev', 'workspace');
+    expect(startServer).toHaveBeenCalledWith(4183, 'empty', '/repo', expect.anything());
+    expect(gitDiff.getFileDiffs).not.toHaveBeenCalled();
+  });
   it('resumes a tracked PR by identity after its source moved to a managed checkout', async () => {
     workspaceData.mockReturnValueOnce({ tabs: [{ key: 'example/project#1', reviewId: 'saved' }], archived: [], active: 'example/project#1' } as any);
     dbQueries.getReview.mockResolvedValueOnce({ id: 'saved', repo_path: '/managed' });

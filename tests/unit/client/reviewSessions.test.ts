@@ -4,7 +4,7 @@ import { PullTabSchema } from '../../../src/api/workspace.js';
 const api = vi.hoisted(() => vi.fn());
 vi.mock('../../../src/api/_runner.js', () => ({ apiCall: api, OkResponseSchema: {} }));
 vi.mock('../../../src/client/analysisEngine.js', () => ({ stopPolling: vi.fn(), resumePolling: vi.fn(), pollingGeneration: vi.fn(() => 0) }));
-vi.mock('../../../src/client/diff/index.js', () => ({ invalidateDiffCache: vi.fn() }));
+vi.mock('../../../src/client/diff/index.js', () => ({ invalidateDiffCache: vi.fn(), forgetReviewDiff: vi.fn() }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
 vi.stubGlobal('document', { body: { dataset: { reviewId: 'a' } } });
 const { reviewStore, aiStore, editFormSignal } = await import('../../../src/client/stores/index.js');
@@ -192,4 +192,26 @@ it('does not preload expired sources and waits for restoration without losing th
   expect(activeReviewReady()).toBe(true); expect(reviewStore.state.value.files[0].id).toBe('b1');
   workspace.value = { ...workspace.value, active: 'a' }; await tick();
   expect(reviewStore.state.value.currentFileId).toBe('a2'); expect([...reviewStore.state.value.hiddenFileIds]).toEqual(['a1']);
+});
+
+it('forgets closed drafts and does not resurrect cached content when the PR reopens', async () => {
+  dispose = initReviewSessions(); await tick();
+  editFormSignal.value = { annotationId: null, formKey: '3:new', content: 'Discard this draft', category: 'bug' };
+  workspace.value = { tabs: [tab('b')], active: 'b' }; await tick();
+  workspace.value = { tabs: [tab('a'), tab('b')], active: 'a' }; await tick();
+  expect(editFormSignal.value).toBeNull();
+  expect(api.mock.calls.filter(call => call[1] === '/files' && call[2].reviewId === 'a')).toHaveLength(1);
+});
+it('clears the last closed review and ignores its late loading response', async () => {
+  let finish!: (value: unknown) => void;
+  api.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  dispose = initReviewSessions(); await tick();
+  workspace.value = { tabs: [], active: null }; await tick();
+  expect(reviewStore.state.value.files).toEqual([]);
+  expect(aiStore.state.value.fileNotes).toEqual({});
+  expect(reviewStore.state.value.reviewId).toBe('');
+  expect(editFormSignal.value).toBeNull();
+  finish({ scores: [] }); await tick();
+  expect(reviewStore.state.value.files).toEqual([]);
+  expect(window.history.replaceState).toHaveBeenLastCalledWith(null, '', '/');
 });

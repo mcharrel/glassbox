@@ -10,8 +10,8 @@
 - A small `rev` link stays at the very bottom of the tab panel, below the scrolling PR list, and opens the fork's GitHub repository in the default browser.
 - New own PRs appear above other people's PRs. Related stacked PRs are placed together, parent before child. Manual ordering persists.
 - Each PR initially opens its Main view and remembers its last selected view. `r` switches Main and File views.
-- New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; every open tab refreshes metadata and conversations in the background every five minutes. Cmd/Ctrl+R refreshes the selected PR immediately, including source changes.
-- Closing a tab only removes it from the tab list. Pending comments keep syncing, and reopening restores the PR.
+- New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup and when switching tabs; every open tab refreshes metadata and conversations in the background every five minutes. Cmd/Ctrl+R refreshes the selected PR immediately, including source changes.
+- Closing a tab deletes its local review, comments, pending GitHub/Codex deliveries, guidance, attachments, exports, source checkout and cached reading state. Reopening starts fresh. Previously archived tabs are purged on startup. GitHub content and user-owned clones are unaffected. If a managed checkout contains unpublished work or an active agent, closing fails visibly and the tab remains open; it is never silently archived. Shared Git objects needed by other tabs are copied before their provider is deleted.
 
 The desktop app, native menu, loading screens, and share link use the rev name. Existing `.glassbox` data, settings, bundle identity, and `glassbox` commands remain compatible; the local `myreview` command opens the saved PR workspace.
 
@@ -98,7 +98,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 ## GitHub request budget
 
-- All open tabs, including inactive tabs and merged/closed PRs still in the tab list, refresh metadata and comments every five minutes. Removed tabs do not poll. Startup, switching tabs and reopening use the cache immediately. The local client also checks its own server for import, comment, and agent progress; those local reads never contact GitHub.
+- All open tabs, including inactive tabs and merged/closed PRs still in the tab list, refresh metadata and comments every five minutes. Removed tabs do not poll. Startup and switching open tabs use the cache immediately; reopening a removed PR starts fresh. The local client also checks its own server for import, comment, and agent progress; those local reads never contact GitHub.
 - A normal background or explicit refresh uses one GraphQL request for metadata and three REST requests for issue comments, inline comments, and submitted review bodies. More than 99 entries in a collection require extra pagination requests; first-time account identification and source fetches add work.
 - At four requests per refresh, the background budget is about 48 GitHub requests per hour per open PR, plus pagination, explicit actions and retries. No background Git fetches run for cached PRs.
 - New PRs and unfinished imports load immediately. Overlapping requests are coalesced; Cmd/Ctrl+R during a background read waits for one subsequent full refresh, including source changes. Failures retain cached data and retry at the next five-minute tick; closing the app stops polling.

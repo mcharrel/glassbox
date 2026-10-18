@@ -20,6 +20,7 @@ function history() {
   if (!value) { value = { stack: [], cursor: -1 }; histories.set(key, value); }
   return value;
 }
+export function forgetNavigation(reviewId: string): void { histories.delete(reviewId); }
 let navigating = false; // True when back/forward navigation is in progress
 
 /** Push a new entry. Clears the forward stack unless we're navigating. */

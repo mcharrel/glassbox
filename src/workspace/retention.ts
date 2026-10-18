@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { PullTab, ThreadMessage } from '../api/workspace.js';
 import { getDataDir } from '../db/connection.js';
 import { gitAsync } from './checkout.js';
-import { checkoutBusy, withCheckoutLock } from './lifecycle.js';
+import { checkoutBusy, closingTabs, withCheckoutLock } from './lifecycle.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 export const WORKSPACE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -13,12 +13,12 @@ const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 function idle(tab: PullTab, cutoff: number): boolean {
   const data = workspaceData();
   // Metadata polling is not checkout activity; updatedAt is only a legacy fallback.
-  return tab.key !== data.active && !tab.loading && (tab.lastUsedAt || tab.updatedAt) <= cutoff
+  return !closingTabs.has(tab) && tab.key !== data.active && !tab.loading && (tab.lastUsedAt || tab.updatedAt) <= cutoff
     && !tab.comments.some(message => message.kind === 'ai' && message.status === 'working')
     && !data.outbox.some(item => item.tab === tab.key);
 }
 
-async function managedPath(area: 'workspaces' | 'agents', name: string): Promise<string | null> {
+export async function managedPath(area: 'workspaces' | 'agents', name: string): Promise<string | null> {
   const dataDir = getDataDir();
   if (dataDir === null || name !== name.replaceAll(/[\\/]/g, '') || name === '.' || name === '..') return null;
   const root = join(dataDir, area, name);
@@ -30,11 +30,11 @@ async function managedPath(area: 'workspaces' | 'agents', name: string): Promise
   } catch { return null; }
 }
 
-async function clean(root: string): Promise<boolean> {
+export async function clean(root: string): Promise<boolean> {
   return !(await gitAsync(['status', '--porcelain', '--untracked-files=all', '--ignored'], root)).trim();
 }
 
-async function safeHead(root: string, heads: string[]): Promise<boolean> {
+export async function safeHead(root: string, heads: string[]): Promise<boolean> {
   const head = (await gitAsync(['rev-parse', 'HEAD'], root)).trim();
   if (heads.includes(head)) return true;
   // A locally recorded remote branch can prove an old agent commit was published, without an API call.

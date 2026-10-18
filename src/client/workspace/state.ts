@@ -11,6 +11,7 @@ import { showToast } from '../toast.js';
 
 export const workspace = signal<Workspace>({ tabs: [], active: null });
 export const addingPull = signal(false);
+export const workspaceLoaded = signal(false);
 export const reviewRetry = signal(0);
 export const reviewSessionKey = (tab: PullTab): string => `${tab.key}:${tab.reviewId ?? ''}:${tab.reviewedBase}:${tab.reviewedHead}${tab.checkoutEvicted ? ':expired' : ''}`;
 export const reviewLoadState = signal<{ key: string; status: 'loading' | 'ready' | 'error'; error: string | null }>({
@@ -23,6 +24,7 @@ export function activeReviewReady(): boolean {
 }
 let mutationVersion = 0;
 function receive(state: Workspace, preserveSelection: boolean): void {
+  workspaceLoaded.value = true;
   const local = workspace.value;
   const openedExternally = (state.externalSelection ?? 0) !== (local.externalSelection ?? 0);
   if (openedExternally) addingPull.value = false;

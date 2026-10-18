@@ -1,5 +1,6 @@
 import { commentDestination, type PullTab, type ThreadMessage } from '../api/workspace.js';
 import { codexConnection, sendToCodex } from './codex-client.js';
+import { closingTabs } from './lifecycle.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 export function commentPrompt(tab: PullTab, message: ThreadMessage): string {
@@ -8,7 +9,7 @@ export function commentPrompt(tab: PullTab, message: ThreadMessage): string {
   return `new comment: ${body}\n\nPR: ${tab.ref.url}${location}\nrev comment: ${message.id}\n\nAfter handling this comment, post a concise answer into its rev thread with:\nrev reply ${tab.ref.url} --comment ${message.id} --body-file <reply-file>\nKeep CODEX_THREAD_ID unchanged. Use the existing chat context and normal verification/signing workflow.`;
 }
 export function queueCodexComment(tab: PullTab, message: ThreadMessage): void {
-  if (commentDestination(tab, message) !== 'local' || message.destination !== 'local') return;
+  if (closingTabs.has(tab) || commentDestination(tab, message) !== 'local' || message.destination !== 'local') return;
   if (tab.codexThreadId === undefined || message.codex || message.deleted || message.kind === 'ai') return;
   message.codex = {
     threadId: tab.codexThreadId,
@@ -28,7 +29,7 @@ export function retryCodexComment(tab: PullTab, message: ThreadMessage): void {
 }
 export function recoverCodexComments(): void {
   const data = workspaceData();
-  for (const tab of [...data.tabs, ...data.archived]) for (const message of tab.comments) {
+  for (const tab of data.tabs) for (const message of tab.comments) {
     if (message.codex?.status === 'sending') {
       message.codex.status = 'uncertain';
       message.codex.error = 'Delivery was interrupted. Check the Codex chat before resending.';
@@ -43,13 +44,13 @@ export async function flushCodexComments(): Promise<void> {
     const data = workspaceData();
     const connections = new Map<string, Awaited<ReturnType<typeof codexConnection>> | null>();
     // Steers bypass queued ordinary comments, including ones in another PR bound to this chat.
-    const pending = [...data.tabs, ...data.archived].flatMap(tab => tab.comments.map(message => ({ tab, message })))
+    const pending = data.tabs.flatMap(tab => tab.comments.map(message => ({ tab, message })))
       .filter(({ tab, message }) => commentDestination(tab, message) === 'local' && message.destination === 'local'
         && !message.deleted && message.codex?.status === 'queued' && message.codex.threadId === tab.codexThreadId)
       .sort((a, b) => Number(b.message.codex?.mode === 'steer') - Number(a.message.codex?.mode === 'steer'));
     for (const { tab, message } of pending) {
       const delivery = message.codex;
-      if (!delivery) continue;
+      if (!delivery || closingTabs.has(tab) || !data.tabs.includes(tab)) continue;
       let connection = connections.get(delivery.threadId);
       if (connection === undefined) {
         try { connection = await codexConnection(delivery.threadId); }
@@ -63,7 +64,7 @@ export async function flushCodexComments(): Promise<void> {
         delivery.error ??= 'Waiting for Codex. Open the originating chat.';
         continue;
       }
-      if (message.deleted || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
+      if (closingTabs.has(tab) || !data.tabs.includes(tab) || message.deleted || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
         || message.destination !== 'local' || tab.codexThreadId !== delivery.threadId) continue;
       delete delivery.error;
       // Persist before dispatch: a lost acknowledgement must never cause an automatic duplicate.

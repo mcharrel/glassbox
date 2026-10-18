@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import { commentDestination, type ThreadMessage } from '../api/workspace.js';
 import { parsePullUrl, pullKey } from './github.js';
+import { closingTabs } from './lifecycle.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 export function postCodexReply(input: { url: string; threadId: string; commentId: string; body: string }): string {
   const data = workspaceData();
   const key = pullKey(parsePullUrl(input.url));
-  const tab = [...data.tabs, ...data.archived].find(item => item.key === key);
+  const tab = data.tabs.find(item => item.key === key && !closingTabs.has(item));
   const original = tab?.comments.find(item => item.id === input.commentId && !item.deleted && item.kind !== 'ai');
   if (!tab || !original) throw new Error('Comment not found in this PR');
   if (commentDestination(tab, original) !== 'local' || original.destination !== 'local')

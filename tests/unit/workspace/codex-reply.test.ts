@@ -28,9 +28,10 @@ it('rejects another chat, wrong PR, deleted comment and remote-only comments', (
   mocks.data.tabs[0].comments[0].deleted = true;
   expect(() => postCodexReply(input)).toThrow('not found');
 });
-it('allows an in-flight answer to reach a closed PR tab without reopening it', () => {
+it('rejects answers to deleted PR tabs', () => {
   mocks.data.archived = mocks.data.tabs; mocks.data.tabs = [];
-  postCodexReply(input); expect(mocks.data.tabs).toHaveLength(0); expect(mocks.data.archived[0].comments).toHaveLength(2);
+  expect(() => postCodexReply(input)).toThrow('not found');
+  expect(mocks.data.archived[0].comments).toHaveLength(1);
 });
 
 it.each(['bob', null])('rejects Codex replies on another or unidentified PR (%s)', author => {

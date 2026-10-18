@@ -5,7 +5,7 @@ import { dirname,join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { registerChannel } from './channel-config.js';
-import { getReview } from './db/queries.js';
+import { createReview, getLatestInProgressReview, getReview } from './db/queries.js';
 import { readGlobalConfig } from './global-config.js';
 import { initContentPlugins, notifyReviewCreated } from './plugins/index.js';
 import { aiApiRoutes } from './routes/ai-api.js';
@@ -54,12 +54,21 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
     await next();
   });
 
+  let emptyWorkspace: ReturnType<typeof createReview> | undefined;
   // Inject context
   app.use('*', async (c, next) => {
     const queryId = c.req.query('reviewId');
-    const requestedId = queryId === undefined || queryId === '' ? reviewId : queryId;
-    const requested = requestedId === reviewId ? null : await getReview(requestedId);
-    if (requestedId !== reviewId && !requested) return c.req.path.startsWith('/api/')
+    const explicit = queryId !== undefined && queryId !== '';
+    let requestedId = explicit ? queryId : reviewId;
+    let requested = await getReview(requestedId);
+    // Closing the launch tab must leave a usable empty workspace, including after reload.
+    if (!requested && !explicit) {
+      emptyWorkspace ??= getLatestInProgressReview(repoRoot, 'workspace')
+        .then(review => review ?? createReview(repoRoot, 'rev', 'workspace'));
+      requested = await emptyWorkspace;
+      requestedId = requested.id;
+    }
+    if (!requested) return c.req.path.startsWith('/api/')
       ? c.json({ error: 'Review not found' }, 404) : c.text('Review not found', 404);
     const tab = tabForReview(requestedId);
     if (tab && (c.req.path.startsWith('/file/') || c.req.path === '/file-raw')) {
@@ -72,7 +81,7 @@ export async function startServer(port: number, reviewId: string, repoRoot: stri
     }
     c.set('reviewId', requestedId);
     c.set('currentReviewId', reviewId);
-    c.set('repoRoot', requested?.repo_path ?? tabForReview(requestedId)?.repoRoot ?? repoRoot);
+    c.set('repoRoot', requested.repo_path);
     c.set('onCompleteCommand', requestedId === reviewId ? onCompleteCommand : null);
     await next();
   });

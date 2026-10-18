@@ -17,6 +17,7 @@ export const OutboxItemSchema = z.object({
 const DiskSchema = WorkspaceSchema.extend({
   outbox: z.array(OutboxItemSchema).default([]),
   archived: z.array(PullTabSchema).default([]),
+  hasOpenedPullRequest: z.boolean().optional(),
 });
 export type WorkspaceDisk = z.infer<typeof DiskSchema>;
 let loaded: { path: string; data: WorkspaceDisk } | null = null;
@@ -36,12 +37,14 @@ export function workspaceData(): WorkspaceDisk {
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
   }
+  data.hasOpenedPullRequest ||= data.tabs.length > 0 || data.archived.length > 0;
   loaded = { path, data };
   return data;
 }
 export function saveWorkspace(): void {
   workspaceData();
   if (!loaded) return;
+  loaded.data.hasOpenedPullRequest ||= loaded.data.tabs.length > 0 || loaded.data.archived.length > 0;
   const root = getDataDir();
   if (root === null) throw new Error('Storage unavailable');
   mkdirSync(root, { recursive: true });

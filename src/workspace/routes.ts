@@ -25,7 +25,7 @@ workspaceRoutes.post('/codex-open', async c => {
   if (!parsed.ok) return parsed.response;
   try {
     const key = pullKey(parsePullUrl(parsed.data.url));
-    const before = [...workspaceData().tabs, ...workspaceData().archived].find(tab => tab.key === key);
+    const before = workspaceData().tabs.find(tab => tab.key === key);
     if (before && codeCommentDestination(before) !== 'github' && parsed.data.threadId !== undefined && before.codexThreadId !== undefined && before.codexThreadId !== parsed.data.threadId)
       return c.json({ error: 'This PR is already linked to another Codex chat' }, 409);
     await mutateWorkspace({ op: 'open', url: parsed.data.url }, c.get('reviewId'));

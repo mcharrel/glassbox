@@ -23,6 +23,7 @@ import {
 import { parseDiffData } from '../git/parseDiffData.js';
 import { ensureCheckout, importPull } from './checkout.js';
 import { flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment } from './codex.js';
+import { discardTabData } from './discard.js';
 import {
   github,
   loadComments,
@@ -34,6 +35,7 @@ import {
   RemoteCommentSchema,
   repoApi,
 } from './github.js';
+import { closingTabs, waitForCheckouts, withCheckoutLock } from './lifecycle.js';
 import { notify } from './notifications.js';
 import { startWorkspaceCleanup } from './retention.js';
 import { saveWorkspace, workspaceData } from './storage.js';
@@ -44,11 +46,12 @@ const BACKGROUND_REFRESH_MS = 5 * 60 * 1000;
 let flushing = false;
 export function tabForReview(reviewId: string): PullTab | undefined {
   const data = workspaceData();
-  return [...data.tabs, ...data.archived].find((t) => t.reviewId === reviewId);
+  return data.tabs.find((t) => t.reviewId === reviewId && !closingTabs.has(t));
 }
 function requireTab(key: string): PullTab {
   const tab = workspaceData().tabs.find((t) => t.key === key);
   if (!tab) throw new Error('PR tab not found');
+  if (closingTabs.has(tab)) throw new Error('This PR tab is closing');
   return tab;
 }
 export function insertTab(tabs: PullTab[], tab: PullTab): void {
@@ -87,6 +90,7 @@ function notifyChanges(before: PullTab['info'], tab: PullTab): void {
   if (before.state !== 'MERGED' && after.state === 'MERGED') notify(after.title, 'PR merged');
 }
 export function syncTab(tab: PullTab, mode: SyncMode = 'initial'): Promise<void> {
+  if (closingTabs.has(tab) || !workspaceData().tabs.includes(tab)) return Promise.resolve();
   const existing = syncing.get(tab.key);
   if (existing) {
     if (mode === 'refresh' && existing.mode !== 'refresh') {
@@ -113,7 +117,7 @@ async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
         ? Promise.resolve({ login: tab.viewer })
         : github(tab.ref, 'user').then((v) => z.object({ login: z.string() }).parse(v)),
     ]);
-    if (!workspaceData().tabs.includes(tab)) return;
+    if (!workspaceData().tabs.includes(tab) || closingTabs.has(tab)) return;
     tab.info = info;
     tab.viewer = viewer.login;
     reconcileCommentRouting(tab);
@@ -146,7 +150,7 @@ async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
       })(),
     ]);
     for (const result of results) if (result.status === 'rejected') throw result.reason;
-    if (tab.importLocalComments && tab.reviewId !== null) {
+    if (!closingTabs.has(tab) && tab.importLocalComments && tab.reviewId !== null) {
       for (const annotation of await getAnnotationsForReview(tab.reviewId)) {
         if (!tab.comments.some((message) => message.annotationId === annotation.id))
           await queueAnnotation(tab.reviewId, annotation, false);
@@ -174,6 +178,7 @@ async function syncComments(tab: PullTab): Promise<void> {
     tab.comments.filter((message) => message.remoteId !== undefined).map((message) => message.remoteId),
   );
   const remote = await loadComments(tab);
+  if (!workspaceData().tabs.includes(tab) || closingTabs.has(tab)) return;
   for (const item of workspaceData().outbox) if (item.tab === tab.key) pendingIds.add(item.message);
   for (const message of tab.comments)
     if (message.remoteId !== undefined && !knownRemoteIds.has(message.remoteId)) pendingIds.add(message.id);
@@ -236,6 +241,13 @@ export function startWorkspace(pinnedRoot?: string): () => void {
     else if (tab.key === data.active) void ensureCheckout(tab).catch(() => {});
   }
   saveWorkspace();
+  for (const tab of [...data.archived]) void discardTab(tab).catch((error: unknown) => {
+    // Never hide retained local work after a failed cleanup.
+    data.archived = data.archived.filter(item => item !== tab);
+    if (!data.tabs.some(item => item.key === tab.key)) data.tabs.push(tab);
+    tab.error = String(error);
+    saveWorkspace();
+  });
   const refreshTimer = setInterval(() => {
     for (const tab of workspaceData().tabs) {
       const mode = needsInitialSync(tab) && !tab.checkoutEvicted ? 'initial' : 'background';
@@ -259,6 +271,7 @@ export function startWorkspace(pinnedRoot?: string): () => void {
   };
 }
 function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'edit' | 'delete'): void {
+  if (closingTabs.has(tab) || !workspaceData().tabs.includes(tab)) return;
   tab.lastUsedAt = Date.now();
   message.status = 'pending';
   const data = workspaceData();
@@ -361,14 +374,15 @@ export async function flushOutbox(): Promise<void> {
   flushing = true;
   try {
     const data = workspaceData();
-    for (const tab of [...data.tabs, ...data.archived]) reconcileCommentRouting(tab);
+    data.outbox = data.outbox.filter(item => data.tabs.some(tab => tab.key === item.tab));
+    for (const tab of data.tabs) reconcileCommentRouting(tab);
     saveWorkspace();
     for (const item of [...data.outbox]) {
       if (!data.outbox.includes(item) || item.nextAttempt > Date.now()) continue;
-      const tab = [...data.tabs, ...data.archived].find((t) => t.key === item.tab);
+      const tab = data.tabs.find((t) => t.key === item.tab && !closingTabs.has(t));
       const message = tab?.comments.find((m) => m.id === item.message);
       if (!tab || !message) continue;
-      if (!canPublishComment(tab, message)) continue;
+      if (closingTabs.has(tab) || !data.tabs.includes(tab) || !data.outbox.includes(item) || !canPublishComment(tab, message)) continue;
       if (
         item.operation !== 'create' &&
         message.remoteId === undefined &&
@@ -411,7 +425,7 @@ export async function flushOutbox(): Promise<void> {
             continue;
           }
           if (message.remoteId === undefined) {
-            if (!canPublishComment(tab, message)) continue;
+            if (closingTabs.has(tab) || !data.tabs.includes(tab) || !data.outbox.includes(item) || !canPublishComment(tab, message)) continue;
             item.attempted = true;
             saveWorkspace();
             const location =
@@ -475,17 +489,35 @@ export async function flushOutbox(): Promise<void> {
     flushing = false;
   }
 }
+const discarding = new Map<string, Promise<void>>();
+let discardQueue: Promise<void> = Promise.resolve();
+async function discardTab(tab: PullTab): Promise<void> {
+  const existing = discarding.get(tab.key);
+  if (existing) return existing;
+  closingTabs.add(tab);
+  const pending = discardQueue.catch(() => {}).then(async () => {
+    await syncing.get(tab.key)?.promise;
+    await waitForCheckouts();
+    await withCheckoutLock(tab.key, () => discardTabData(tab));
+    const data = workspaceData();
+    data.tabs = data.tabs.filter(item => item !== tab);
+    data.archived = data.archived.filter(item => item !== tab);
+    data.outbox = data.outbox.filter(item => item.tab !== tab.key);
+    if (data.active === tab.key) data.active = data.tabs[0]?.key ?? null;
+    saveWorkspace();
+  }).finally(() => { closingTabs.delete(tab); discarding.delete(tab.key); });
+  discardQueue = pending;
+  discarding.set(tab.key, pending);
+  return pending;
+}
 export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId: string): Promise<void> {
   const data = workspaceData();
   if (input.op === 'open') {
     const ref = parsePullUrl(input.url);
+    await discarding.get(pullKey(ref));
+    const archived = data.archived.find(t => t.key === pullKey(ref));
+    if (archived) await discardTab(archived);
     let tab = data.tabs.find((t) => t.key === pullKey(ref));
-    const archived = data.archived.find((t) => t.key === pullKey(ref));
-    if (!tab && archived) {
-      tab = archived;
-      data.archived = data.archived.filter((t) => t !== archived);
-      insertTab(data.tabs, archived);
-    }
     if (!tab) {
       tab = PullTabSchema.parse({
         key: pullKey(ref),
@@ -525,6 +557,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     saveWorkspace();
     return;
   }
+  if (input.op === 'close' && discarding.has(input.key)) { await discarding.get(input.key); return; }
   const tab = requireTab(input.key);
   tab.lastUsedAt = Date.now();
   if (input.op === 'retry-codex') {
@@ -545,9 +578,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   }
   if (input.op === 'view') tab.view = input.view;
   if (input.op === 'close') {
-    data.tabs = data.tabs.filter((t) => t !== tab);
-    data.archived.push(tab);
-    if (data.active === tab.key) data.active = data.tabs[0]?.key ?? null;
+    await discardTab(tab);
     const next = data.tabs.find(item => item.key === data.active);
     if (next) void ensureCheckout(next).catch(() => {});
   }

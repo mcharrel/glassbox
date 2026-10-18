@@ -293,8 +293,10 @@ export function initWorkspace(): void {
   const descriptionDrafts = new Map<string, Node[]>();
   effect(() => {
     const tab = activeTab();
+    const keys = new Set(workspace.value.tabs.map(item => item.key));
+    for (const key of descriptionDrafts.keys()) if (!keys.has(key)) descriptionDrafts.delete(key);
     if (descriptionKey !== tab?.key) {
-      if (descriptionKey !== undefined && editingDescription) descriptionDrafts.set(descriptionKey, [...description.childNodes]);
+      if (descriptionKey !== undefined && keys.has(descriptionKey) && editingDescription) descriptionDrafts.set(descriptionKey, [...description.childNodes]);
       descriptionKey = tab?.key;
       const draft = descriptionKey === undefined ? undefined : descriptionDrafts.get(descriptionKey);
       editingDescription = draft !== undefined;

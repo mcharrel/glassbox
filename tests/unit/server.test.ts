@@ -2,6 +2,12 @@ vi.mock('../../src/workspace/control.js', () => ({ registerControl: vi.fn(() => 
 vi.mock('../../src/workspace/service.js', () => ({ startWorkspace: vi.fn(() => () => {}), mutateWorkspace: vi.fn(), tabForReview: vi.fn() }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('../../src/db/queries.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../src/db/queries.js')>(),
+  getReview: vi.fn(), getLatestInProgressReview: vi.fn(), createReview: vi.fn(),
+}));
+import { createReview, getLatestInProgressReview, getReview } from '../../src/db/queries.js';
+
 // Mock @hono/node-server before importing the module under test
 const mockServer = {
   on: vi.fn((event: string, cb: () => void) => {
@@ -40,6 +46,7 @@ vi.mock('../../src/routes/api.js', () => {
   const { Hono } = require('hono');
   const routes = new Hono();
   routes.get('/ping', (c: any) => c.json({ ok: true }));
+  routes.get('/context', (c: any) => c.json({ reviewId: c.get('reviewId') }));
   return { apiRoutes: routes };
 });
 
@@ -66,6 +73,9 @@ import { openOS } from '../../src/utils/openOS.js';
 describe('startServer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getReview).mockImplementation(async id => ({ id, repo_path: '/tmp/repo', repo_name: 'repo', mode: 'workspace', mode_args: null, head_commit: null, status: 'in_progress', created_at: '', updated_at: '' }));
+    vi.mocked(getLatestInProgressReview).mockReset().mockResolvedValue(undefined);
+    vi.mocked(createReview).mockReset();
     // Reset the mock server's on handler for each test
     mockServer.on.mockImplementation((event: string, cb: () => void) => {
       if (event === 'listening') {
@@ -80,6 +90,19 @@ describe('startServer', () => {
     const response = await handler(new Request('http://localhost:4183/api/ping?reviewId='));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
+  });
+
+  it('keeps an empty workspace usable after deleting the launch review, but rejects explicit deleted links', async () => {
+    await startServer(4183, 'deleted', '/tmp/repo', { noOpen: true });
+    vi.mocked(getReview).mockResolvedValue(undefined);
+    vi.mocked(createReview).mockResolvedValue({ id: 'empty', repo_path: '/tmp/repo', repo_name: 'rev', mode: 'workspace', mode_args: null, head_commit: null, status: 'in_progress', created_at: '', updated_at: '' });
+    const handler = vi.mocked(serve).mock.calls.at(-1)![0].fetch;
+    expect((await handler(new Request('http://localhost:4183/?reviewId=deleted'))).status).toBe(404);
+    const first = await handler(new Request('http://localhost:4183/api/context'));
+    expect(first.status).toBe(200); expect(await first.json()).toEqual({ reviewId: 'empty' });
+    expect((await handler(new Request('http://localhost:4183/'))).status).toBe(200);
+    expect(createReview).toHaveBeenCalledTimes(1);
+    expect(createReview).toHaveBeenCalledWith('/tmp/repo', 'rev', 'workspace');
   });
 
   it('calls serve with the correct port and hostname', async () => {

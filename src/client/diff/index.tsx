@@ -16,6 +16,7 @@ import { navigateToLocation } from './goToDefinition.js';
 import { applyHighlighting, detectLanguage } from './highlight.js';
 import { handleHunkExpand } from './hunkExpander.js';
 import { bindImageDiff } from './imageDiff/index.js';
+import { forgetNavigation } from './navStack.js';
 import { bindNoteArtifactRegions } from './noteArtifactRegions.js';
 import { clearOutline, invalidateOutlineCache, loadOutline } from './outline.js';
 import { selectFile } from './selection.js';
@@ -50,6 +51,7 @@ interface CachedDiff { html: string; kind: DiffContent['kind']; node?: HTMLEleme
 const diffCache = new Map<string, CachedDiff>();
 const diffLoads = new Map<string, Promise<CachedDiff>>();
 const reviewVersions = new Map<string, number>();
+const diffControllers = new Map<string, AbortController>();
 const diffResource = resource<CachedDiff, { fileId: string; reviewId: string; key: string }>();
 
 export function saveDiffScroll(): void {
@@ -140,14 +142,16 @@ function setupFetchEffect(): void {
       let pending = diffLoads.get(key);
       if (!pending) {
         pending = (async () => {
-          const res = await fetch('/file/' + fileId + params);
+          const controller = new AbortController();
+          diffControllers.set(key, controller);
+          const res = await fetch('/file/' + fileId + params, { signal: controller.signal });
           if (!res.ok) throw new Error(`/file/${fileId} returned ${String(res.status)}`);
           const html = await res.text();
           const kind: DiffContent['kind'] = html.includes('class="image-diff"') ? 'image' : 'text';
           const value = { html, kind };
-          diffCache.set(key, value);
+          if (!controller.signal.aborted) diffCache.set(key, value);
           return value;
-        })().finally(() => { diffLoads.delete(key); });
+        })().finally(() => { diffLoads.delete(key); diffControllers.delete(key); });
         diffLoads.set(key, pending);
       }
       return pending;
@@ -665,6 +669,17 @@ export function updateNavFilePath(filePath: string): void {
  *  unchanged. Use after a server-side mutation that affects the diff —
  *  the refresh button (`/review/refresh`), an annotation drag-drop move,
  *  etc. */
+export function forgetReviewDiff(reviewId: string): void {
+  invalidateOutlineCache(reviewId);
+  forgetNavigation(reviewId);
+  reviewVersions.delete(reviewId);
+  for (const key of diffCache.keys()) if (key.startsWith(reviewId + '|')) diffCache.delete(key);
+  for (const [key, controller] of diffControllers) if (key.startsWith(reviewId + '|')) {
+    controller.abort(); diffControllers.delete(key); diffLoads.delete(key);
+  }
+  if (diffResource.value.input?.reviewId === reviewId) diffResource.reset();
+}
+
 export function invalidateDiffCache(reviewId = reviewStore.state.value.reviewId): void {
   invalidateOutlineCache(reviewId);
   reviewVersions.set(reviewId, (reviewVersions.get(reviewId) ?? 0) + 1);

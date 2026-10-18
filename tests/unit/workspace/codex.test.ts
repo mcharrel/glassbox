@@ -58,13 +58,12 @@ it('does not retry uncertain delivery automatically, including across app restar
   await vi.waitFor(() => expect(m.codex?.status).toBe('sent'));
   expect(mocks.send).toHaveBeenCalledTimes(2);
 });
-it('ignores remote, old, deleted and already delivered comments but preserves an archived pending one', async () => {
+it('never delivers queued comments from closed tabs', async () => {
   const t = mocks.data.tabs[0]; const remote = message(); const deleted = message();
   deleted.deleted = true; deleted.codex = { threadId: chat, status: 'queued', mode: 'queue' };
   const pending = message(); pending.codex = { threadId: chat, status: 'queued', mode: 'queue' };
   t.comments.push(remote, deleted, pending); mocks.data.archived.push(t); mocks.data.tabs = [];
-  await flushCodexComments(); expect(mocks.send).toHaveBeenCalledTimes(1);
-  expect(mocks.send.mock.calls[0][4]).toBe(pending.id);
+  await flushCodexComments(); expect(mocks.send).not.toHaveBeenCalled();
 });
 
 it.each(['bob', null])('never connects or sends on another or unidentified PR (%s)', async author => {

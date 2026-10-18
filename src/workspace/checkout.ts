@@ -11,7 +11,7 @@ import { addReviewFile, createReview, updateReviewSource } from '../db/queries.j
 import { parseDiff } from '../git/parseDiff.js';
 import { updateReviewDiffs } from '../review-update.js';
 import { github, githubToken, repoApi } from './github.js';
-import { withCheckoutLock } from './lifecycle.js';
+import { closingTabs, withCheckoutLock } from './lifecycle.js';
 import { findLocalRepository } from './repositories.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
@@ -52,17 +52,17 @@ async function remoteMergeBase(tab: PullTab): Promise<string> {
 }
 /** Import into a dedicated checkout; never switch the user's existing working tree. */
 export async function importPull(tab: PullTab): Promise<void> {
-  return withCheckoutLock(tab.key, () => prepareCheckout(tab, false));
+  return withCheckoutLock(tab.key, async () => { if (!closingTabs.has(tab)) await prepareCheckout(tab, false); });
 }
 
 const restoring = new Map<string, Promise<void>>();
 /** Recreate the exact saved source snapshot without rewriting review files or annotations. */
 export async function ensureCheckout(tab: PullTab): Promise<void> {
-  if (!tab.checkoutEvicted) return;
+  if (!tab.checkoutEvicted || closingTabs.has(tab)) return;
   const existing = restoring.get(tab.key);
   if (existing) return existing;
   const pending = withCheckoutLock(tab.key, async () => {
-    if (!tab.checkoutEvicted) return;
+    if (!tab.checkoutEvicted || closingTabs.has(tab)) return;
     tab.loading = true;
     tab.error = undefined;
     tab.lastUsedAt = Date.now();
@@ -103,7 +103,7 @@ async function prepareCheckout(tab: PullTab, restore: boolean): Promise<void> {
     (!tab.checkoutEvicted ? tab.repoRoot : null) ??
     workspaceData().tabs.find(
       (other) =>
-        other.key !== tab.key && !other.checkoutEvicted && other.ref.owner === tab.ref.owner && other.ref.repo === tab.ref.repo && other.repoRoot !== null,
+        other.key !== tab.key && !closingTabs.has(other) && !other.checkoutEvicted && other.ref.owner === tab.ref.owner && other.ref.repo === tab.ref.repo && other.repoRoot !== null,
     )?.repoRoot ?? await findLocalRepository(tab.ref);
   if (source !== undefined && source !== root) {
     const objects = (

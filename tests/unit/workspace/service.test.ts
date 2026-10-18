@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   agent: vi.fn(),
   notify: vi.fn(),
+  discard: vi.fn(),
 }));
 vi.mock('../../../src/workspace/storage.js', () => ({
   workspaceData: () => mocks.data,
@@ -15,6 +16,7 @@ vi.mock('../../../src/workspace/storage.js', () => ({
 }));
 vi.mock('../../../src/workspace/codex.js', () => ({ queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
 vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../../src/workspace/discard.js', () => ({ discardTabData: mocks.discard }));
 vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
 vi.mock('../../../src/workspace/notifications.js', () => ({ notify: mocks.notify }));
 vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
@@ -49,6 +51,7 @@ function remote(id: number, body = 'comment') {
 beforeEach(() => {
   vi.restoreAllMocks();
   mocks.github.mockReset();
+  mocks.discard.mockReset().mockResolvedValue(undefined);
   mocks.notify.mockReset();
   mocks.agent.mockReset().mockImplementation((tab, message) => {
     if (tab.codexThreadId && !message.codex && !message.deleted)
@@ -88,7 +91,7 @@ describe('durable comment outbox', () => {
     expect(message.remoteId).toBe(11);
     expect(mocks.github.mock.calls.filter((call) => call[2] === 'POST')).toHaveLength(1);
   });
-  it('continues syncing offline comments after their tab is closed', async () => {
+  it('deletes closed tabs and cancels their offline comments', async () => {
     let now = 1000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     mocks.github.mockRejectedValueOnce(new Error('offline'));
@@ -96,11 +99,13 @@ describe('durable comment outbox', () => {
     await vi.waitFor(() => expect(mocks.data.tabs[0].comments[0].status).toBe('error'));
     await mutateWorkspace({ op: 'close', key: 'example/project#1' }, 'review');
     expect(mocks.data.tabs).toHaveLength(0);
-    expect(mocks.data.archived).toHaveLength(1);
+    expect(mocks.data.archived).toHaveLength(0);
+    expect(mocks.data.outbox).toHaveLength(0);
+    expect(mocks.discard).toHaveBeenCalledTimes(1);
     mocks.github.mockResolvedValueOnce([]).mockResolvedValueOnce(remote(12));
     now += 300000;
     await flushOutbox();
-    expect(mocks.data.archived[0].comments[0].status).toBe('synced');
+    expect(mocks.github).toHaveBeenCalledTimes(1);
   });
   it('rejects editing somebody else’s comment without contacting GitHub', async () => {
     mocks.data.tabs[0].comments.push({ id: 'other', editable: false });
@@ -222,15 +227,13 @@ describe('GitHub refresh', () => {
   });
   afterEach(() => { stop?.(); vi.useRealTimers(); });
 
-  it.each([0, 1, 5])('uses cached data for %i tabs before the five-minute refresh, including startup and reopening', async count => {
+  it.each([0, 1, 5])('uses cached data for %i tabs before the five-minute refresh, including startup and selecting an already-open PR', async count => {
     vi.useFakeTimers();
     mocks.data.tabs = Array.from({ length: count }, (_, index) => cached(index + 1));
     stop = startWorkspace();
     await vi.advanceTimersByTimeAsync(299999);
     for (const tab of [...mocks.data.tabs]) {
       await mutateWorkspace({ op: 'select', key: tab.key }, 'review');
-      await mutateWorkspace({ op: 'open', url: tab.ref.url }, 'review');
-      await mutateWorkspace({ op: 'close', key: tab.key }, 'review');
       await mutateWorkspace({ op: 'open', url: tab.ref.url }, 'review');
     }
     expect(loadPull).not.toHaveBeenCalled();
@@ -249,7 +252,7 @@ describe('GitHub refresh', () => {
     expect(vi.mocked(loadPull).mock.calls.map(([ref]) => ref.number)).toEqual(mocks.data.tabs.map(tab => tab.ref.number));
     expect(loadComments).toHaveBeenCalledTimes(count);
     for (const tab of mocks.data.tabs) expect(tab.info.title).toBe(`Refreshed ${tab.ref.number}`);
-    expect(mocks.data.archived[0].info.title).toBe('PR');
+    expect(mocks.data.archived).toEqual([]);
     await vi.advanceTimersByTimeAsync(300000);
     expect(loadPull).toHaveBeenCalledTimes(count * 2);
     expect(loadComments).toHaveBeenCalledTimes(count * 2);
@@ -317,8 +320,8 @@ describe('GitHub refresh', () => {
     const refresh = mutateWorkspace({ op: 'refresh', key: tab.key }, 'review').then(() => { settled = true; });
     const repeated = mutateWorkspace({ op: 'refresh', key: tab.key }, 'review');
     await Promise.resolve(); expect(settled).toBe(false);
-    if (closed) await mutateWorkspace({ op: 'close', key: tab.key }, 'review');
-    finish(latest); await Promise.all([refresh, repeated]);
+    const close = closed ? mutateWorkspace({ op: 'close', key: tab.key }, 'review') : Promise.resolve();
+    finish(latest); await Promise.all([refresh, repeated, close]);
     expect(loadPull).toHaveBeenCalledTimes(closed ? 1 : 2);
     expect(importPull).toHaveBeenCalledTimes(closed ? 0 : 1);
     expect(tab.reviewedHead).toBe(closed ? 'head' : 'new-head');
@@ -528,7 +531,7 @@ describe('comment scope and ownership routing', () => {
     mocks.data.tabs = [other]; mocks.data.archived = [mine];
     mocks.github.mockResolvedValue(remote(103));
     await flushOutbox();
-    expect(mocks.data.outbox).toHaveLength(0); expect(mine.comments[0].destination).toBe('local');
+    expect(mocks.data.outbox).toHaveLength(0);
     expect(other.comments[0].codex).toBeUndefined(); expect(other.codexThreadId).toBeUndefined();
     expect(mocks.github).toHaveBeenCalledTimes(1); expect(mocks.github.mock.calls[0][0].number).toBe(2);
   });
@@ -593,4 +596,43 @@ it('still refreshes other people’s GitHub comments on own PRs', async () => {
   vi.mocked(loadComments).mockResolvedValue([{ ...t.comments[0], body: 'Updated feedback' }]);
   await syncTab(t); expect(t.comments[0].body).toBe('Updated feedback');
   expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.github).not.toHaveBeenCalled();
+});
+
+it('starts a fresh review after closing and reopening the same PR', async () => {
+  const old = mocks.data.tabs[0]; old.comments.push({ body: 'Discard me' });
+  await mutateWorkspace({ op: 'close', key: old.key }, 'review');
+  expect(mocks.data.active).toBeNull();
+  vi.mocked(loadPull).mockResolvedValue(pullInfo());
+  await mutateWorkspace({ op: 'open', url: old.ref.url }, 'review');
+  expect(mocks.data.tabs[0]).not.toBe(old);
+  expect(mocks.data.tabs[0].comments).toEqual([]);
+  expect(mocks.data.tabs[0].reviewId).toBeNull();
+  await syncTab(mocks.data.tabs[0]);
+});
+it('leaves the tab visible if its unpublished source cannot be discarded', async () => {
+  const old = mocks.data.tabs[0];
+  mocks.discard.mockRejectedValue(new Error('Unpublished changes'));
+  await expect(mutateWorkspace({ op: 'close', key: old.key }, 'review')).rejects.toThrow('Unpublished changes');
+  expect(mocks.data.tabs).toEqual([old]); expect(mocks.data.active).toBe(old.key);
+  expect(mocks.data.archived).toEqual([]);
+});
+it('waits for a pending import before deleting, and prevents a late metadata response from restarting it', async () => {
+  const old = mocks.data.tabs[0];
+  let resolve!: (value: ReturnType<typeof pullInfo>) => void;
+  vi.mocked(loadPull).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  const sync = syncTab(old);
+  const close = mutateWorkspace({ op: 'close', key: old.key }, 'review');
+  expect(mocks.discard).not.toHaveBeenCalled();
+  resolve(pullInfo()); await Promise.all([sync, close]);
+  expect(mocks.discard).toHaveBeenCalledWith(old);
+  expect(mocks.data.tabs).toEqual([]); expect(mocks.data.archived).toEqual([]);
+});
+it('removes legacy archived tabs on startup without restoring them on reopening', async () => {
+  const old = tab(9); mocks.data.tabs = []; mocks.data.archived = [old];
+  const stop = startWorkspace();
+  try {
+    await vi.waitFor(() => expect(mocks.data.archived).toEqual([]));
+    expect(mocks.discard).toHaveBeenCalledWith(old);
+    expect(mocks.data.tabs).toEqual([]);
+  } finally { stop(); }
 });

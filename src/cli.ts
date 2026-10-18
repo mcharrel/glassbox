@@ -553,10 +553,16 @@ export async function launchReview(args: {
   // Workspace refreshes can move a review into its managed checkout; resume by identity.
   if (resume) {
     const workspace = workspaceData();
-    const tab = workspace.tabs.find(item => item.key === workspace.active) ?? workspace.tabs.at(0) ?? workspace.archived.at(-1);
+    const tab = workspace.tabs.find(item => item.key === workspace.active) ?? workspace.tabs.at(0);
     const saved = tab?.reviewId !== undefined && tab.reviewId !== null ? await getReview(tab.reviewId) : undefined;
     if (saved) {
       await startServer(port, saved.id, saved.repo_path, { noOpen, strictPort, onComplete });
+      return;
+    }
+    // An empty PR workspace stays empty after restart; never recreate a closed launch review.
+    if (workspace.hasOpenedPullRequest === true) {
+      const empty = await getLatestInProgressReview(repoRoot, 'workspace') ?? await createReview(repoRoot, 'rev', 'workspace');
+      await startServer(port, empty.id, repoRoot, { noOpen, strictPort, onComplete });
       return;
     }
   }

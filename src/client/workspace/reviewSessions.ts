@@ -5,13 +5,13 @@ import { apiCall } from '../../api/_runner.js';
 import { GetAnalysisRespSchema, ListFilesRespSchema } from '../../api/index.js';
 import type { PullTab } from '../../api/workspace.js';
 import { resumePolling, stopPolling } from '../analysisEngine.js';
-import { invalidateDiffCache } from '../diff/index.js';
+import { forgetReviewDiff, invalidateDiffCache } from '../diff/index.js';
 import { loadGuidedResults } from '../guided.js';
 import { loadAnalysisResults } from '../sidebar/sortMode.js';
 import { defaultAnalysisModeState } from '../state.js';
 import { aiStore, diffViewStore, editFormSignal, reviewStore, visibleFileOrder } from '../stores/index.js';
 import { showToast } from '../toast.js';
-import { activeTab, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
+import { activeTab, reviewLoadState, reviewRetry, reviewSessionKey, workspace, workspaceLoaded } from './state.js';
 
 interface Session {
   status: 'loading' | 'ready' | 'error';
@@ -30,11 +30,12 @@ const sessionKey = reviewSessionKey;
 export function initReviewSessions(): () => void {
   let live = true;
   const sessions = new Map<string, Session>();
+  const requests = new Map<string, AbortController>();
   const analysisVersions = new Map<string, number>();
   const resetAnalysis = (event: Event) => {
     if (!(event instanceof CustomEvent)) return;
     const parsed = z.object({ reviewId: z.string(), types: z.array(z.enum(['narrative', 'guided'])) }).safeParse(event.detail);
-    if (!parsed.success) return;
+    if (!parsed.success || ![...sessions.values()].some(session => session.review.reviewId === parsed.data.reviewId)) return;
     analysisVersions.set(parsed.data.reviewId, (analysisVersions.get(parsed.data.reviewId) ?? 0) + 1);
     for (const session of sessions.values()) if (session.review.reviewId === parsed.data.reviewId) {
       session.ai = { ...session.ai, fileNotes: {}, guidedNotes: {}, narrativeOrder: null, riskScores: null,
@@ -44,6 +45,7 @@ export function initReviewSessions(): () => void {
   };
   document.addEventListener('glassbox-analysis-reset', resetAnalysis);
   let current = '';
+  let clearedEmpty = false;
   let usedInitial = false;
   let lastRetry = reviewRetry.peek();
   const capture = (): Session => ({
@@ -53,9 +55,17 @@ export function initReviewSessions(): () => void {
     scroll: scrollSelectors.map(selector => document.querySelector(selector)?.scrollTop ?? 0),
     comment: document.querySelector<HTMLTextAreaElement>('.pr-comment-input')?.value ?? '',
   });
-  const initial = capture();
+  let initial: Session | null = capture();
   initial.status = 'ready';
   initial.error = null;
+  const empty: Session = {
+    status: 'ready', error: null,
+    review: { ...initial.review, reviewId: '', currentFileId: null, files: [], annotationCounts: {}, staleCounts: {},
+      filterText: '', hiddenFileIds: new Set(), groundTruth: {}, pluginRendered: new Set(), notedFileIds: new Set() },
+    ai: { ...initial.ai, fileNotes: {}, guidedNotes: {}, riskScores: null, narrativeOrder: null,
+      riskAnalysis: defaultAnalysisModeState(), narrativeAnalysis: defaultAnalysisModeState(), guidedAnalysis: defaultAnalysisModeState() },
+    diff: { ...initial.diff, collapsedFolders: new Set() }, edit: null, scroll: [], comment: '',
+  };
   const restore = (session: Session) => {
     document.body.dataset.reviewId = session.review.reviewId;
     batch(() => {
@@ -84,18 +94,19 @@ export function initReviewSessions(): () => void {
     if (existing) return existing;
     const reviewId = tab.reviewId ?? '';
     if (reviewId !== '' && [...sessions.values()].some(value => value.review.reviewId === reviewId)) invalidateDiffCache(reviewId);
-    if (!tab.checkoutEvicted && reviewId !== '' && reviewId === initial.review.reviewId && !usedInitial) {
+    if (!tab.checkoutEvicted && reviewId !== '' && reviewId === initial?.review.reviewId && !usedInitial) {
       usedInitial = true;
-      sessions.set(key, initial);
-      return initial;
+      const captured = initial; initial = null;
+      sessions.set(key, captured);
+      return captured;
     }
     const session: Session = {
       status: 'loading', error: null,
-      review: { ...initial.review, reviewId, currentFileId: null, files: [], annotationCounts: {}, staleCounts: {},
+      review: { ...empty.review, reviewId, currentFileId: null, files: [], annotationCounts: {}, staleCounts: {},
         filterText: '', hiddenFileIds: new Set(), groundTruth: {}, pluginRendered: new Set(), notedFileIds: new Set() },
-      ai: { ...initial.ai, fileNotes: {}, guidedNotes: {}, riskScores: null, narrativeOrder: null,
+      ai: { ...empty.ai, fileNotes: {}, guidedNotes: {}, riskScores: null, narrativeOrder: null,
         riskAnalysis: defaultAnalysisModeState(), narrativeAnalysis: defaultAnalysisModeState(), guidedAnalysis: defaultAnalysisModeState() },
-      diff: { ...initial.diff, collapsedFolders: new Set() }, edit: null, scroll: [], comment: '',
+      diff: { ...empty.diff, collapsedFolders: new Set() }, edit: null, scroll: [], comment: '',
     };
     try {
       const hidden: unknown = JSON.parse(localStorage.getItem(`glassbox.hidden.${reviewId}`) ?? '[]');
@@ -104,6 +115,8 @@ export function initReviewSessions(): () => void {
     sessions.set(key, session);
     // Importing tabs have no review yet. Never fetch against the prior/default review.
     if (tab.reviewId === null || tab.checkoutEvicted) return session;
+    const controller = new AbortController();
+    requests.set(key, controller);
     const isCurrent = () => live && current === key && sessions.get(key) === session;
     const publish = (kind: 'files' | 'ai') => {
       if (!isCurrent()) return;
@@ -114,13 +127,15 @@ export function initReviewSessions(): () => void {
         reviewLoadState.value = { key, status: session.status, error: session.error };
       } else aiStore.actions.update({ fileNotes: session.ai.fileNotes, guidedNotes: session.ai.guidedNotes, narrativeOrder: session.ai.narrativeOrder, narrativeAnalysis: session.ai.narrativeAnalysis, guidedAnalysis: session.ai.guidedAnalysis });
     };
-    void apiCall(ListFilesRespSchema, '/files', { reviewId }).then(data => {
+    void apiCall(ListFilesRespSchema, '/files', { reviewId, signal: controller.signal }).then(data => {
+      if (sessions.get(key) !== session) return;
       Object.assign(session.review, data, {
         pluginRendered: new Set(data.pluginRendered ?? []), notedFileIds: new Set(data.notedFileIds ?? []),
       });
       session.status = 'ready';
       publish('files');
     }).catch((error: unknown) => {
+      if (sessions.get(key) !== session) return;
       session.status = 'error'; session.error = String(error);
       if (isCurrent()) {
         reviewLoadState.value = { key, status: 'error', error: session.error };
@@ -129,8 +144,8 @@ export function initReviewSessions(): () => void {
     });
     const analysisVersion = analysisVersions.get(reviewId) ?? 0;
     for (const mode of ['narrative', 'guided'] as const) {
-      void apiCall(GetAnalysisRespSchema, `/ai/analysis/${mode}`, { reviewId }).then(data => {
-        if (!live || analysisVersion !== (analysisVersions.get(reviewId) ?? 0)) return;
+      void apiCall(GetAnalysisRespSchema, `/ai/analysis/${mode}`, { reviewId, signal: controller.signal }).then(data => {
+        if (!live || sessions.get(key) !== session || analysisVersion !== (analysisVersions.get(reviewId) ?? 0)) return;
         const status = data.status === 'running' || data.status === 'completed' || data.status === 'failed' ? data.status : 'idle';
         session.ai[mode === 'guided' ? 'guidedAnalysis' : 'narrativeAnalysis'] = { ...defaultAnalysisModeState(), status };
         const notes = Object.fromEntries(data.scores.flatMap(score => score.notes === null ? [] : [[score.reviewFileId, score.notes]]));
@@ -150,11 +165,41 @@ export function initReviewSessions(): () => void {
   };
   const stop = effect(() => {
     void workspace.value;
+    void workspaceLoaded.value;
     const retry = reviewRetry.value;
     queueMicrotask(() => {
       if (!live) return;
+      const tabs = workspace.value.tabs;
+      const keys = new Set(tabs.map(sessionKey));
+      const ids = new Set(tabs.map(tab => tab.reviewId));
+      for (const [key, session] of sessions) if (!keys.has(key)) {
+        requests.get(key)?.abort(); requests.delete(key); sessions.delete(key);
+        if (!ids.has(session.review.reviewId)) {
+          forgetReviewDiff(session.review.reviewId);
+          analysisVersions.delete(session.review.reviewId);
+        }
+      }
+      if (workspaceLoaded.value) {
+        // Also remove persisted reading state left by tabs closed before this app version.
+        try {
+          for (const key of Object.keys(localStorage)) {
+            const prefix = ['glassbox.hidden.', 'glassbox.lastFile.', 'glassbox-collapsed-'].find(prefix => key.startsWith(prefix));
+            if (prefix !== undefined && !ids.has(key.slice(prefix.length))) localStorage.removeItem(key);
+          }
+        } catch { /* optional persistence */ }
+      }
       const tab = activeTab();
-      if (tab === undefined) return;
+      if (tab === undefined) {
+        if (!clearedEmpty && (current !== '' || workspaceLoaded.value)) {
+          clearedEmpty = true;
+          for (const mode of ['risk', 'narrative', 'guided'] as const) stopPolling(mode);
+          initial = null; current = ''; restore(empty);
+          window.history.replaceState(null, '', '/');
+          document.dispatchEvent(new Event('glassbox-review-selected'));
+        }
+        return;
+      }
+      clearedEmpty = false;
       const key = sessionKey(tab);
       if (retry !== lastRetry) {
         lastRetry = retry;
@@ -184,7 +229,8 @@ export function initReviewSessions(): () => void {
         document.dispatchEvent(new Event('glassbox-review-selected'));
       }
       for (const other of workspace.value.tabs) if (other.reviewId !== null && !other.checkoutEvicted) prepare(other);
+      if (workspaceLoaded.value) initial = null;
     });
   });
-  return () => { live = false; stop(); document.removeEventListener('glassbox-analysis-reset', resetAnalysis); };
+  return () => { live = false; stop(); for (const request of requests.values()) request.abort(); requests.clear(); sessions.clear(); initial = null; document.removeEventListener('glassbox-analysis-reset', resetAnalysis); };
 }

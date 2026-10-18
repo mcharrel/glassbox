@@ -45,7 +45,7 @@ function currentReviewId(): string {
 export async function apiCall<T>(
   responseSchema: z.ZodType<T>,
   path: string,
-  opts: { method?: string; body?: unknown; reviewId?: string | null } = {},
+  opts: { method?: string; body?: unknown; reviewId?: string | null; signal?: AbortSignal } = {},
 ): Promise<T> {
   const separator = path.includes('?') ? '&' : '?';
   const reviewId = opts.reviewId === null ? '' : opts.reviewId ?? currentReviewId();
@@ -53,6 +53,7 @@ export async function apiCall<T>(
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
     method: opts.method,
+    signal: opts.signal,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
   const text = await res.text();
