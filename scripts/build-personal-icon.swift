@@ -20,6 +20,11 @@ else { fatalError("Cannot load the artwork or create the icon canvas") }
 let width: CGFloat = 824
 let height = width * CGFloat(artwork.height) / CGFloat(artwork.width)
 let tile = CGRect(x: (1024 - width) / 2, y: (1024 - height) / 2, width: width, height: height)
+// An opaque dark tile prevents macOS from nesting the translucent artwork in a pale frame.
+canvas.addPath(CGPath(roundedRect: CGRect(x: 100, y: 100, width: 824, height: 824),
+                     cornerWidth: 185, cornerHeight: 185, transform: nil))
+canvas.setFillColor(CGColor(red: 36/255, green: 38/255, blue: 40/255, alpha: 1))
+canvas.fillPath()
 canvas.interpolationQuality = .high
 canvas.draw(artwork, in: tile)
 
