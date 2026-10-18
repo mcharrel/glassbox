@@ -9,8 +9,20 @@
 }
 .pr-tabs-list {
   overflow-y: auto;
+  min-height: 0;
   flex: 0 1 auto;
   padding: 8px 4px;
+}
+.pr-repo-link {
+  flex-shrink: 0;
+  align-self: center;
+  margin-top: auto;
+  padding: 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-decoration: none;
+  &:hover, &:focus-visible { color: var(--accent); }
 }
 .pr-tab {
   border: 0;

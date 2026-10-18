@@ -50,6 +50,9 @@ function tabList() {
         +
       </button>
       </div>
+      <a className="pr-repo-link" href="https://github.com/mcharrel/rev" target="_blank" rel="noreferrer" aria-label="rev on GitHub">
+        <span className="pr-repo-name">rev</span>
+      </a>
     </>
   );
 }
@@ -147,7 +150,7 @@ export function initWorkspace(): void {
   mount(rail, tabList);
   // Hidden absolute labels remain measurable when the rail shows full titles.
   bindDivider(railDivider, rail, 'width', 'glassbox.tabsWidth', 24, 24, () =>
-    Math.ceil(Math.max(0, ...[...rail.querySelectorAll('.pr-tab-number')].map(label => label.getBoundingClientRect().width))) + 16);
+    Math.ceil(Math.max(0, ...[...rail.querySelectorAll('.pr-tab-number, .pr-repo-name')].map(label => label.getBoundingClientRect().width))) + 16);
   const headerDivider = toElement(
     <div
       className="workspace-divider"
@@ -460,7 +463,7 @@ export function initWorkspace(): void {
   void delegate(
     document.body,
     'click',
-    '.pr-reviewer a, .pr-check a, .pr-description a, .pr-message a',
+    '.pr-repo-link, .pr-reviewer a, .pr-check a, .pr-description a, .pr-message a',
     (event, element) => {
       const url = element.getAttribute('href');
       if (url !== null && openExternalUrl(url)) event.preventDefault();

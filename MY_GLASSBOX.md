@@ -7,6 +7,7 @@
 - A permanent resizable tab panel sits to the left of the mid panel. It starts at its compact minimum and shows bare PR numbers without a hashtag or status dot; expanding it shows titles. The active tab has a purple background. Unselected tab text shows draft (gray), open (green), merged (purple), and closed (red).
 - Long-press and drag a tab to reorder it. Option+Tab / Option+Shift+Tab cycle PRs. Double-click an expanded title to edit the GitHub title only for my own PRs.
 - The + immediately after the PR tabs opens a URL field. A GitHub PR URL may include `/files`, query parameters, or a fragment. Reopening a tracked PR selects the existing tab.
+- A small `rev` link stays at the very bottom of the tab panel, below the scrolling PR list, and opens the fork's GitHub repository in the default browser.
 - New own PRs appear above other people's PRs. Related stacked PRs are placed together, parent before child. Manual ordering persists.
 - Each PR initially opens its Main view and remembers its last selected view. `r` switches Main and File views.
 - New PRs load GitHub metadata and conversations asynchronously. Existing PRs use their cached data at startup, when switching tabs, and when reopening; every open tab refreshes metadata and conversations in the background every five minutes. Cmd/Ctrl+R refreshes the selected PR immediately, including source changes.
