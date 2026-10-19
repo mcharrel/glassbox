@@ -93,6 +93,21 @@ export const ThreadMessageSchema = z.object({
   workspaceSafeHead: z.string().optional(),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
+export const DeploymentTargetSchema = z.object({
+  datacenter: z.string(),
+  environment: z.string(),
+  namespace: z.string(),
+  service: z.string(),
+  status: z.enum(['reached', 'deploying', 'missing', 'unknown']),
+});
+export type DeploymentTarget = z.infer<typeof DeploymentTargetSchema>;
+export const DeploymentSnapshotSchema = z.object({
+  targets: z.array(DeploymentTargetSchema).default([]),
+  status: z.enum(['loading', 'ready', 'error', 'unavailable']),
+  updatedAt: z.number().default(0),
+  attemptedAt: z.number().default(0),
+  message: z.string().optional(),
+});
 export const PullTabSchema = z.object({
   key: z.string(),
   ref: PullRefSchema,
@@ -114,6 +129,7 @@ export const PullTabSchema = z.object({
   reviewedBase: z.string().default(''),
   importLocalComments: z.boolean().default(false),
   codexThreadId: z.uuid().optional(),
+  deployment: DeploymentSnapshotSchema.optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
 // Unknown ownership must never default to publishing a private comment.

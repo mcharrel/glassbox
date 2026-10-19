@@ -237,3 +237,8 @@ Both items came from GitHub #59.
 - Add a normal comment while Codex is busy: it must enter that chat’s queue. Add `[steer]` feedback: it must reach the current turn immediately. When idle, either should start the next turn with existing settings. These checks require a compatible shared-server desktop; they cannot be verified against a private-stdio desktop.
 - With the currently unsupported private-stdio desktop, confirm comments remain visibly pending and no isolated agent starts. Restart rev and check pending comments remain; GitHub sync should still work independently.
 - Automated tests cover local state transitions, source context, no dispatch of imported/deleted comments, ambiguous acknowledgement recovery, server request methods, unloaded-chat refusal and external tab selection. No live messages or GitHub writes are made by these tests.
+
+## Merged PR deployment layout
+
+- On a merged Devflow PR, verify datacenters replace checks in the same resizable section, without a visible heading. Reached rows appear first, and hovering exposes service/environment/namespace status. Switch to an open PR and confirm its CI checks return.
+- API/subprocess integration, safe HTML rendering, aggregation, empty/error states, refresh timing and closed-tab cancellation have automated coverage. Native appearance and hover remain manual because browser/screen automation is disabled for this fork's local workflow.

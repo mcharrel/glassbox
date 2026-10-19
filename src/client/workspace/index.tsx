@@ -11,6 +11,7 @@ import { filePriority } from '../sidebar/readingOrder.js';
 import { reviewStore } from '../stores/index.js';
 import { openExternalUrl } from '../tauri.js';
 import { showToast } from '../toast.js';
+import { checks } from './checks.js';
 import { createCommentNavigator } from './commentNavigation.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
@@ -87,31 +88,6 @@ function reviewers(tab: PullTab) {
             ) : (
               <span>{name}</span>
             )}
-          </div>
-        ))}
-    </>
-  );
-}
-function checks(tab: PullTab) {
-  if (tab.info?.state === 'MERGED') return <></>;
-  const rank = (check: NonNullable<NonNullable<PullTab['info']>['statusCheckRollup']>[number]) => {
-    const state = check.conclusion ?? check.state ?? check.status;
-    return ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED'].includes(state ?? '')
-      ? 0
-      : ['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(state ?? '')
-        ? 2
-        : 1;
-  };
-  return (
-    <>
-      {[...(tab.info?.statusCheckRollup ?? [])]
-        .sort((a, b) => rank(a) - rank(b))
-        .map((check) => (
-          <div className={`pr-check check-${rank(check)}`} data-key={check.name ?? check.context}>
-            <span>{['×', '●', '✓'][rank(check)]}</span>
-            <a href={check.detailsUrl ?? check.targetUrl} target="_blank" rel="noreferrer">
-              {check.name ?? check.context}
-            </a>
           </div>
         ))}
     </>
@@ -268,6 +244,9 @@ export function initWorkspace(): void {
   });
   mount(checksSection, () => {
     const tab = activeTab();
+    const label = tab?.info?.state === 'MERGED' ? 'Deployments' : 'CI checks';
+    checksSection.setAttribute('aria-label', label);
+    checksSection.nextElementSibling?.setAttribute('aria-label', `Resize ${label.toLowerCase()}`);
     return tab ? checks(tab) : <></>;
   });
   mount(conversation, () => {

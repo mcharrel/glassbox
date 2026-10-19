@@ -135,3 +135,7 @@ GitHub descriptions and comments use GitHub-rendered HTML from the existing meta
 ## Source installation
 
 Use `git clone https://github.com/mcharrel/rev.git && ./rev/install.sh --desktop`. The recommended install and update commands include `--desktop` to build the native macOS app alongside the browser workspace, without release keys or upstream automatic updates. Omit the option for Linux or browser-only installs. The installer installs a user-local command, checks dependencies, and guides GitHub authentication. Rerun the script after pulling changes; existing review data and unrelated launchers are preserved.
+
+## Deployment status
+
+Merged PRs replace CI checks with one row per datacenter from the read-only `ddr devflow whereismycode` command. Fully reached datacenters sort first; mixed service/environment/namespace targets are marked partial, with details on hover. Deploying, missing and unknown states remain distinct. Devflow-suggested services are queried automatically in one follow-up command. Status loads independently of PR content, is cached locally, refreshes every five minutes and on Cmd/Ctrl+R, and is cancelled when a tab closes. Failed refreshes retain clearly marked last-known results; unavailable or empty reports never mean “not reached”. This integration requires an installed, authenticated `ddr` and applies to Devflow repositories under the `ddoghq`/`DataDog` GitHub organisations. It posts no GitHub comments and adds no direct GitHub API requests; Devflow performs its own backend lookups.

@@ -23,6 +23,7 @@ import {
 import { parseDiffData } from '../git/parseDiffData.js';
 import { ensureCheckout, importPull } from './checkout.js';
 import { flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment } from './codex.js';
+import { cancelDeployment, refreshDeployment, stopDeployments } from './deployments.js';
 import { discardTabData } from './discard.js';
 import {
   github,
@@ -119,6 +120,8 @@ async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
     ]);
     if (!workspaceData().tabs.includes(tab) || closingTabs.has(tab)) return;
     tab.info = info;
+    // Deployment lookup must never hold up metadata, comments, or the source view.
+    void refreshDeployment(tab, mode !== 'initial');
     tab.viewer = viewer.login;
     reconcileCommentRouting(tab);
     void flushOutbox();
@@ -237,6 +240,8 @@ export function startWorkspace(pinnedRoot?: string): () => void {
       }
     tab.loading = false;
     if (!data.tabs.includes(tab)) continue;
+    if (tab.deployment?.status === 'loading') tab.deployment.attemptedAt = 0;
+    if (!needsInitialSync(tab)) void refreshDeployment(tab);
     if (tab.checkoutEvicted && tab.key !== data.active) continue;
     if (needsInitialSync(tab)) void syncTab(tab);
     else if (tab.key === data.active) void ensureCheckout(tab).catch(() => {});
@@ -269,6 +274,7 @@ export function startWorkspace(pinnedRoot?: string): () => void {
     clearInterval(refreshTimer);
     clearInterval(timer);
     stopCleanup();
+    stopDeployments();
   };
 }
 function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'edit' | 'delete'): void {
@@ -496,6 +502,7 @@ async function discardTab(tab: PullTab): Promise<void> {
   const existing = discarding.get(tab.key);
   if (existing) return existing;
   closingTabs.add(tab);
+  cancelDeployment(tab);
   const pending = discardQueue.catch(() => {}).then(async () => {
     await syncing.get(tab.key)?.promise;
     await waitForCheckouts();

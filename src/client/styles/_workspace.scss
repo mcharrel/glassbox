@@ -225,14 +225,18 @@
   color: var(--accent);
 }
 .review-approved,
-.check-2 > span {
+.check-2 > span,
+.deployment-reached > span:first-child {
   color: #50bf80;
 }
 .review-pending,
-.check-1 > span {
+.check-1 > span,
+.deployment-partial > span:first-child,
+.deployment-deploying > span:first-child {
   color: #e1b952;
 }
-.check-0 > span {
+.check-0 > span,
+.deployment-missing > span:first-child {
   color: #ef7777;
 }
 .pr-conversation {
@@ -445,4 +449,15 @@ body[data-review-pending='true'] {
   &[data-workspace-view='file'] .pr-review-loading {
     display: flex;
   }
+}
+
+.deployment-unknown > span:first-child,
+.deployment-notice {
+  color: var(--text-muted);
+}
+.deployment-notice {
+  font-size: 12px;
+}
+.deployment-name {
+  overflow-wrap: anywhere;
 }

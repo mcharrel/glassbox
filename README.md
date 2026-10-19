@@ -51,6 +51,12 @@ rev uses `gh` credentials; never put tokens in this repository. For multiple acc
 
 Existing local checkouts can speed up first imports. Every open PR tab refreshes GitHub status, reviewers, CI checks, description and comments in the background every five minutes. **Cmd/Ctrl+R** refreshes immediately and loads new source revisions; background refresh keeps the code snapshot stable while you read. Main-view comments publish to GitHub on every PR. Code comments on your own PRs stay local; code comments on other people’s PRs publish to GitHub. Offline writes retry every five minutes. Disposable managed checkouts expire after two weeks without use or updates, with unpublished work preserved.
 
+### Deployment status
+
+Merged PRs show datacenters instead of CI checks, with fully reached datacenters first. Partial, deploying, missing and unknown states are distinct; hover over a row for service and namespace details. Status refreshes every five minutes and with Cmd/Ctrl+R, without blocking the review.
+
+This optional integration uses an installed, authenticated `ddr` CLI for Devflow repositories in the `ddoghq`/`DataDog` organisations. It runs `ddr devflow whereismycode --pr <URL>` locally and never posts a GitHub comment. If authentication expires, run that command in your terminal, then refresh rev. Other repositories show that deployment tracking is unavailable.
+
 ### GUIDE and LEARN
 
 Choose a provider and model in Settings to generate review guidance. API keys belong in local settings or the OS keychain, never in Git. GUIDE and LEARN follow the visible code. Press **a**, then **i** to replace guidance with a fresh review (at most once per five minutes per PR).

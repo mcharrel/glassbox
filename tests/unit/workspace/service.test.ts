@@ -16,6 +16,7 @@ vi.mock('../../../src/workspace/storage.js', () => ({
 }));
 vi.mock('../../../src/workspace/codex.js', () => ({ queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
 vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../../src/workspace/deployments.js', () => ({ refreshDeployment: vi.fn().mockResolvedValue(undefined), cancelDeployment: vi.fn(), stopDeployments: vi.fn() }));
 vi.mock('../../../src/workspace/discard.js', () => ({ discardTabData: mocks.discard }));
 vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
 vi.mock('../../../src/workspace/notifications.js', () => ({ notify: mocks.notify }));
@@ -25,6 +26,7 @@ vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   loadPull: vi.fn(),
   loadComments: vi.fn().mockResolvedValue([]),
 }));
+import { cancelDeployment, refreshDeployment, stopDeployments } from '../../../src/workspace/deployments.js';
 import { flushOutbox, insertTab, mutateWorkspace, queueAnnotation, startWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
 import { ensureCheckout, importPull } from '../../../src/workspace/checkout.js';
@@ -646,4 +648,34 @@ it('removes legacy archived tabs on startup without restoring them on reopening'
     expect(mocks.discard).toHaveBeenCalledWith(old);
     expect(mocks.data.tabs).toEqual([]);
   } finally { stop(); }
+});
+
+
+describe('deployment refresh lifecycle', () => {
+  it('starts deployment lookup after merge metadata without waiting for it to finish', async () => {
+    const t = mocks.data.tabs[0];
+    vi.mocked(refreshDeployment).mockReturnValueOnce(new Promise(() => {}));
+    vi.mocked(loadPull).mockResolvedValue({ ...pullInfo(), state: 'MERGED' });
+    vi.mocked(loadComments).mockResolvedValue([]);
+    await syncTab(t, 'refresh');
+    expect(t.info?.state).toBe('MERGED');
+    expect(refreshDeployment).toHaveBeenLastCalledWith(t, true);
+    expect(t.loading).toBe(false);
+    await mutateWorkspace({ op: 'close', key: t.key }, 'review');
+    expect(cancelDeployment).toHaveBeenLastCalledWith(t);
+  });
+  it('loads cached merged tabs at startup and refreshes in the background every five minutes', async () => {
+    vi.useFakeTimers();
+    const t = mocks.data.tabs[0]; t.info = { ...pullInfo(), state: 'MERGED' }; t.commentsLoaded = true;
+    vi.mocked(loadPull).mockResolvedValue(t.info); vi.mocked(loadComments).mockResolvedValue([]);
+    vi.mocked(refreshDeployment).mockClear();
+    const stop = startWorkspace();
+    try {
+      expect(refreshDeployment).toHaveBeenCalledWith(t);
+      await vi.advanceTimersByTimeAsync(300000);
+      expect(refreshDeployment).toHaveBeenLastCalledWith(t, true);
+      expect(refreshDeployment).toHaveBeenCalledTimes(2);
+    } finally { stop(); vi.useRealTimers(); }
+    expect(stopDeployments).toHaveBeenCalled();
+  });
 });
