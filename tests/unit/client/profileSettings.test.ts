@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ get: vi.fn(), save: vi.fn(), invoke: vi.fn(), refresh: vi.fn(), handlers: new Map<string, Function>() }));
 vi.mock('kerfjs', async original => ({ ...await original<any>(), delegate: (_root: any, event: string, selector: string, fn: Function) => { mocks.handlers.set(`${event}:${selector}`, fn); } }));
 vi.mock('../../../src/api/github-accounts.js', () => ({ getGitHubAccounts: mocks.get, saveGitHubAccounts: mocks.save }));
+vi.mock('../../../src/client/settings/slackReactions.js', () => ({ resetSlackReactions: vi.fn(), loadSlackReactions: vi.fn(), bindSlackReactions: vi.fn(), renderSlackReactions: () => '' }));
 vi.mock('../../../src/client/tauri.js', () => ({ getTauriInvoke: () => mocks.invoke }));
 vi.mock('../../../src/client/workspace/state.js', () => ({ refreshWorkspace: mocks.refresh }));
 vi.mock('../../../src/client/dom.js', () => ({ asInput: (el: any) => el, asSelect: (el: any) => el }));

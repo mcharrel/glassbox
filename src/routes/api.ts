@@ -16,6 +16,7 @@ import { projectSettingsRoutes } from './api/project-settings.js';
 import { reviewNotesRoutes } from './api/review-notes.js';
 import { reviewsRoutes } from './api/reviews.js';
 import { sharePromptRoutes } from './api/share-prompt.js';
+import { slackReactionsRoutes } from './api/slack-reactions.js';
 import { systemRoutes } from './api/system.js';
 
 /**
@@ -34,6 +35,7 @@ apiRoutes.route('/', contextRoutes);
 apiRoutes.route('/', projectSettingsRoutes);
 apiRoutes.route('/', companyDeploymentsRoutes);
 apiRoutes.route('/', githubAccountsRoutes);
+apiRoutes.route('/', slackReactionsRoutes);
 apiRoutes.route('/', codexConnectionRoutes);
 apiRoutes.route('/', pluginsRoutes);
 apiRoutes.route('/', imageRoutes);

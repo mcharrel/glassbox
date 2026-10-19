@@ -392,6 +392,7 @@ export function initWorkspace(): void {
     else if (action === 'share' && tab && !addingPull.value) void copyPullLink(tab);
     else if (action === 'title' && tab) editTitle(tab);
     else if (action === 'close' && tab) void mutate({ op: 'close', key: tab.key });
+    else if (action === 'retry-slack' && tab) void mutate({ op: 'retry-slack', key: tab.key });
   });
   asInput(add.querySelector('input')).addEventListener('keydown', (e) => {
     if (e.key === 'Enter') void loadPullInput(add);

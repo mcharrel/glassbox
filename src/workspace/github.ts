@@ -253,7 +253,7 @@ export async function loadComments(tab: PullTab): Promise<ThreadMessage[]> {
   }
   return [...groups[1], ...groups[0], ...summaries];
 }
-export async function mutatePull(tab: PullTab, action: string, body?: string): Promise<void> {
+export async function mutatePull(tab: PullTab, action: string, body?: string): Promise<{ reviewer: string; state: string } | undefined> {
   if (!tab.info) throw new Error('PR details are still loading');
   const ref = tab.ref;
   if (tab.info.state === 'MERGED') throw new Error('This PR is already merged');
@@ -290,5 +290,6 @@ export async function mutatePull(tab: PullTab, action: string, body?: string): P
     // Show GitHub's accepted decision immediately; subsequent metadata refreshes remain authoritative.
     tab.info = { ...tab.info, reviews: [...tab.info.reviews,
       { author: { login: receipt.user.login }, state: receipt.state, submittedAt: receipt.submitted_at }] };
+    return { reviewer: receipt.user.login, state: receipt.state };
   }
 }

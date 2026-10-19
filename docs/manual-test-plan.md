@@ -299,3 +299,11 @@ Automated coverage: disposable filesystem/launch environment install-enable-disa
 - Main comments have neutral borders/backgrounds. Adjacent bot comments share a collapsed row; human comments separate groups and remain visible. Expand a group and refresh: it remains open. Find inside a folded bot body expands the group and highlights its result; sharing/deleting still targets the individual message.
 
 Automated coverage includes accepted/failed review transitions, metadata races and dismissal, viewer isolation, bot identity from issue/review responses, empty/all-filtered/single/mixed groups, shuffled input, nested human replies, stable group keys and retained searchable content. UI automation remains excluded by user preference.
+
+## Optional Slack review reactions
+
+- Profile defaults off with `stamp-approved` / `request-changes`; opening Settings or refreshing PRs never searches Slack. Connect a test workspace user token, customize both names and save. The token must not appear in API responses, global config or exports. Disconnect removes it from the system keychain and disables reactions.
+- In a disposable Slack workspace, link a test PR in several messages (including a thread and a `/files` URL); include a different PR whose number shares the prefix. Approve: only the correct messages receive the approval emoji. Both change-request actions use the other emoji. GitHub success remains immediate even when Slack is unavailable or an emoji is missing. Retry Slack adds missing reactions without a second GitHub review.
+- Close the tab, change accounts or disable the setting while work is pending: no further reactions. Already-sent reactions stay. Restart during a job: show a retryable interruption, do not resend automatically.
+
+Automated coverage uses synthetic data for exact/misleading links, zero/filtered/multiple results, pagination, duplicate reactions, rate limits, safe authentication failures, keychain-only storage, defaults, UI lifecycle, accepted-only review hooks, cancellation and late-response races. No real Slack reactions are sent by tests. UI automation remains excluded by user preference.

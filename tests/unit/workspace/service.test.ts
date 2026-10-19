@@ -18,6 +18,7 @@ vi.mock('../../../src/workspace/storage.js', () => ({
 }));
 vi.mock('../../../src/workspace/codex.js', async importOriginal => ({ ...await importOriginal<typeof import('../../../src/workspace/codex.js')>(), queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
 vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../../src/workspace/slack-reactions.js', () => ({ queueSlackReaction: vi.fn(), cancelSlackReaction: vi.fn(), cancelSlackReactions: vi.fn(), recoverSlackReactions: vi.fn(), retrySlackReaction: vi.fn(), stopSlackReactions: vi.fn() }));
 vi.mock('../../../src/workspace/deployments.js', () => ({ refreshDeployment: vi.fn().mockResolvedValue(undefined), cancelDeployment: vi.fn(), stopDeployments: vi.fn() }));
 vi.mock('../../../src/workspace/discard.js', () => ({ discardTabData: mocks.discard }));
 vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
@@ -823,4 +824,27 @@ it('holds queued public comments when their publishing account no longer matches
   await flushOutbox();
   expect(mocks.github).toHaveBeenCalledOnce();
   expect(mocks.data.outbox).toHaveLength(0);
+});
+
+
+describe('Slack review hook', () => {
+  it('queues only a GitHub-accepted review and leaves failed/non-review actions alone', async () => {
+    const github = await import('../../../src/workspace/github.js');
+    const slack = await import('../../../src/workspace/slack-reactions.js');
+    const receipt = { reviewer: 'alice', state: 'APPROVED' };
+    const submit = vi.spyOn(github, 'mutatePull').mockResolvedValue(receipt);
+    vi.mocked(slack.queueSlackReaction).mockClear();
+    vi.mocked(loadPull).mockResolvedValue(pullInfo('bob'));
+    await mutateWorkspace({ op: 'action', key: 'example/project#1', action: 'approve' }, 'review');
+    expect(slack.queueSlackReaction).toHaveBeenCalledExactlyOnceWith(mocks.data.tabs[0], receipt);
+    await syncTab(mocks.data.tabs[0]);
+    expect(slack.queueSlackReaction).toHaveBeenCalledTimes(1);
+    submit.mockRejectedValueOnce(new Error('Review rejected'));
+    await expect(mutateWorkspace({ op: 'action', key: 'example/project#1', action: 'changes', body: 'Please simplify' }, 'review')).rejects.toThrow('Review rejected');
+    expect(slack.queueSlackReaction).toHaveBeenCalledTimes(1);
+    submit.mockResolvedValueOnce(undefined);
+    await mutateWorkspace({ op: 'action', key: 'example/project#1', action: 'draft' }, 'review');
+    expect(slack.queueSlackReaction).toHaveBeenCalledTimes(1);
+    await syncTab(mocks.data.tabs[0]);
+  });
 });

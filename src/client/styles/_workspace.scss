@@ -580,3 +580,11 @@ body[data-review-pending='true'] {
   .resolved-thread-author { margin-left: auto; }
   > .resolved-thread-content { padding: 0 10px 10px; }
 }
+
+.pr-slack-status {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  button { margin-left: 6px; }
+}

@@ -47,3 +47,12 @@ it('reflects the viewer’s submitted review through comments, pending drafts, d
   expect(String(pullHeader(t, null))).toContain('selected disabled>Review');
   t.viewer = ''; expect(String(pullHeader(t, null))).not.toContain('pr-review-approved');
 });
+
+it('separates Slack failure and retry from the accepted GitHub review', () => {
+  const t = tab('main', 'someone');
+  t.info!.reviews = [{ author: { login: 'me' }, state: 'APPROVED', submittedAt: '2026-01-01' }];
+  t.slackReaction = { status: 'error', review: 'APPROVED', reviewer: 'me', count: 0, message: 'Slack unavailable' };
+  const html = String(pullHeader(t, null));
+  expect(html).toContain('selected disabled>Approved');
+  expect(html).toContain('Slack unavailable'); expect(html).toContain('data-workspace="retry-slack"');
+});

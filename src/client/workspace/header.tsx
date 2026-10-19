@@ -35,6 +35,10 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
         </select>}
     </div>
     {Boolean(tab.error) && <div className="workspace-error" title={tab.error}>{tab.error}</div>}
+    {tab.slackReaction && <div className="pr-slack-status" role={tab.slackReaction.status === 'error' ? 'alert' : 'status'}>
+      {tab.slackReaction.status === 'pending' ? 'Adding Slack reactions…' : tab.slackReaction.message}
+      {tab.slackReaction.status === 'error' && <button className="btn btn-xs" data-workspace="retry-slack">Retry Slack</button>}
+    </div>}
     {tab.sourceRefreshRequested === undefined && tab.reviewedHead && info && tab.reviewedHead !== info.headRefOid &&
       <div className="workspace-error">New commits on GitHub. Press Cmd+R to refresh this review.</div>}
   </>;

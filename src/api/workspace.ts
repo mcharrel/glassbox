@@ -143,6 +143,13 @@ export const PullTabSchema = z.object({
   codexThreadId: z.uuid().optional(),
   sourceRefreshRequested: z.uuid().optional(),
   deployment: DeploymentSnapshotSchema.optional(),
+  slackReaction: z.object({
+    status: z.enum(['pending', 'done', 'error']),
+    review: z.enum(['APPROVED', 'CHANGES_REQUESTED']),
+    reviewer: z.string(),
+    count: z.number().int().nonnegative(),
+    message: z.string().optional(),
+  }).optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
 /** Comments and pending drafts do not replace a submitted approval/change request. */
@@ -174,6 +181,7 @@ export const WorkspaceSchema = z.object({
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 export const WorkspaceMutationSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('retry-slack'), key: z.string() }),
   z.object({ op: z.literal('retry-codex'), key: z.string(), id: z.string() }),
   z.object({ op: z.literal('retry-agent'), key: z.string(), id: z.string() }),
   z.object({

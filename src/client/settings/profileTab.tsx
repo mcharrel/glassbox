@@ -6,6 +6,7 @@ import { IconUser } from '../../icons.js';
 import { asInput, asSelect } from '../dom.js';
 import { getTauriInvoke } from '../tauri.js';
 import { refreshWorkspace } from '../workspace/state.js';
+import { bindSlackReactions, loadSlackReactions, renderSlackReactions, resetSlackReactions } from './slackReactions.js';
 import type { Tab } from './tabContext.js';
 
 const LinksSchema = z.object({ supported: z.boolean(), enabled: z.boolean(), registered: z.boolean(), browser: z.string(), error: z.string().optional() });
@@ -15,11 +16,13 @@ let generation = 0;
 let sequence = 0;
 let loading = false;
 export function resetProfileTab(): void {
+  resetSlackReactions();
   generation++; loading = false;
   state.value = { accounts: null, rows: [], links: null, saving: false, linking: false, error: '' };
 }
 export function loadProfileTab(): void {
   if (loading) return;
+  loadSlackReactions();
   loading = true;
   const version = generation;
   void getGitHubAccounts().then(accounts => {
@@ -64,6 +67,7 @@ function setLinks(enabled: boolean): void {
   });
 }
 export function bindProfileTab(root: HTMLElement): void {
+  bindSlackReactions(root);
   void delegate(root, 'change', '#github-default-user', (_event, el) => {
     const current = state.value;
     if (!current.accounts) return;
@@ -122,6 +126,7 @@ export const profileTab: Tab = {
         {links.error !== undefined && <p role="alert">{links.error}</p>}
       </> : <p className="settings-hint">Automatic PR link routing is available in the macOS desktop app.</p>}
       {error && <p className="settings-hint" role="alert">{error}</p>}
+      {renderSlackReactions()}
     </>;
   },
 };

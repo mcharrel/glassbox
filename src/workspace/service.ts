@@ -41,6 +41,7 @@ import {
 import { closingTabs, waitForCheckouts, withCheckoutLock } from './lifecycle.js';
 import { hasCodeFocus, notify } from './notifications.js';
 import { startWorkspaceCleanup } from './retention.js';
+import { cancelSlackReaction, cancelSlackReactions, queueSlackReaction, recoverSlackReactions, retrySlackReaction, stopSlackReactions } from './slack-reactions.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 type SyncMode = 'initial' | 'refresh' | 'background' | 'auto';
@@ -134,6 +135,7 @@ async function performSync(tab: PullTab, mode: Exclude<SyncMode, 'auto'>): Promi
     tab.info = info;
     // Deployment lookup must never hold up metadata, comments, or the source view.
     void refreshDeployment(tab, mode !== 'initial');
+    if (tab.viewer.toLowerCase() !== viewer.login.toLowerCase()) cancelSlackReaction(tab);
     tab.viewer = viewer.login;
     reconcileCommentRouting(tab);
     void flushOutbox();
@@ -271,6 +273,7 @@ function needsInitialSync(tab: PullTab): boolean {
 export function startWorkspace(pinnedRoot?: string): () => void {
   const data = workspaceData();
   recoverCodexComments();
+  recoverSlackReactions();
   for (const tab of [...data.tabs, ...data.archived]) {
     const account = githubAccount(tab.ref);
     if (account && account.toLowerCase() !== tab.viewer.toLowerCase()) tab.viewer = '';
@@ -317,6 +320,7 @@ export function startWorkspace(pinnedRoot?: string): () => void {
     clearInterval(timer);
     stopCleanup();
     stopDeployments();
+    stopSlackReactions();
   };
 }
 function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'edit' | 'delete'): void {
@@ -373,6 +377,7 @@ function canPublishComment(tab: PullTab, message: ThreadMessage): boolean {
 }
 
 export function refreshAccountRouting(): void {
+  cancelSlackReactions();
   for (const tab of workspaceData().tabs) {
     tab.viewer = '';
     for (const message of tab.comments) if (message.remoteId !== undefined) message.editable = false;
@@ -561,6 +566,7 @@ async function discardTab(tab: PullTab): Promise<void> {
   if (existing) return existing;
   closingTabs.add(tab);
   cancelDeployment(tab);
+  cancelSlackReaction(tab);
   const pending = discardQueue.catch(() => {}).then(async () => {
     await syncing.get(tab.key)?.promise;
     await waitForCheckouts();
@@ -626,6 +632,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   if (input.op === 'close' && discarding.has(input.key)) { await discarding.get(input.key); return; }
   const tab = requireTab(input.key);
   tab.lastUsedAt = Date.now();
+  if (input.op === 'retry-slack') retrySlackReaction(tab);
   if (input.op === 'retry-codex') {
     const message = tab.comments.find(item => item.id === input.id && !item.deleted);
     if (!message) throw new Error('Comment not found');
@@ -666,8 +673,9 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     }
   }
   if (input.op === 'action') {
-    await mutatePull(tab, input.action, input.body);
+    const receipt = await mutatePull(tab, input.action, input.body);
     tab.action = input.action;
+    if (receipt) queueSlackReaction(tab, receipt);
     void syncTab(tab);
   }
   if (input.op === 'comment') {
