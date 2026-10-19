@@ -90,13 +90,26 @@ Codex supplies `CODEX_THREAD_ID`, so rev links your own PR to that original chat
 
 **Current limitation:** delivery requires a Codex installation whose desktop chat is connected to an existing shared app server exposing `thread/queue/add`, `thread/queue/start`, and `turn/steer`. A desktop session running its private stdio server cannot receive these messages from rev. Linking/opening still works, but comments stay visibly pending. This is not a substitute for the originating chat, and rev never resumes a second process against the same history.
 
-Only for a compatible shared-server setup, launch rev with `REV_CODEX_SHARED_SERVER=1` and a current `codex` on `PATH` (or set `REV_CODEX_BIN`). It connects through `codex app-server proxy`; it does not start a daemon. The chat's existing model and permissions remain in effect. If delivery is interrupted, rev asks you to check the chat before resending to avoid duplicate work. After handling a comment, the same Codex chat posts its answer back into the original rev thread:
+Only for a compatible shared-server setup, launch rev with `REV_CODEX_SHARED_SERVER=1` and a current `codex` on `PATH` (or set `REV_CODEX_BIN`). It connects through `codex app-server proxy`; it does not start a daemon. The chat's existing model and permissions remain in effect. If delivery is interrupted, rev asks you to check the chat before resending to avoid duplicate work.
+
+Local code comments have a thin status band inside a neutral card:
+
+- Gray (`#656C76`): pending pickup. Delivery to the chat alone does not change this.
+- Yellow (`#D29922`): the agent acknowledged pickup and is working.
+- Green (`#00B401`): the agent posted an answer into the comment thread.
+
+The originating agent uses these commands, with `CODEX_THREAD_ID` unchanged:
 
 ```sh
-rev reply https://github.com/OWNER/REPOSITORY/pull/123 --comment COMMENT_ID --body-file reply.txt
+# Read outstanding requests, including their IDs, revisions and source context.
+rev comments https://github.com/OWNER/REPOSITORY/pull/123
+# Acknowledge the returned revision before starting work.
+rev pickup https://github.com/OWNER/REPOSITORY/pull/123 --comment COMMENT_ID --revision 1
+# Post the answer and mark that request answered in one operation.
+rev reply https://github.com/OWNER/REPOSITORY/pull/123 --comment COMMENT_ID --revision 1 --body-file reply.txt
 ```
 
-The incoming message includes the comment ID and reply instruction. Replies appear as **Codex** underneath that comment, with the same formatting as earlier agent responses. They are local rev replies, not additional GitHub posts. The command requires the original `CODEX_THREAD_ID`; it never changes models or starts another chat. This return path works even when automatic incoming delivery is unavailable.
+Incoming messages include these instructions. Pickup and reply are idempotent, restricted to the bound chat, and work even when incoming push delivery is unavailable. Editing a request returns it to pending and increments its revision; stale pickup/reply attempts are rejected. A follow-up is a separate request with its own status. Already-posted answers remain visible. Replies appear as **Codex** below the original comment and stay local to rev. Add this workflow to the originating agent's instructions; no separate chat or model is started.
 
 ## Keyboard navigation
 

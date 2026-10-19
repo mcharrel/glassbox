@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ active: vi.fn() }));
 vi.mock('../../../src/client/workspace/state.js', () => ({ activeTab: mocks.active }));
 vi.mock('../../../src/client/diff/find.js', () => ({ refreshFind: vi.fn() }));
 vi.mock('../../../src/client/stores/index.js', () => ({ reviewStore: {} }));
-import { threadHtml } from '../../../src/client/workspace/threads.js';
+import { messageHtml, threadHtml } from '../../../src/client/workspace/threads.js';
 const root = () => ThreadMessageSchema.parse({ id: 'root', author: 'alice', body: 'Request', date: '', kind: 'review', path: 'file.ts', status: 'done', destination: 'local' });
 beforeEach(() => mocks.active.mockReturnValue(PullTabSchema.parse({ key: 'example/project#1', info: pullInfo(), viewer: 'alice', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: null })));
 it('shows local follow-ups and Codex answers without a GitHub ID, share button or offline marker', () => {
@@ -31,4 +31,22 @@ it('shows Main comments on own PRs as public without local reply controls', () =
   expect(html).toContain('comment-share');
   expect(html).not.toContain('Reply locally'); expect(html).not.toContain('data-parent-key');
   expect(html).not.toContain('>Local<'); expect(html).not.toContain('Codex');
+});
+
+it.each([
+  ['pending', 'Pending pickup'], ['processing', 'Agent working'], ['answered', 'Answered'],
+] as const)('shows the %s agent band with an accessible status label', (status, label) => {
+  const r = { ...root(), agentStatus: status };
+  const html = String(messageHtml(r));
+  expect(html).toContain(`data-agent-status="${status}"`);
+  expect(html).toContain('role="status"'); expect(html).toContain(label);
+  expect(html).toContain('data-code-comment="true"');
+});
+it('shows unacknowledged delivery as pending and omits agent status on GitHub comments and AI replies', () => {
+  const r = root();
+  r.codex = { threadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', status: 'sent', mode: 'queue' };
+  expect(String(messageHtml(r))).toContain('Pending pickup');
+  expect(String(messageHtml({ ...r, destination: 'github' }))).not.toContain('data-agent-status');
+  expect(String(messageHtml({ ...r, kind: 'ai' }))).not.toContain('data-agent-status');
+  expect(String(messageHtml({ ...r, kind: 'issue' }))).not.toContain('data-agent-status');
 });

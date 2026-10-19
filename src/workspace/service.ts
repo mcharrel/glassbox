@@ -22,7 +22,7 @@ import {
 } from '../db/queries.js';
 import { parseDiffData } from '../git/parseDiffData.js';
 import { ensureCheckout, importPull } from './checkout.js';
-import { flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment } from './codex.js';
+import { flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment, reviseComment } from './codex.js';
 import { cancelDeployment, refreshDeployment, stopDeployments } from './deployments.js';
 import { discardTabData } from './discard.js';
 import {
@@ -373,7 +373,7 @@ export function queueAnnotationChange(
   if (!tab || !message) return;
   if (!message.editable) throw new Error('Only your comments can be edited');
   if (operation === 'delete') message.deleted = true;
-  else { message.body = content ?? message.body; delete message.bodyHTML; }
+  else reviseComment(message, content ?? message.body);
   enqueue(tab, message, Boolean(message.remoteId) || operation === 'delete' ? operation : 'create');
 }
 export async function flushOutbox(): Promise<void> {
@@ -647,7 +647,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   if (input.op === 'edit-comment' || input.op === 'delete-comment') {
     const message = tab.comments.find((m) => m.id === input.id);
     if (message?.editable !== true) throw new Error('Only your comments can be edited');
-    if (input.op === 'edit-comment') { message.body = input.body; delete message.bodyHTML; }
+    if (input.op === 'edit-comment') reviseComment(message, input.body);
     else message.deleted = true;
     enqueue(
       tab,

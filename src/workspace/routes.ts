@@ -3,8 +3,8 @@ import { Hono } from 'hono';
 import { codeCommentDestination, VisibilitySchema, WorkspaceMutationSchema } from '../api/workspace.js';
 import type { AppEnv } from '../types.js';
 import { parseBody } from '../utils/parseBody.js';
-import { postCodexReply } from './codex-reply.js';
-import { authorizeControl, CodexOpenSchema, CodexReplySchema } from './control.js';
+import { listCodexComments, pickUpCodexComment, postCodexReply } from './codex-reply.js';
+import { authorizeControl, CodexCommentSchema, CodexCommentsSchema, CodexOpenSchema, CodexReplySchema } from './control.js';
 import { parsePullUrl, pullKey } from './github.js';
 import { reportVisibility } from './notifications.js';
 import { searchAllFiles } from './search.js';
@@ -12,6 +12,20 @@ import { mutateWorkspace, reconcileCommentRouting } from './service.js';
 import { saveWorkspace, workspaceData  } from './storage.js';
 
 export const workspaceRoutes = new Hono<AppEnv>();
+workspaceRoutes.post('/codex-comments', async c => {
+  if (!authorizeControl(c.req.header('x-rev-token'))) return c.json({ error: 'Unauthorized' }, 401);
+  const parsed = await parseBody(c, CodexCommentsSchema);
+  if (!parsed.ok) return parsed.response;
+  try { return c.json({ comments: listCodexComments(parsed.data) }); }
+  catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Could not read comments' }, 400); }
+});
+workspaceRoutes.post('/codex-pickup', async c => {
+  if (!authorizeControl(c.req.header('x-rev-token'))) return c.json({ error: 'Unauthorized' }, 401);
+  const parsed = await parseBody(c, CodexCommentSchema);
+  if (!parsed.ok) return parsed.response;
+  try { pickUpCodexComment(parsed.data); return c.json({ ok: true }); }
+  catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Could not pick up comment' }, 400); }
+});
 workspaceRoutes.post('/codex-reply', async c => {
   if (!authorizeControl(c.req.header('x-rev-token'))) return c.json({ error: 'Unauthorized' }, 401);
   const parsed = await parseBody(c, CodexReplySchema);

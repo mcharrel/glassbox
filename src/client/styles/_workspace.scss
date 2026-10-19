@@ -410,7 +410,47 @@ body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
   margin-top: 6px;
 }
 .local-thread-details {
-  padding: 0 12px 10px;
+  padding: 0 0 10px;
+}
+.local-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-right: 48px;
+  font-family: var(--font-mono);
+  strong { font-size: var(--font-code-size); font-weight: 600; }
+  span, time { color: var(--text-dim); font-size: 11px; }
+}
+.local-agent-status { width: 100%; }
+.pr-message[data-code-comment='true'] {
+  position: relative;
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 20px;
+  .pr-message-meta { font-size: 11px; opacity: 1; color: var(--text-dim); }
+  .pr-message-meta > span:first-of-type { font-size: var(--font-code-size); color: var(--text); }
+  .pr-message-meta time { font-size: 11px; }
+}
+// The band stays inside the card and reflects agent acknowledgement, not transport delivery.
+.annotation-item[data-agent-status],
+.pr-message[data-agent-status] {
+  --comment-status: #656c76;
+  &[data-agent-status='processing'] { --comment-status: #d29922; }
+  &[data-agent-status='answered'] { --comment-status: #00b401; }
+  &::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--comment-status);
+  }
 }
 .local-comment-status {
   padding-right: 5px;

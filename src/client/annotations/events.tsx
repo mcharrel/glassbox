@@ -150,7 +150,7 @@ function startEdit(item: HTMLElement): void {
         <textarea>{annotation.content}</textarea>
         <div className="annotation-form-actions">
           <button className="btn btn-sm cancel-edit">Cancel</button>
-          <button className="btn btn-sm btn-primary save-edit">Save</button>
+          <button className="btn btn-sm save-edit">Save</button>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { PullTabSchema, ThreadMessageSchema, type PullTab } from '../../../src/a
 const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[] }, connect: vi.fn(), send: vi.fn(), save: vi.fn(), close: vi.fn() }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks.data, saveWorkspace: mocks.save }));
 vi.mock('../../../src/workspace/codex-client.js', () => ({ codexConnection: mocks.connect, sendToCodex: mocks.send }));
-import { commentPrompt, flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment } from '../../../src/workspace/codex.js';
+import { commentPrompt, flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment, reviseComment } from '../../../src/workspace/codex.js';
 const chat = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const message = (body = 'Please simplify this') => ThreadMessageSchema.parse({ id: crypto.randomUUID(), body, author: 'alice', date: '', kind: 'review', destination: 'local', path: 'src/example.ts', line: 10, side: 'new' });
 function tab() {
@@ -91,4 +91,55 @@ it('never dispatches Main comments, including a legacy local comment queued befo
   m.codex = { threadId: chat, status: 'queued', mode: 'queue' };
   await flushCodexComments(); expect(mocks.connect).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
   m.codex.status = 'uncertain'; expect(() => retryCodexComment(t, m)).toThrow('local comments');
+});
+
+it('does not confuse delivery with pickup, and resets the request when its text changes', async () => {
+  const t = mocks.data.tabs[0], m = message(); t.comments.push(m); queueCodexComment(t, m);
+  await vi.waitFor(() => expect(m.codex?.status).toBe('sent'));
+  expect(m.agentStatus).toBeUndefined();
+  m.agentStatus = 'answered';
+  reviseComment(m, m.body); expect(m.agentStatus).toBe('answered');
+  reviseComment(m, 'Updated request');
+  expect(m).toMatchObject({ revision: 2, agentStatus: 'pending', codexRequested: true });
+  expect(m.codex).toBeUndefined();
+  queueCodexComment(t, m);
+  await vi.waitFor(() => expect(m.codex?.status).toBe('sent'));
+  expect(mocks.send.mock.calls[1][4]).toBe(`${m.id}:2`);
+  expect(commentPrompt(t, m)).toContain('--revision 2');
+  expect(commentPrompt(t, m)).toContain('rev pickup');
+});
+it('recovers existing answers without treating delivery or an old revision as answered', () => {
+  const t = mocks.data.tabs[0], answered = message(), delivered = message(), edited = message(), failed = message();
+  delivered.codex = { threadId: chat, status: 'sent', mode: 'queue' };
+  edited.revision = 2;
+  t.comments.push(answered, delivered, edited, failed,
+    { ...message(), kind: 'ai', status: 'error', author: 'Previous agent', parentKey: failed.id },
+    { ...message(), kind: 'ai', status: 'done', author: 'Previous agent', parentKey: answered.id },
+    { ...message(), kind: 'ai', status: 'done', author: 'Codex', parentKey: edited.id });
+  recoverCodexComments();
+  expect(answered.agentStatus).toBe('answered');
+  expect(delivered.agentStatus).toBe('pending');
+  expect(edited.agentStatus).toBe('pending');
+  expect(failed.agentStatus).toBe('pending');
+});
+it('does not send an obsolete revision if the request changes while connecting', async () => {
+  let release!: (value: unknown) => void;
+  mocks.connect.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const t = mocks.data.tabs[0], m = message(); t.comments.push(m); queueCodexComment(t, m);
+  reviseComment(m, 'Use this new requirement'); queueCodexComment(t, m);
+  release({ client: { close: mocks.close }, activeTurn: 'active' });
+  await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
+  expect(mocks.send.mock.calls[0][2]).toContain('new comment: Use this new requirement');
+  expect(mocks.send.mock.calls[0][4]).toBe(`${m.id}:2`);
+});
+it('does not turn an explicit pickup into uncertain delivery after a late transport failure', async () => {
+  let rejectSend!: (reason: Error) => void;
+  mocks.send.mockImplementationOnce(() => new Promise((_, reject) => { rejectSend = reject; }));
+  const t = mocks.data.tabs[0], m = message(); t.comments.push(m); queueCodexComment(t, m);
+  await vi.waitFor(() => expect(m.codex?.status).toBe('sending'));
+  m.codex!.status = 'sent'; m.agentStatus = 'processing';
+  rejectSend(new Error('Connection lost'));
+  await vi.waitFor(() => expect(mocks.close).toHaveBeenCalled());
+  expect(m.codex).toMatchObject({ status: 'sent' });
+  expect(m.agentStatus).toBe('processing');
 });

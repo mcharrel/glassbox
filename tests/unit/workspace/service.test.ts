@@ -14,7 +14,7 @@ vi.mock('../../../src/workspace/storage.js', () => ({
   workspaceData: () => mocks.data,
   saveWorkspace: mocks.save,
 }));
-vi.mock('../../../src/workspace/codex.js', () => ({ queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
+vi.mock('../../../src/workspace/codex.js', async importOriginal => ({ ...await importOriginal<typeof import('../../../src/workspace/codex.js')>(), queueCodexComment: mocks.agent, flushCodexComments: vi.fn(), recoverCodexComments: vi.fn(), retryCodexComment: vi.fn() }));
 vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensureCheckout: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../../../src/workspace/deployments.js', () => ({ refreshDeployment: vi.fn().mockResolvedValue(undefined), cancelDeployment: vi.fn(), stopDeployments: vi.fn() }));
 vi.mock('../../../src/workspace/discard.js', () => ({ discardTabData: mocks.discard }));
@@ -508,7 +508,8 @@ describe('comment scope and ownership routing', () => {
     expect(t.comments).toEqual([first, reply]);
     expect(first.body).toBe('Clarified request'); expect(reply.deleted).toBe(true);
     expect(mocks.data.outbox).toHaveLength(0); expect(mocks.github).not.toHaveBeenCalled();
-    expect(mocks.agent).toHaveBeenCalledTimes(2);
+    expect(first).toMatchObject({ revision: 2, agentStatus: 'pending' });
+    expect(mocks.agent).toHaveBeenCalledTimes(3);
   });
   it.each(['alice', 'bob'])('waits for ownership and then routes to author %s exactly once', async author => {
     const t = mocks.data.tabs[0]; t.info = null; t.codexThreadId = chat;
@@ -598,7 +599,8 @@ it('keeps imported annotations local on own PRs without treating historical feed
   queueAnnotationChange('review', 'new-note', 'edit', 'Edited note');
   queueAnnotationChange('review', 'new-note', 'delete');
   expect(t.comments[1]).toMatchObject({ destination: 'local', body: 'Edited note', deleted: true });
-  expect(mocks.agent).toHaveBeenCalledTimes(1); expect(mocks.github).not.toHaveBeenCalled();
+  expect(t.comments[1]).toMatchObject({ revision: 2, agentStatus: 'pending' });
+  expect(mocks.agent).toHaveBeenCalledTimes(2); expect(mocks.github).not.toHaveBeenCalled();
 });
 
 it('still refreshes other people’s GitHub comments on own PRs', async () => {

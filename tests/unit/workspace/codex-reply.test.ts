@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { PullTabSchema, ThreadMessageSchema, type PullTab } from '../../../src/api/workspace.js';
 const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[] }, save: vi.fn() }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks.data, saveWorkspace: mocks.save }));
-import { postCodexReply } from '../../../src/workspace/codex-reply.js';
+import { listCodexComments, pickUpCodexComment, postCodexReply } from '../../../src/workspace/codex-reply.js';
 const chat = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const input = { url: 'https://github.com/owner/repo/pull/1', commentId: 'comment', threadId: chat, body: 'Fixed and pushed the signed commit. The focused tests pass.' };
 beforeEach(() => {
@@ -13,7 +13,7 @@ beforeEach(() => {
 it('posts the original chat’s answer in the original comment thread and preserves its source anchor', () => {
   const id = postCodexReply(input); const comments = mocks.data.tabs[0].comments;
   expect(comments[1]).toMatchObject({ id, parentKey: 'comment', author: 'Codex', body: input.body, kind: 'ai', status: 'done', path: 'src/file.ts', line: 10, side: 'new', annotationId: 'annotation' });
-  expect(comments[0].codex?.status).toBe('sent'); expect(comments[1].remoteId).toBeUndefined();
+  expect(comments[0].codex?.status).toBe('sent'); expect(comments[0].agentStatus).toBe('answered'); expect(comments[1].remoteId).toBeUndefined();
 });
 it('deduplicates identical retries without preventing a follow-up answer', () => {
   const first = postCodexReply(input); expect(postCodexReply(input)).toBe(first);
@@ -43,4 +43,58 @@ it('rejects Codex replies to Main comments even when a legacy chat binding remai
   mocks.data.tabs[0].comments[0].kind = 'issue';
   expect(() => postCodexReply(input)).toThrow('local comments');
   expect(mocks.data.tabs[0].comments).toHaveLength(1);
+});
+
+it('lists only unfinished local code requests belonging to the originating chat', () => {
+  expect(listCodexComments(input)).toMatchObject([{ id: 'comment', revision: 1, status: 'pending' }]);
+  expect(listCodexComments(input)[0].prompt).toContain('rev pickup');
+  pickUpCodexComment(input);
+  expect(listCodexComments(input)[0].status).toBe('processing');
+  postCodexReply(input);
+  expect(listCodexComments(input)).toEqual([]);
+  expect(() => listCodexComments({ ...input, threadId: 'other' })).toThrow('linked');
+});
+it('acknowledges pickup idempotently and never regresses an answered request', () => {
+  pickUpCodexComment(input); pickUpCodexComment(input);
+  const comment = mocks.data.tabs[0].comments[0];
+  expect(comment.agentStatus).toBe('processing');
+  expect(comment.codex?.status).toBe('sent');
+  postCodexReply(input); pickUpCodexComment(input);
+  expect(comment.agentStatus).toBe('answered');
+});
+it('rejects stale pickup and replies after an edit and deduplicates within each revision', () => {
+  const first = postCodexReply(input);
+  const comment = mocks.data.tabs[0].comments[0];
+  comment.revision = 2; comment.agentStatus = 'pending';
+  expect(() => pickUpCodexComment(input)).toThrow('edited');
+  expect(() => postCodexReply(input)).toThrow('edited');
+  expect(comment.agentStatus).toBe('pending');
+  pickUpCodexComment({ ...input, revision: 2 });
+  const second = postCodexReply({ ...input, revision: 2 });
+  expect(second).not.toBe(first);
+  expect(postCodexReply({ ...input, revision: 2 })).toBe(second);
+  expect(comment.agentStatus).toBe('answered');
+});
+it('rejects pickup by another chat, deleted comments, public comments and Main comments', () => {
+  expect(() => pickUpCodexComment({ ...input, threadId: 'other' })).toThrow('originating');
+  const comment = mocks.data.tabs[0].comments[0];
+  comment.destination = 'github';
+  expect(() => pickUpCodexComment(input)).toThrow('local comments');
+  comment.destination = 'local'; comment.kind = 'issue';
+  expect(() => pickUpCodexComment(input)).toThrow('local comments');
+  comment.deleted = true;
+  expect(() => pickUpCodexComment(input)).toThrow('not found');
+  expect(comment.agentStatus).toBeUndefined();
+});
+it('filters a mixed request list without losing eligible requests or exposing private Main messages', () => {
+  const tab = mocks.data.tabs[0], original = tab.comments[0];
+  const clone = (id: string, changes = {}) => ({ ...original, id, ...changes });
+  tab.comments = [
+    clone('public', { destination: 'github' }), clone('main', { kind: 'issue' }),
+    clone('deleted', { deleted: true }), clone('answered', { agentStatus: 'answered' }),
+    clone('unbound', { codex: undefined }), clone('working', { agentStatus: 'processing' }), original,
+  ];
+  expect(listCodexComments(input).map(item => item.id)).toEqual(['working', 'comment']);
+  tab.info = null;
+  expect(listCodexComments(input)).toEqual([]);
 });

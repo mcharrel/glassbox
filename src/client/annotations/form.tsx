@@ -7,6 +7,7 @@ import { clearPendingArtifactRegions, takePendingArtifactRegions } from '../diff
 import { asTextarea, toElement } from '../dom.js';
 import { asCategory } from '../narrow.js';
 import { editFormSignal, reviewStore, setEditForm } from '../stores/index.js';
+import { activeTab } from '../workspace/state.js';
 import { renderAnnotationInline } from './render.js';
 
 /** Register the create-form delegates on the diff container. Called once
@@ -64,14 +65,15 @@ export function showAnnotationForm(afterEl: HTMLElement, lineNumber: number, sid
   const container = toElement(
     <div className="annotation-form-container" data-form-key={formKey} data-line={String(lineNumber)} data-side={side}>
       <div className={`annotation-form${replyToNoteId !== undefined ? ' annotation-form-reply' : ''}`}>
+        <strong className="annotation-form-author">{activeTab()?.viewer ?? 'You'}</strong>
         {replyToNoteId !== undefined
           ? <span className="annotation-reply-tag"><IconCornerDownRight /> replying to AI note</span>
           : <span className="annotation-form-anchor">Line {String(lineNumber)}</span>}
-        <textarea placeholder={replyToNoteId !== undefined ? 'Reply to this note…' : "Describe the issue and what you'd expect instead…"} autoFocus></textarea>
+        <textarea placeholder={replyToNoteId !== undefined ? 'Reply to this note…' : 'Leave a comment…'} aria-label="Comment" autoFocus></textarea>
         <div className="annotation-form-actions">
           <span className="annotation-form-hint">Enter to save · Shift+Enter for a new line · Esc to cancel</span>
           <button className="btn btn-sm cancel-btn">Cancel</button>
-          <button className="btn btn-sm btn-primary annotation-save-btn" disabled>Save</button>
+          <button className="btn btn-sm annotation-save-btn" disabled>Comment</button>
         </div>
       </div>
     </div>

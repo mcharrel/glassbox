@@ -89,10 +89,19 @@ export const ThreadMessageSchema = z.object({
   codex: CodexDeliverySchema.optional(),
   destination: z.enum(['local', 'github']).optional(),
   codexRequested: z.boolean().optional(),
+  agentStatus: z.enum(['pending', 'processing', 'answered']).optional(),
+  revision: z.number().int().positive().optional(),
+  replyToRevision: z.number().int().positive().optional(),
   workspaceUpdatedAt: z.number().optional(),
   workspaceSafeHead: z.string().optional(),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
+
+/** Delivery to a chat is not an acknowledgement that an agent has begun work. */
+export function commentAgentStatus(message: ThreadMessage): 'pending' | 'processing' | 'answered' | undefined {
+  return message.kind === 'review' && message.destination === 'local'
+    ? message.agentStatus ?? 'pending' : undefined;
+}
 export const DeploymentTargetSchema = z.object({
   datacenter: z.string(),
   environment: z.string(),

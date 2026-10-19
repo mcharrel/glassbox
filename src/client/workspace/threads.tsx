@@ -1,6 +1,6 @@
 import { delegate, effect } from 'kerfjs';
 
-import { commentDestination, type ThreadMessage } from '../../api/workspace.js';
+import { commentAgentStatus, commentDestination, type ThreadMessage } from '../../api/workspace.js';
 import { IconTrash } from '../../icons.js';
 import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
@@ -11,14 +11,16 @@ import { commentAnchor } from './commentAnchor.js';
 import { activeTab, mutate, workspace } from './state.js';
 
 export function codexStatus(message: ThreadMessage) {
+  const status = commentAgentStatus(message);
+  if (status === undefined) return null;
   const delivery = message.codex;
-  if (!delivery) return null;
-  return <div className="agent-status" title={delivery.error ?? ''}>
-    <a href={`codex://threads/${delivery.threadId}`}>Codex</a>{' · '}
-    {delivery.status === 'sent' ? 'Delivered to chat' : delivery.status === 'sending' ? 'Sending…'
-      : delivery.status === 'uncertain' ? 'Check chat before resending'
-      : delivery.error ?? (delivery.mode === 'steer' ? 'Waiting to steer' : 'Queued')}
-    {delivery.status === 'uncertain' && <button className="btn btn-xs" data-comment-action="retry-codex" data-message-id={message.id}>Resend</button>}
+  return <div className="agent-status" role="status" title={delivery?.error ?? (!delivery ? 'No Codex chat linked yet' : '')}>
+    {status === 'answered' ? 'Answered' : status === 'processing' ? 'Agent working' : 'Pending pickup'}
+    {delivery && <> · <a href={`codex://threads/${delivery.threadId}`}>Codex</a></>}
+    {status === 'pending' && delivery?.status === 'uncertain' && <>
+      {' · Check chat before resending '}
+      <button className="btn btn-xs" data-comment-action="retry-codex" data-message-id={message.id}>Resend</button>
+    </>}
   </div>;
 }
 export function messageHtml(message: ThreadMessage) {
@@ -29,6 +31,8 @@ export function messageHtml(message: ThreadMessage) {
       data-message={message.id}
       data-key={message.id}
       data-editable={message.editable ? 'true' : 'false'}
+      data-code-comment={message.kind === 'review' || message.path !== undefined ? 'true' : undefined}
+      data-agent-status={commentAgentStatus(message)}
     >
       <div className="pr-message-meta">
         {pending && (
@@ -60,8 +64,8 @@ export function messageHtml(message: ThreadMessage) {
           )}
         </span>
       </div>
-      {codexStatus(message)}
       <div className="pr-message-body github-markdown">{renderGitHubMarkdown(message.body, message.bodyHTML)}</div>
+      {codexStatus(message)}
       {message.status === 'working' && <div className="agent-status">AI working…</div>}
       {Boolean(message.error) && (
         <div className="workspace-error">
@@ -121,7 +125,7 @@ export function bindThreads(): void {
     previous = signature;
     pane
       .querySelectorAll(
-        '.pr-inline-thread, .local-thread-details, .local-comment-status, .local-comment-share',
+        '.pr-inline-thread, .local-thread-details, .local-comment-header, .local-agent-status, .local-comment-share',
       )
       .forEach((el) => {
         el.remove();
@@ -144,14 +148,22 @@ export function bindThreads(): void {
           : null;
       if (local) {
         local.dataset.commentThread = root.id;
+        const agentStatus = commentAgentStatus(root);
+        if (agentStatus) local.dataset.agentStatus = agentStatus;
+        else delete local.dataset.agentStatus;
         const localText = local.querySelector('.annotation-text');
         if (localText && localText.textContent !== root.body) localText.textContent = root.body;
         const status = toElement(
-          <span className="local-comment-status" title={root.destination === 'local' ? 'Only in rev' : root.error ?? (root.destination === 'github' ? 'Queued for GitHub' : 'Waiting to determine PR ownership')}>
-            {root.destination === 'local' ? 'Local' : root.status === 'synced' ? '' : '☁'}
-          </span>,
+          <div className="local-comment-header">
+            <strong>{root.author}</strong>
+            <span className="local-comment-status" title={root.destination === 'local' ? 'Only in rev' : root.error ?? 'Waiting to sync'}>
+              {root.destination === 'local' ? 'Local' : root.status === 'synced' ? '' : '☁'}
+            </span>
+            <time dateTime={root.date}>{new Date(root.date).toLocaleString()}</time>
+          </div>,
         );
         local.prepend(status);
+        if (agentStatus) local.append(toElement(<div className="local-agent-status">{codexStatus(root)}</div>));
         const share = toElement(
           <button
             className="btn btn-xs local-comment-share"
@@ -173,7 +185,6 @@ export function bindThreads(): void {
         );
         const details = toElement(
           <div className="local-thread-details">
-            {codexStatus(root)}
             {replies.map((reply) => (
               <>
                 {messageHtml(reply)}

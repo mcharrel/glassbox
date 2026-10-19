@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { setDataDir } from './db/connection.js';
 import { createReview, getLatestInProgressReview } from './db/queries.js';
 import { startServer } from './server.js';
-import { CodexReplySchema, ConnectionSchema, controlPath } from './workspace/control.js';
+import { CodexCommentSchema, CodexCommentsSchema, CodexReplySchema, ConnectionSchema, controlPath } from './workspace/control.js';
 import { parsePullUrl } from './workspace/github.js';
 
 async function openPull(url: string): Promise<void> {
@@ -47,25 +47,31 @@ async function openPull(url: string): Promise<void> {
   }
   console.log(`Opened ${ref.url}${opened.linked ? ' and linked the originating Codex chat' : ''}.`);
 }
-async function replyToComment(args: string[]): Promise<void> {
+async function commentCommand(args: string[]): Promise<void> {
   const value = (name: string) => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };
+  const command = args[0];
+  const common = { url: args[1], threadId: process.env.CODEX_THREAD_ID };
+  const comment = { ...common, commentId: value('--comment'),
+    revision: value('--revision') === undefined ? 1 : Number(value('--revision')) };
   const file = value('--body-file');
-  if (file === undefined || file === '') throw new Error('Use rev reply <PR URL> --comment <ID> --body-file <FILE or ->');
-  const body = readFileSync(file === '-' ? 0 : file, 'utf8');
-  const input = CodexReplySchema.parse({ url: args[1], commentId: value('--comment'), threadId: process.env.CODEX_THREAD_ID, body });
+  if (command === 'reply' && (file === undefined || file === '')) throw new Error('Use rev reply <PR URL> --comment <ID> --revision <N> --body-file <FILE or ->');
+  const input = command === 'comments' ? CodexCommentsSchema.parse(common)
+    : command === 'pickup' ? CodexCommentSchema.parse(comment)
+    : CodexReplySchema.parse({ ...comment, body: readFileSync(file === '-' ? 0 : file ?? '', 'utf8') });
   const connection = ConnectionSchema.parse(JSON.parse(readFileSync(controlPath(), 'utf8')));
-  const response = await fetch(`http://127.0.0.1:${connection.port}/api/workspace/codex-reply`, {
+  const response = await fetch(`http://127.0.0.1:${connection.port}/api/workspace/codex-${command}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-rev-token': connection.token },
     body: JSON.stringify(input), signal: AbortSignal.timeout(5000),
   });
-  if (!response.ok) throw new Error(`Could not post reply: ${await response.text()}`);
-  console.log('Reply posted in rev.');
+  if (!response.ok) throw new Error(`rev ${command} failed: ${await response.text()}`);
+  if (command === 'comments') console.log(JSON.stringify(await response.json(), null, 2));
+  else console.log(command === 'pickup' ? 'Comment picked up in rev.' : 'Reply posted in rev; comment marked answered.');
 }
 export async function main(args = process.argv.slice(2)): Promise<void> {
-  if (args[0] === 'reply') { await replyToComment(args); return; }
+  if (['comments', 'pickup', 'reply'].includes(args[0])) { await commentCommand(args); return; }
   if (args[0] === 'open' && args[1]) { await openPull(args[1]); return; }
   if (args.length && args[0] !== 'serve') {
-    console.log('rev serve [--no-open]\nrev open <GitHub PR URL>\nrev reply <PR URL> --comment <ID> --body-file <FILE or ->\n\nInside a Codex chat, rev open links comments to that chat automatically.');
+    console.log('rev serve [--no-open]\nrev open <GitHub PR URL>\nrev comments <PR URL>\nrev pickup <PR URL> --comment <ID> --revision <N>\nrev reply <PR URL> --comment <ID> --revision <N> --body-file <FILE or ->\n\nInside a Codex chat, rev open links comments to that chat automatically.');
     return;
   }
   const root = process.env.REV_DATA_DIR ?? join(homedir(), '.local', 'share', 'rev', 'workspace');

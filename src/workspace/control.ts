@@ -9,9 +9,11 @@ export const ConnectionSchema = z.object({
   port: z.number().int().min(1).max(65535), token: z.string().length(64),
 });
 export const CodexOpenSchema = z.object({ url: z.string(), threadId: z.uuid().optional() });
-export const CodexReplySchema = z.object({
-  url: z.string(), threadId: z.uuid(), commentId: z.string().min(1), body: z.string().trim().min(1).max(50000),
+export const CodexCommentSchema = z.object({
+  url: z.string(), threadId: z.uuid(), commentId: z.string().min(1), revision: z.number().int().positive().default(1),
 });
+export const CodexReplySchema = CodexCommentSchema.extend({ body: z.string().trim().min(1).max(50000) });
+export const CodexCommentsSchema = z.object({ url: z.string(), threadId: z.uuid() });
 export const controlPath = () => join(process.env.REV_CONFIG_DIR ?? join(homedir(), '.local', 'share', 'rev'), 'connection.json');
 let token = '';
 export function authorizeControl(value: string | undefined): boolean {

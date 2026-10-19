@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { PullTabSchema, type PullTab } from '../../../src/api/workspace.js';
+import { PullTabSchema, ThreadMessageSchema, type PullTab } from '../../../src/api/workspace.js';
 import type { AppEnv } from '../../../src/types.js';
 const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[], active: null, externalSelection: 0 }, mutate: vi.fn(), save: vi.fn() }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks.data, saveWorkspace: mocks.save }));
@@ -55,4 +55,26 @@ it('opens another person’s PR without binding a Codex chat', async () => {
   const response = await post({ url, threadId: chat }, token);
   expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ linked: false });
   expect(mocks.data.tabs[0].codexThreadId).toBeUndefined(); stop();
+});
+
+it('authenticates agent controls and enforces chat binding and comment revisions', async () => {
+  const stop = registerControl(4183); const { token } = JSON.parse(readFileSync(controlPath(), 'utf8'));
+  await post({ url, threadId: chat }, token);
+  const tab = mocks.data.tabs[0]; tab.info = pullInfo(); tab.viewer = 'alice';
+  tab.comments.push(ThreadMessageSchema.parse({ id: 'note', kind: 'review', destination: 'local', author: 'alice',
+    body: 'Please simplify', date: '', revision: 2, codex: { threadId: chat, status: 'queued', mode: 'queue' } }));
+  const request = (action: string, body: object, authenticated = true) => app.request(`/api/workspace/codex-${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(authenticated ? { 'x-rev-token': token } : {}) },
+    body: JSON.stringify({ url, threadId: chat, ...body }),
+  });
+  for (const action of ['comments', 'pickup', 'reply'])
+    expect((await request(action, {}, false)).status).toBe(401);
+  expect((await request('pickup', { commentId: 'note', revision: 1 })).status).toBe(400);
+  expect((await request('pickup', { commentId: 'note', revision: 2, threadId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' })).status).toBe(400);
+  expect((await request('pickup', { commentId: 'note', revision: 2 })).status).toBe(200);
+  expect(tab.comments[0].agentStatus).toBe('processing');
+  expect((await request('reply', { commentId: 'note', revision: 2, body: 'Done' })).status).toBe(200);
+  expect(tab.comments[0].agentStatus).toBe('answered');
+  expect(await (await request('comments', {})).json()).toEqual({ comments: [] });
+  stop();
 });

@@ -6,7 +6,8 @@ import { saveWorkspace, workspaceData } from './storage.js';
 export function commentPrompt(tab: PullTab, message: ThreadMessage): string {
   const body = message.body.replace(/^\s*\[steer\]\s*/i, '');
   const location = message.path !== undefined ? `\nFile: ${message.path}${message.line != null ? `:${message.line} (${message.side ?? 'new'})` : ''}` : '';
-  return `new comment: ${body}\n\nPR: ${tab.ref.url}${location}\nrev comment: ${message.id}\n\nAfter handling this comment, post a concise answer into its rev thread with:\nrev reply ${tab.ref.url} --comment ${message.id} --body-file <reply-file>\nKeep CODEX_THREAD_ID unchanged. Use the existing chat context and normal verification/signing workflow.`;
+  const command = `${tab.ref.url} --comment ${message.id} --revision ${message.revision ?? 1}`;
+  return `new comment: ${body}\n\nPR: ${tab.ref.url}${location}\nrev comment: ${message.id}\n\nBefore starting work, acknowledge pickup:\nrev pickup ${command}\nAfter handling this comment, post a concise answer into its rev thread:\nrev reply ${command} --body-file <reply-file>\nPickup marks the comment as processing; the reply marks it answered. If the comment changed, run rev comments ${tab.ref.url} and use its latest revision. Keep CODEX_THREAD_ID unchanged. Use the existing chat context and normal verification/signing workflow.`;
 }
 export function queueCodexComment(tab: PullTab, message: ThreadMessage): void {
   if (closingTabs.has(tab) || commentDestination(tab, message) !== 'local' || message.destination !== 'local') return;
@@ -19,6 +20,18 @@ export function queueCodexComment(tab: PullTab, message: ThreadMessage): void {
   saveWorkspace();
   void flushCodexComments();
 }
+/** Editing starts a new request; an answer to an older revision must not complete it. */
+export function reviseComment(message: ThreadMessage, body: string): void {
+  if (message.body === body) return;
+  message.body = body;
+  delete message.bodyHTML;
+  if (message.destination === 'local' && message.kind === 'review') {
+    message.revision = (message.revision ?? 1) + 1;
+    message.agentStatus = 'pending';
+    if (message.codex) message.codexRequested = true;
+    delete message.codex;
+  }
+}
 export function retryCodexComment(tab: PullTab, message: ThreadMessage): void {
   if (commentDestination(tab, message) !== 'local' || message.destination !== 'local') throw new Error('Codex only handles local comments on your own PRs');
   if (!message.codex || message.codex.status !== 'uncertain') throw new Error('No uncertain delivery to retry');
@@ -30,6 +43,10 @@ export function retryCodexComment(tab: PullTab, message: ThreadMessage): void {
 export function recoverCodexComments(): void {
   const data = workspaceData();
   for (const tab of data.tabs) for (const message of tab.comments) {
+    if (message.destination === 'local' && message.kind === 'review' && message.agentStatus === undefined) {
+      message.agentStatus = tab.comments.some(reply => !reply.deleted && reply.kind === 'ai' && reply.status === 'done'
+        && reply.parentKey === message.id && (reply.replyToRevision ?? 1) === (message.revision ?? 1)) ? 'answered' : 'pending';
+    }
     if (message.codex?.status === 'sending') {
       message.codex.status = 'uncertain';
       message.codex.error = 'Delivery was interrupted. Check the Codex chat before resending.';
@@ -37,8 +54,9 @@ export function recoverCodexComments(): void {
   }
 }
 let flushing = false;
+let flushAgain = false;
 export async function flushCodexComments(): Promise<void> {
-  if (flushing) return;
+  if (flushing) { flushAgain = true; return; }
   flushing = true;
   try {
     const data = workspaceData();
@@ -64,18 +82,21 @@ export async function flushCodexComments(): Promise<void> {
         delivery.error ??= 'Waiting for Codex. Open the originating chat.';
         continue;
       }
-      if (closingTabs.has(tab) || !data.tabs.includes(tab) || message.deleted || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
+      if (closingTabs.has(tab) || !data.tabs.includes(tab) || message.deleted || message.codex !== delivery || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
         || message.destination !== 'local' || tab.codexThreadId !== delivery.threadId) continue;
       delete delivery.error;
       // Persist before dispatch: a lost acknowledgement must never cause an automatic duplicate.
+      const stillSending = () => message.codex === delivery && delivery.status === 'sending';
       delivery.status = 'sending';
       saveWorkspace();
       try {
-        await sendToCodex(connection, delivery.threadId, commentPrompt(tab, message), delivery.mode, message.id);
-        delivery.status = 'sent';
+        await sendToCodex(connection, delivery.threadId, commentPrompt(tab, message), delivery.mode, (message.revision ?? 1) === 1 ? message.id : `${message.id}:${message.revision}`);
+        if (stillSending()) delivery.status = 'sent';
       } catch {
-        delivery.status = 'uncertain';
-        delivery.error = 'Delivery was not confirmed. Check the Codex chat before resending.';
+        if (stillSending()) {
+          delivery.status = 'uncertain';
+          delivery.error = 'Delivery was not confirmed. Check the Codex chat before resending.';
+        }
         connection.client.close();
         connections.set(delivery.threadId, null);
       }
@@ -83,5 +104,8 @@ export async function flushCodexComments(): Promise<void> {
     }
     for (const connection of connections.values()) connection?.client.close();
     saveWorkspace();
-  } finally { flushing = false; }
+  } finally {
+    flushing = false;
+    if (flushAgain) { flushAgain = false; void flushCodexComments(); }
+  }
 }
