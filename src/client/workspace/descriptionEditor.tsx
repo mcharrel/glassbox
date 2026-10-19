@@ -1,5 +1,6 @@
+import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { toElement } from '../dom.js';
-import type { DescriptionClick } from './description.js';
+import { clickedDescriptionText, type DescriptionClick } from './description.js';
 import { descriptionSourceOffset } from './descriptionSource.js';
 
 export function descriptionEditOffset(source: string, body: HTMLElement, click: DescriptionClick): number {
@@ -24,6 +25,24 @@ export function resizeDescriptionEditor(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto';
   textarea.style.height = `${textarea.scrollHeight}px`;
   if (parent) parent.scrollTop = scroll;
+}
+
+/** Render an unsaved draft without losing its editor or publishing it to GitHub. */
+export function previewDescriptionEditor(textarea: HTMLTextAreaElement, container: HTMLElement): void {
+  const preview = toElement(<div className="pr-description-body github-markdown">
+    {textarea.value.trim() ? renderGitHubMarkdown(textarea.value) : <p>Add a description…</p>}
+  </div>);
+  const scroll = container.scrollTop;
+  textarea.replaceWith(preview);
+  container.scrollTop = scroll;
+  preview.addEventListener('click', (event) => {
+    const click = clickedDescriptionText(event, preview);
+    if (!click) return;
+    const offset = descriptionEditOffset(textarea.value, preview, click);
+    const previousScroll = container.scrollTop;
+    preview.replaceWith(textarea);
+    focusDescriptionEditor(textarea, container, offset, click.top, previousScroll);
+  });
 }
 
 /** Measure wrapping using the same typography, without changing the textarea's text. */

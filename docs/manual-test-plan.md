@@ -314,3 +314,5 @@ Automated coverage uses synthetic data for exact/misleading links, zero/filtered
 - Resize the mid-panel while editing, type enough to add several wrapped lines, switch PRs and return: keep the draft, caret and usable scrolling. Save and Cancel retain their existing behavior. Another person’s PR, links, whitespace and drag selections must not open the editor.
 
 Automated coverage checks source mapping for repeated text, links/definitions/images, hidden HTML, entities, code, tables, nested blocks, UTF-16 offsets, empty input and bounded fallback; synthetic geometry checks caret/scroll placement and late-layout guards. Pixel-level UI verification remains manual under the no-browser-automation preference.
+
+- Click outside an unchanged description editor: return to the rendered description with no save controls. Change text and click outside: render that draft, retaining Save/Cancel without publishing. Reopen at a clicked word, switch PRs and return, and verify the draft survives. Save publishes; Cancel discards. Clicking inside the textarea or on Save/Cancel must not interfere.

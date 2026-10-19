@@ -15,7 +15,7 @@ import { initCommentDelete } from './commentDelete.js';
 import { createCommentNavigator } from './commentNavigation.js';
 import { conversation as conversationHtml } from './conversation.js';
 import { clickedDescriptionText } from './description.js';
-import { descriptionEditOffset, focusDescriptionEditor, resizeDescriptionEditor } from './descriptionEditor.js';
+import { descriptionEditOffset, focusDescriptionEditor, previewDescriptionEditor, resizeDescriptionEditor } from './descriptionEditor.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
@@ -268,7 +268,11 @@ export function initWorkspace(): void {
     const keys = new Set(workspace.value.tabs.filter(isPullAuthor).map(item => item.key));
     for (const key of descriptionDrafts.keys()) if (!keys.has(key)) descriptionDrafts.delete(key);
     if (descriptionKey !== tab?.key) {
-      if (descriptionKey !== undefined && keys.has(descriptionKey) && editingDescription) descriptionDrafts.set(descriptionKey, [...description.childNodes]);
+      if (descriptionKey !== undefined && keys.has(descriptionKey) && editingDescription) {
+        descriptionDrafts.set(descriptionKey, [...description.childNodes]);
+        // Detach the draft so morphing the next PR cannot reuse and overwrite its nodes.
+        description.replaceChildren();
+      }
       descriptionKey = tab?.key;
       const draft = descriptionKey === undefined ? undefined : descriptionDrafts.get(descriptionKey);
       editingDescription = draft !== undefined;
@@ -290,6 +294,14 @@ export function initWorkspace(): void {
     const textarea = description.querySelector<HTMLTextAreaElement>('.pr-description-editor textarea');
     if (textarea && description.clientWidth > 0) resizeDescriptionEditor(textarea);
   }).observe(description);
+  // Pointerdown runs before tab/navigation clicks and cannot dismiss a just-opened editor.
+  document.addEventListener('pointerdown', (event) => {
+    const form = description.querySelector<HTMLElement>('.pr-description-editor');
+    const textarea = form?.querySelector('textarea');
+    if (event.button !== 0 || !(event.target instanceof Node) || !form || !textarea || form.contains(event.target)) return;
+    if (textarea.value === textarea.defaultValue) form.querySelector<HTMLButtonElement>('[data-cancel]')?.click();
+    else previewDescriptionEditor(textarea, description);
+  });
   description.addEventListener('click', (event) => {
     const tab = activeTab();
     const text = description.querySelector<HTMLElement>('.pr-description-body');
