@@ -1,43 +1,34 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
+import type { CompanyDeployments } from '../api/company-deployments.js';
 import type { PullRef, PullTab } from '../api/workspace.js';
 import { parseDeploymentOutput } from './deployment-output.js';
+import { deploymentSettings } from './deployment-settings.js';
+import { runDeploymentSource } from './deployment-source.js';
 import { closingTabs } from './lifecycle.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
-const exec = promisify(execFile);
 const jobs = new Map<PullTab, { controller: AbortController; promise: Promise<void> }>();
 const REFRESH_MS = 300_000;
 let commandQueue = Promise.resolve();
 
-async function runDevflow(ref: PullRef, services: string[], signal: AbortSignal): Promise<string> {
+async function querySource(settings: CompanyDeployments, ref: PullRef, services: string[], signal: AbortSignal): Promise<string> {
   const previous = commandQueue;
   let release!: () => void;
   commandQueue = new Promise(resolve => { release = resolve; });
   try {
     await previous;
     signal.throwIfAborted();
-    const { stdout } = await exec('ddr', ['devflow', '--no-interactive', 'whereismycode',
-      '--pr', `https://github.com/${ref.owner}/${ref.repo}/pull/${ref.number}`,
-      ...services.flatMap(service => ['--service', service])],
-    { timeout: 90_000, maxBuffer: 1024 * 1024, signal,
-      env: { ...process.env, DEVFLOW_RENDER_TYPE: 'GITHUB' } });
-    return stdout;
-  } catch (error) {
-    if (signal.aborted) throw error;
-    // CLI failures can contain authentication URLs or tokens; never persist raw output.
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
-      throw new Error('Install ddr to see Devflow deployment status.', { cause: error });
-    throw new Error('Couldn’t refresh deployments. Check your ddr sign-in and connection, then press Cmd/Ctrl+R.', { cause: error });
+    return await runDeploymentSource(settings, ref, services, signal);
+  } catch {
+    // Reports and transport errors can contain private URLs or credentials; never persist them.
+    throw new Error('Couldn’t refresh deployments. Check My company → Deployments in Settings, then press Cmd/Ctrl+R.');
   } finally { release(); }
 }
-export async function loadDeploymentTargets(ref: PullRef, signal: AbortSignal) {
-  let result = parseDeploymentOutput(await runDevflow(ref, [], signal));
+export async function loadDeploymentTargets(settings: CompanyDeployments, ref: PullRef, signal: AbortSignal) {
+  let result = parseDeploymentOutput(await querySource(settings, ref, [], signal));
   if (result.services.length) {
-    if (result.services.length > 100) throw new Error('Devflow reported too many services to check automatically.');
-    result = parseDeploymentOutput(await runDevflow(ref, result.services, signal));
-    if (result.services.length) throw new Error('Devflow could not select services for this PR.');
+    if (result.services.length > 100) throw new Error('The deployment report lists too many services to check automatically.');
+    result = parseDeploymentOutput(await querySource(settings, ref, result.services, signal));
+    if (result.services.length) throw new Error('The deployment source could not select services for this PR.');
   }
   return result.targets;
 }
@@ -49,16 +40,19 @@ export function cancelDeployment(tab: PullTab): void {
   if (tab.deployment?.status === 'loading') {
     tab.deployment.status = 'error';
     tab.deployment.attemptedAt = 0;
-    tab.deployment.message = 'Deployment lookup cancelled. Press Cmd/Ctrl+R to retry.';
+    tab.deployment.message = 'Deployment lookup canceled. Press Cmd/Ctrl+R to retry.';
   }
 }
 export function stopDeployments(): void { for (const job of jobs.values()) job.controller.abort(); }
 export function refreshDeployment(tab: PullTab, force = false): Promise<void> {
   if (!current(tab)) { cancelDeployment(tab); return Promise.resolve(); }
-  // Devflow is organisation-specific; do not send unrelated PRs to it.
-  if (!['ddoghq', 'datadog'].includes(tab.ref.owner.toLowerCase())) {
+  const settings = deploymentSettings();
+  if (!settings.enabled || !settings.organizations.some(owner => owner.toLowerCase() === tab.ref.owner.toLowerCase())) {
+    cancelDeployment(tab);
     tab.deployment = { status: 'unavailable', targets: [], updatedAt: 0, attemptedAt: Date.now(),
-      message: 'Deployment tracking is available for Devflow repositories.' };
+      message: settings.enabled ? 'Deployment tracking is not configured for this organization.'
+        : 'Configure deployments in Settings → My company → Deployments.' };
+    saveWorkspace();
     return Promise.resolve();
   }
   const running = jobs.get(tab);
@@ -69,7 +63,7 @@ export function refreshDeployment(tab: PullTab, force = false): Promise<void> {
   tab.deployment = { targets: tab.deployment?.targets ?? [], updatedAt: tab.deployment?.updatedAt ?? 0,
     attemptedAt, status: 'loading' };
   saveWorkspace();
-  const promise = loadDeploymentTargets(tab.ref, controller.signal).then(targets => {
+  const promise = loadDeploymentTargets(settings, tab.ref, controller.signal).then(targets => {
     if (current(tab) && !controller.signal.aborted)
       tab.deployment = { targets, status: 'ready', updatedAt: Date.now(), attemptedAt };
   }).catch((error: unknown) => {
@@ -78,9 +72,19 @@ export function refreshDeployment(tab: PullTab, force = false): Promise<void> {
       tab.deployment.message = error instanceof Error ? error.message : 'Couldn’t refresh deployments.';
     }
   }).finally(() => {
-    jobs.delete(tab);
+    if (jobs.get(tab)?.controller === controller) jobs.delete(tab);
     if (current(tab) && !controller.signal.aborted) saveWorkspace();
   });
   jobs.set(tab, { controller, promise });
   return promise;
+}
+
+export function resetDeployments(): void {
+  stopDeployments();
+  jobs.clear();
+  for (const tab of workspaceData().tabs) {
+    delete tab.deployment;
+    void refreshDeployment(tab, true);
+  }
+  saveWorkspace();
 }

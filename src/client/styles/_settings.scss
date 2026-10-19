@@ -1,3 +1,12 @@
+.company-deployments {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  .settings-label { display: block; margin-top: 14px; }
+  .settings-input, .settings-select { width: 100%; box-sizing: border-box; }
+  textarea { resize: vertical; font-family: var(--font-mono); min-height: 90px; }
+}
+
 // --- Theme Editor ---
 
 // Wider than the base `.modal` (480px), so set width explicitly — the base's
@@ -320,6 +329,7 @@
 
 .settings-tabs {
   display: flex;
+  overflow-x: auto;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   padding: 0 12px;
@@ -328,10 +338,12 @@
 
 .settings-tab {
   display: flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 12px 16px 10px;
+  padding: 12px 12px 10px;
   font-size: 11px;
   font-family: var(--font-sans);
   color: var(--text-dim);

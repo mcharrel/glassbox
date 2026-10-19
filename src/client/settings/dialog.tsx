@@ -36,6 +36,7 @@ import { getTauriGlobal, getTauriInvoke, showUpdateBanner } from '../tauri.js';
 import { switchTheme as rawSwitchTheme } from '../themes.js';
 import { CHANNEL_STATUS_POLL_MS, SETTINGS_APP_NAME_DEBOUNCE_MS, SETTINGS_CONFIG_DEBOUNCE_MS, TOAST_DURATION_MS } from '../timing.js';
 import { showToast } from '../toast.js';
+import { bindCompanyTab, companyTab, loadCompanyTab, resetCompanyTab } from './companyTab.js';
 import { experimentalTab } from './experimentalTab.js';
 import { generalTab } from './generalTab.js';
 import { browsePluginFolder, doInstallBundled, doInstallPlugin, doPluginAction, doUninstallPlugin, loadPluginsList, pluginsTab, resetPluginsTab, setPreference, togglePluginDisabled } from './pluginsTab.js';
@@ -44,7 +45,7 @@ import type { ChannelState, ConfigResponse, KeyStatusResponse, ModelsResponse, P
 import { showThemeManager } from './themeManager.js';
 import { updatesTab } from './updatesTab.js';
 
-const TABS: Tab[] = [generalTab, profileTab, experimentalTab, pluginsTab, updatesTab];
+const TABS: Tab[] = [generalTab, profileTab, experimentalTab, companyTab, pluginsTab, updatesTab];
 
 interface SettingsUIState {
   activeTab: string;
@@ -124,6 +125,7 @@ const deleteDatabaseBackup = withInvalidate(rawDeleteDatabaseBackup);
 const switchTheme = withInvalidate(rawSwitchTheme);
 
 export function showSettingsDialog(onClose?: () => void): void {
+  resetCompanyTab();
   resetPluginsTab(); // fresh plugin list per dialog session (doc 29, GB-1040)
 
   // The whole modal — `.modal-overlay` backdrop, the `.modal` content mount,
@@ -160,6 +162,7 @@ export function showSettingsDialog(onClose?: () => void): void {
   // then notify. Safe whether the user dismisses during loading or after build.
   const teardowns: Array<() => void> = [];
   void handle.result.then(() => {
+    resetCompanyTab();
     while (teardowns.length > 0) teardowns.pop()?.();
     if (onClose !== undefined) onClose();
   });
@@ -661,6 +664,7 @@ function setupDelegates(args: {
   closeDialog: () => void;
 }): void {
   const { overlay, setUi, forceRerender, actions, modelsData, themesData, channelState, closeDialog } = args;
+  bindCompanyTab(overlay);
 
   void delegate(overlay, 'click', '#settings-close', closeDialog);
   void delegate(overlay, 'click', '[data-tab]', (_e, btn) => {
@@ -668,6 +672,7 @@ function setupDelegates(args: {
     if (t === undefined) return;
     setUi({ activeTab: t });
     if (t === 'plugins') loadPluginsList();
+    if (t === 'company') loadCompanyTab();
   });
 
   // Plugins tab (doc 29, GB-1040)

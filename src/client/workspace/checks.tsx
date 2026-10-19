@@ -82,6 +82,6 @@ function deployments(tab: PullTab) {
     {snapshot?.message !== undefined && <p className="deployment-notice" role="status">
       {snapshot.updatedAt > 0 ? 'Showing last known status. ' : ''}{snapshot.message}
     </p>}
-    {snapshot?.status === 'ready' && !groups.length && <p className="deployment-notice">No datacenters reported by Devflow.</p>}
+    {snapshot?.status === 'ready' && !groups.length && <p className="deployment-notice">No datacenters reported.</p>}
   </>;
 }

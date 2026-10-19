@@ -240,5 +240,7 @@ Both items came from GitHub #59.
 
 ## Merged PR deployment layout
 
-- On a merged Devflow PR, verify datacenters replace checks in the same resizable section, without a visible heading. Service names head separate groups. Each lists staging, production, then federal datacenters (including federal staging), followed by unclassified ones; reached rows appear first within each tier. Hovering exposes environment/namespace status. Switch to an open PR and confirm its CI checks return.
+- On a merged PR with a configured deployment source, verify datacenters replace checks in the same resizable section, without a visible heading. Service names head separate groups. Each lists staging, production, then federal datacenters (including federal staging), followed by unclassified ones; reached rows appear first within each tier. Hovering exposes environment/namespace status. Switch to an open PR and confirm its CI checks return.
 - API/subprocess integration, safe HTML rendering, aggregation, empty/error states, refresh timing and closed-tab cancellation have automated coverage. Native appearance and hover remain manual because browser/screen automation is disabled for this fork's local workflow.
+
+- In Settings → My company → Deployments, save a local command and organization list, close/reopen the dialog and verify the values remain. Switch to endpoint mode, save an endpoint, then disable tracking; old datacenter results disappear. Other settings tabs should open without waiting for company settings. Provider values must remain local.

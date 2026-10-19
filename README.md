@@ -55,7 +55,22 @@ Existing local checkouts can speed up first imports. Every open PR tab refreshes
 
 Merged PRs show deployment status grouped by service instead of CI checks. Each service lists staging datacenters first, then production, then federal (including federal staging); unclassified datacenters follow. Fully reached datacenters come first within each tier. Partial, deploying, missing and unknown states are distinct; hover over a row for environment and namespace details. Status refreshes every five minutes and with Cmd/Ctrl+R, without blocking the review.
 
-This optional integration uses an installed, authenticated `ddr` CLI for Devflow repositories in the `ddoghq`/`DataDog` organisations. It runs `ddr devflow whereismycode --pr <URL>` locally and never posts a GitHub comment. If authentication expires, run that command in your terminal, then refresh rev. Other repositories show that deployment tracking is unavailable.
+Settings → **My company → Deployments** selects a local shell command or an HTTP GET endpoint and an explicit list of GitHub organizations. Tracking is disabled by default. Saving settings cancels old requests, clears old deployment results and refreshes matching merged tabs without blocking the settings dialog. Commands, endpoints and optional Authorization headers live only in the user's global config (`~/.glassbox/config.json`, mode 0600), never in project settings, review exports or the public repository. No company-specific provider configuration ships with the app.
+
+For a command, print a text/Markdown deployment report to stdout. PR values are supplied as environment variables: `REV_PR_URL`, `REV_PR_OWNER`, `REV_PR_REPO`, `REV_PR_NUMBER`; `REV_SERVICES` contains suggested services separated by newlines (empty on the initial request). Quote variables in your command. The command runs from the local configuration directory with your environment; its output is never treated as shell code.
+
+For an endpoint, use an HTTPS URL (HTTP is supported for localhost). URL-encoded placeholders are `{pr_url}`, `{owner}`, `{repo}`, `{number}`, and `{services}` (a JSON array). An optional Authorization header is stored locally. Redirects are not followed. For example: `https://deployments.example/status?pr={pr_url}&services={services}`.
+
+Both sources accept service headings followed by a table:
+
+```text
+**example-service**
+| Datacenter | Env | Namespace | Deployed |
+| east.example | staging | app | (deployed) |
+| west.example | prod | app | (ongoing) |
+```
+
+Statuses are `(deployed)`, `(ongoing)`, `(missing)`, or unknown. A service heading followed by `Not found` represents an empty result. If the source returns `Changed services found: ` followed by backtick-quoted service names (or `Here is the list of all impacted services detected:` followed by `- name` lines), rev retries once with those services. Each request has a 90-second timeout and a 1 MiB output limit. Source errors are shown without recording raw output or private connection details.
 
 ### GUIDE and LEARN
 

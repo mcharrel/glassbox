@@ -422,3 +422,7 @@ Maintain two synthesis docs an AI assistant reads at the start of a fresh sessio
 Both AI-summary files already exist and are actively maintained; update them in the same change as the code (see the per-file triggers in each).
 <!-- hotsheet:end specifics=requirements-documentation -->
 <!-- hotsheet:end section=requirements-documentation -->
+
+## Public repository boundary
+
+This repository is public. Never commit or push company-specific commands, endpoints, credentials, organization configuration, internal documentation or real company fixtures. Company deployment sources are configured only in the user's local My company → Deployments settings. Generic response-format support and synthetic examples are allowed. Review confidentiality as well as credentials before every push; secret scanning alone is insufficient.
