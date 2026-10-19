@@ -1,12 +1,9 @@
 import type { SafeHtml, Signal } from 'kerfjs';
 import { delegate, signal } from 'kerfjs';
-import { confirm, overlay } from 'kerfjs/overlay';
+import { overlay } from 'kerfjs/overlay';
 import { debounce } from 'kerfjs/timing';
 
 import { AgentAccessSchema, ReasoningEffortSchema, selectedReasoning } from '../../ai/options.js';
-import type { DatabaseBackup, ListBackupsResp } from '../../api/db-backups.js';
-import { deleteDatabaseBackup as rawDeleteDatabaseBackup, listDatabaseBackups, revealDatabaseBackup } from '../../api/db-backups.js';
-import type { DifftoolStatusResp } from '../../api/index.js';
 import {
   deleteAIKey as rawDeleteAIKey,
   disableChannel as rawDisableChannel,
@@ -15,37 +12,30 @@ import {
   getAIKeyStatus,
   getChannelStatus,
   getClaudeCheck,
-  getDifftoolStatus,
-  getProjectSettings,
   listAIModels,
   listThemes,
-  registerDifftool as rawRegisterDifftool,
   saveAIConfig as rawSaveAIConfig,
   saveAIKey as rawSaveAIKey,
-  unregisterDifftool as rawUnregisterDifftool,
-  updateProjectSettings as rawUpdateProjectSettings,
 } from '../../api/index.js';
 import { IconX } from '../../icons.js';
-import { asButton, asEl, asInput, asSelect } from '../dom.js';
+import { asEl, asInput, asSelect } from '../dom.js';
 import { invalidateGuidedAnalysis } from '../guided.js';
 import { asKeyStorage, asPlatform } from '../narrow.js';
 import { triggerShare } from '../share.js';
 import { invalidateAnalysisCache } from '../sidebar/sortMode.js';
 import { aiStore } from '../stores/index.js';
-import { getTauriGlobal, getTauriInvoke, showUpdateBanner } from '../tauri.js';
+import { getTauriGlobal } from '../tauri.js';
 import { switchTheme as rawSwitchTheme } from '../themes.js';
-import { CHANNEL_STATUS_POLL_MS, SETTINGS_APP_NAME_DEBOUNCE_MS, SETTINGS_CONFIG_DEBOUNCE_MS, TOAST_DURATION_MS } from '../timing.js';
+import { CHANNEL_STATUS_POLL_MS, SETTINGS_CONFIG_DEBOUNCE_MS, TOAST_DURATION_MS } from '../timing.js';
 import { showToast } from '../toast.js';
 import { bindCompanyTab, companyTab, loadCompanyTab, resetCompanyTab } from './companyTab.js';
 import { experimentalTab } from './experimentalTab.js';
 import { generalTab } from './generalTab.js';
-import { browsePluginFolder, doInstallBundled, doInstallPlugin, doPluginAction, doUninstallPlugin, loadPluginsList, pluginsTab, resetPluginsTab, setPreference, togglePluginDisabled } from './pluginsTab.js';
-import { ALL_LANG_KEYS, profileTab } from './profileTab.js';
-import type { ChannelState, ConfigResponse, KeyStatusResponse, ModelsResponse, ProjectSettings, Tab, TabContext, ThemesResponse } from './tabContext.js';
+import { bindProfileTab, loadProfileTab, profileTab, resetProfileTab } from './profileTab.js';
+import type { ChannelState, ConfigResponse, KeyStatusResponse, ModelsResponse, Tab, TabContext, ThemesResponse } from './tabContext.js';
 import { showThemeManager } from './themeManager.js';
-import { updatesTab } from './updatesTab.js';
 
-const TABS: Tab[] = [generalTab, profileTab, experimentalTab, companyTab, pluginsTab, updatesTab];
+const TABS: Tab[] = [generalTab, profileTab, experimentalTab, companyTab];
 
 interface SettingsUIState {
   activeTab: string;
@@ -59,31 +49,19 @@ interface SettingsUIState {
   localEndpoint: string;
   guidedEnabled: boolean;
   guidedTopics: Set<string>;
-  showMoreLangs: boolean;
-  appName: string;
   activeThemeId: string;
-  // GB-850 — current `git difftool` registration state. Updated after
-  // register/unregister actions so the General tab's button re-renders.
-  difftoolStatus: DifftoolStatusResp;
-  // Retained pre-upgrade database backups (doc 9 §9.1a). Re-fetched after a
-  // delete so the section disappears once the last one is gone.
-  dbBackups: DatabaseBackup[];
-  dbQuarantined: DatabaseBackup[];
 }
 
-/** The dialog's server data (9 endpoints). Cached across opens so a repeat open
+/** The dialog's server data (6 endpoints). Cached across opens so a repeat open
  *  renders instantly without a spinner (GB-1131). */
 async function fetchSettingsData() {
   return Promise.all([
     getAIKeyStatus(),
     listAIModels(),
     getAIConfig(),
-    getProjectSettings(),
     listThemes(),
     getClaudeCheck(),
     getChannelStatus(),
-    getDifftoolStatus(),
-    listDatabaseBackups(),
   ]);
 }
 type SettingsData = Awaited<ReturnType<typeof fetchSettingsData>>;
@@ -95,8 +73,7 @@ type SettingsData = Awaited<ReturnType<typeof fetchSettingsData>>;
 let settingsCache: SettingsData | null = null;
 
 /** Drop the cached settings data so the next open re-fetches. Called after any
- *  action that changes server-side settings (config, key, theme, app name,
- *  difftool, channel, backup) — see the wrapped mutators below. */
+ *  action that changes server-side settings (config, key, theme, channel) — see the wrapped mutators below. */
 function invalidateSettingsData(): void {
   settingsCache = null;
 }
@@ -116,17 +93,13 @@ function withInvalidate<A extends unknown[], R>(fn: (...args: A) => Promise<R>):
 const saveAIConfig = withInvalidate(rawSaveAIConfig);
 const saveAIKey = withInvalidate(rawSaveAIKey);
 const deleteAIKey = withInvalidate(rawDeleteAIKey);
-const updateProjectSettings = withInvalidate(rawUpdateProjectSettings);
-const registerDifftool = withInvalidate(rawRegisterDifftool);
-const unregisterDifftool = withInvalidate(rawUnregisterDifftool);
 const enableChannel = withInvalidate(rawEnableChannel);
 const disableChannel = withInvalidate(rawDisableChannel);
-const deleteDatabaseBackup = withInvalidate(rawDeleteDatabaseBackup);
 const switchTheme = withInvalidate(rawSwitchTheme);
 
 export function showSettingsDialog(onClose?: () => void): void {
   resetCompanyTab();
-  resetPluginsTab(); // fresh plugin list per dialog session (doc 29, GB-1040)
+  resetProfileTab();
 
   // The whole modal — `.modal-overlay` backdrop, the `.modal` content mount,
   // Escape/backdrop dismissal, focus trap, and focus restore — is owned by
@@ -134,7 +107,7 @@ export function showSettingsDialog(onClose?: () => void): void {
   // is driven by a swappable render fn: it starts as the loading spinner and,
   // when data arrives, `renderSettingsModal` swaps in the real shell render fn
   // (which closes over the freshly-created non-null `ui` signal). Showing the
-  // modal never blocks on the ~9-endpoint fetch — with cached data the spinner
+  // modal never blocks on the six-endpoint fetch — with cached data the spinner
   // is never seen; on a cold open it shows while we load (GB-1129).
   const content = signal<() => SafeHtml>(() => (
     <div className="modal settings-dialog">
@@ -163,6 +136,7 @@ export function showSettingsDialog(onClose?: () => void): void {
   const teardowns: Array<() => void> = [];
   void handle.result.then(() => {
     resetCompanyTab();
+    resetProfileTab();
     while (teardowns.length > 0) teardowns.pop()?.();
     if (onClose !== undefined) onClose();
   });
@@ -170,7 +144,7 @@ export function showSettingsDialog(onClose?: () => void): void {
   function build(data: SettingsData): void {
     // Dismissed before the data arrived? overlay() detached the wrapper.
     if (!handle.el.isConnected) return;
-    const [keyStatus, modelsData, configData, projectSettings, themesData, channelCheck, channelStatus, difftoolStatus, backups] = data;
+    const [keyStatus, modelsData, configData, themesData, channelCheck, channelStatus] = data;
     const channelState: ChannelState = {
       enabled: channelStatus.enabled,
       connected: channelStatus.connected,
@@ -180,7 +154,7 @@ export function showSettingsDialog(onClose?: () => void): void {
     };
     renderSettingsModal(
       { overlay: handle.el, setContent: (fn) => { content.value = fn; }, close, registerTeardown: (fn) => { teardowns.push(fn); } },
-      keyStatus, modelsData, configData, projectSettings, themesData, channelState, difftoolStatus, backups,
+      keyStatus, modelsData, configData, themesData, channelState,
     );
   }
 
@@ -219,30 +193,13 @@ interface ModalShell {
   registerTeardown: (fn: () => void) => void;
 }
 
-/**
- * Confirm deleting a retained database backup — via kerfjs/overlay's `confirm()`
- * (native <dialog>, focus trap + restore, Escape/backdrop dismiss), replacing a
- * hand-rolled `.modal-overlay`. Not `window.confirm`, which doesn't render in the
- * Tauri webview. The backup name is folded into the message (the picker's
- * separate code-block paragraph is dropped for the flat confirm body).
- */
-function showDeleteBackupConfirm(name: string): Promise<boolean> {
-  return confirm(
-    `Delete the database backup "${name}"? Your current reviews are not affected — but this removes the copy kept from before the upgrade, and it cannot be undone.`,
-    { title: 'Delete Database Backup', okText: 'Delete', cancelText: 'Cancel', danger: true, native: true },
-  );
-}
-
 function renderSettingsModal(
   shell: ModalShell,
   keyStatus: KeyStatusResponse,
   modelsData: ModelsResponse,
   configData: ConfigResponse,
-  projectSettings: ProjectSettings,
   themesData: ThemesResponse,
   channelState: ChannelState,
-  initialDifftoolStatus: DifftoolStatusResp,
-  initialBackups: ListBackupsResp,
 ): void {
   const { overlay, setContent, close: closeDialog, registerTeardown } = shell;
   const isTauri = getTauriGlobal() !== undefined;
@@ -268,12 +225,7 @@ function renderSettingsModal(
     localEndpoint: configData.localEndpoint,
     guidedEnabled: configData.guidedReview.enabled,
     guidedTopics: new Set(configData.guidedReview.topics),
-    showMoreLangs: false,
-    appName: projectSettings.appName ?? '',
     activeThemeId: themesData.activeId,
-    difftoolStatus: initialDifftoolStatus,
-    dbBackups: initialBackups.backups,
-    dbQuarantined: initialBackups.quarantined,
   });
 
   function setUi(partial: Partial<SettingsUIState>): void {
@@ -283,7 +235,7 @@ function renderSettingsModal(
     ui.value = { ...ui.value };
   }
 
-  const actions = createActions({ ui, setUi, forceRerender, keyStatus, projectSettings, configData, channelState, overlay, modelsData, themesData });
+  const actions = createActions({ ui, setUi, forceRerender, keyStatus, configData, channelState, overlay, modelsData, themesData });
   registerTeardown(() => { actions.dispose(); });
 
   // Periodic Claude-channel health poll (doc 17.3). While the dialog is open we
@@ -312,7 +264,7 @@ function renderSettingsModal(
   // template now (the wrapper is the mount root), so its `min-height` is a
   // signal read, not an imperative style.
   const renderShellContent = (): SafeHtml => {
-    const ctx = buildContext({ ui, isTauri, keyStatus, modelsData, themesData, projectSettings, channelState, actions });
+    const ctx = buildContext({ ui, isTauri, keyStatus, modelsData, themesData, channelState, actions });
     const visible = TABS.filter(t => t.enabled === undefined || t.enabled(ctx));
     const cur = ui.value;
     let activeId = cur.activeTab;
@@ -340,7 +292,7 @@ function renderSettingsModal(
   // read in the template above (which morph preserves across the child morphs).
   // Shorter tabs then get empty space at the bottom instead of shrinking.
   if (modalEl !== null) {
-    const ctx = buildContext({ ui, isTauri, keyStatus, modelsData, themesData, projectSettings, channelState, actions });
+    const ctx = buildContext({ ui, isTauri, keyStatus, modelsData, themesData, channelState, actions });
     const visibleTabs = TABS.filter(t => t.enabled === undefined || t.enabled(ctx));
     if (visibleTabs.length > 1) {
       const original = ui.value.activeTab;
@@ -366,7 +318,6 @@ interface ActionDeps {
   setUi: (p: Partial<SettingsUIState>) => void;
   forceRerender: () => void;
   keyStatus: KeyStatusResponse;
-  projectSettings: ProjectSettings;
   configData: ConfigResponse;
   channelState: ChannelState;
   overlay: HTMLElement;
@@ -378,19 +329,15 @@ interface Actions {
   saveConfig: () => void;
   saveConfigDebounced: () => void;
   saveLocalEndpoint: (endpoint: string) => void;
-  saveAppNameDebounced: () => void;
   saveKey: () => void;
   removeKey: () => void;
   saveFallbackKey: () => void;
   removeFallbackKey: () => void;
-  toggleTopic: (topic: string) => void;
-  registerDifftoolAction: () => void;
-  unregisterDifftoolAction: () => void;
   dispose: () => void;
 }
 
 function createActions(deps: ActionDeps): Actions {
-  const { ui, setUi, forceRerender, keyStatus, projectSettings, configData, overlay } = deps;
+  const { ui, setUi, forceRerender, keyStatus, configData, overlay } = deps;
   let lastSavedGuidedEnabled = configData.guidedReview.enabled;
   let lastSavedGuidedTopics = new Set(configData.guidedReview.topics);
 
@@ -466,14 +413,6 @@ function createActions(deps: ActionDeps): Actions {
   // after the dialog closes.
   const saveConfigDebounced = debounce(saveConfig, SETTINGS_CONFIG_DEBOUNCE_MS);
 
-  const saveAppNameDebounced = debounce(() => {
-    const val = ui.value.appName.trim();
-    if (val !== (projectSettings.appName ?? '')) {
-      void updateProjectSettings({ appName: val });
-      projectSettings.appName = val || undefined;
-    }
-  }, SETTINGS_APP_NAME_DEBOUNCE_MS);
-
   // Save/remove are parameterized by platform + element ids so the same logic
   // serves the primary platform's key block and the Apple-FM fallback's.
   function saveKeyFor(platform: string, inputId: string, storageName: string): void {
@@ -517,89 +456,11 @@ function createActions(deps: ActionDeps): Actions {
   const saveFallbackKey = (): void => { saveKeyFor(ui.value.fallbackPlatform, 'settings-fallback-key', 'fallback-key-storage'); };
   const removeFallbackKey = (): void => { removeKeyFor(ui.value.fallbackPlatform); };
 
-  function toggleTopic(topic: string): void {
-    const cur = ui.value;
-    const next = new Set(cur.guidedTopics);
-    let showMoreLangs = cur.showMoreLangs;
-    if (next.has(topic)) {
-      next.delete(topic);
-    } else {
-      next.add(topic);
-      if (topic === 'programming') {
-        const hasAnyLang = [...next].some(t => ALL_LANG_KEYS.has(t));
-        if (!hasAnyLang) {
-          for (const key of ALL_LANG_KEYS) next.add(key);
-          showMoreLangs = true;
-        }
-      }
-    }
-    setUi({ guidedTopics: next, showMoreLangs });
-    saveConfigDebounced();
-  }
-
-  // GB-850 / GB-852 — register/unregister `glassbox-difftool` at --global
-  // scope. The dialog already shows the current `diff.tool` in its status
-  // row, so when the displayed status is a non-Glassbox tool, the button
-  // sends `force: true` directly (no redundant `window.confirm()` — the row
-  // itself was the confirmation, and we used to rely on the WKWebView
-  // confirm-panel handler which adds a moving part). On any failure we
-  // surface the server's actual error message so the user can act on it
-  // instead of staring at a generic "please try again" toast (GB-852).
-  async function refreshDifftoolStatus(): Promise<void> {
-    try {
-      const s = await getDifftoolStatus();
-      setUi({ difftoolStatus: s });
-    } catch {
-      // Non-fatal — UI just shows the prior status until the next open.
-    }
-  }
-  function registerDifftoolAction(): void {
-    void (async () => {
-      try {
-        const cur = ui.value.difftoolStatus;
-        // Force only when we already know the displayed `diff.tool` belongs to
-        // someone else — that's a deliberate "Replace" click. For a clean slate
-        // (no tool set, or already Glassbox), let the server's conflict guard
-        // run as a safety net in case the value changed since the dialog opened.
-        const force = cur.tool !== null && cur.tool !== 'glassbox';
-        let res = await registerDifftool({ force });
-        // Race: status changed under us between fetch and click. If the server
-        // reports a conflict we didn't anticipate, retry once with force.
-        if (!res.ok && res.reason === 'conflict') {
-          res = await registerDifftool({ force: true });
-        }
-        if (!res.ok) {
-          const detail = res.reason === 'git-failed'
-            ? `Couldn’t register the git difftool — ${res.message}`
-            : `Couldn’t register the git difftool — please try again.`;
-          flashSettingsError(detail);
-          return;
-        }
-        await refreshDifftoolStatus();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'unknown error';
-        flashSettingsError(`Couldn’t register the git difftool — ${msg}`);
-      }
-    })();
-  }
-  function unregisterDifftoolAction(): void {
-    void (async () => {
-      try {
-        await unregisterDifftool();
-        await refreshDifftoolStatus();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'unknown error';
-        flashSettingsError(`Couldn’t unregister the git difftool — ${msg}`);
-      }
-    })();
-  }
-
   function dispose(): void {
     saveConfigDebounced.cancel();
-    saveAppNameDebounced.cancel();
   }
 
-  return { saveConfig, saveConfigDebounced, saveLocalEndpoint, saveAppNameDebounced, saveKey, removeKey, saveFallbackKey, removeFallbackKey, toggleTopic, registerDifftoolAction, unregisterDifftoolAction, dispose };
+  return { saveConfig, saveConfigDebounced, saveLocalEndpoint, saveKey, removeKey, saveFallbackKey, removeFallbackKey, dispose };
 }
 
 // --- TabContext construction ---
@@ -610,14 +471,13 @@ function buildContext(args: {
   keyStatus: KeyStatusResponse;
   modelsData: ModelsResponse;
   themesData: ThemesResponse;
-  projectSettings: ProjectSettings;
   channelState: ChannelState;
   actions: Actions;
 }): TabContext {
   const cur = args.ui.value;
   return {
     keyStatus: args.keyStatus, modelsData: args.modelsData, themesData: args.themesData,
-    projectSettings: args.projectSettings, channelState: args.channelState,
+    channelState: args.channelState,
     isTauri: args.isTauri,
     currentPlatform: cur.currentPlatform,
     currentModel: cur.currentModel,
@@ -628,17 +488,10 @@ function buildContext(args: {
     localEndpoint: cur.localEndpoint,
     guidedEnabled: cur.guidedEnabled,
     guidedTopics: cur.guidedTopics,
-    showMoreLangs: cur.showMoreLangs,
-    appName: cur.appName,
     activeThemeId: cur.activeThemeId,
-    difftoolStatus: cur.difftoolStatus,
-    dbBackups: cur.dbBackups,
-    dbQuarantined: cur.dbQuarantined,
     saveConfig: args.actions.saveConfig,
     saveKey: args.actions.saveKey,
     removeKey: args.actions.removeKey,
-    toggleTopic: args.actions.toggleTopic,
-    saveAppNameDebounced: args.actions.saveAppNameDebounced,
     switchTheme: (id: string) => void switchTheme(id),
     showThemeManager,
     refreshThemes: () => listThemes().then(updated => {
@@ -665,60 +518,15 @@ function setupDelegates(args: {
 }): void {
   const { overlay, setUi, forceRerender, actions, modelsData, themesData, channelState, closeDialog } = args;
   bindCompanyTab(overlay);
+  bindProfileTab(overlay);
 
   void delegate(overlay, 'click', '#settings-close', closeDialog);
   void delegate(overlay, 'click', '[data-tab]', (_e, btn) => {
     const t = asEl(btn).dataset.tab;
     if (t === undefined) return;
     setUi({ activeTab: t });
-    if (t === 'plugins') loadPluginsList();
+    if (t === 'profile') loadProfileTab();
     if (t === 'company') loadCompanyTab();
-  });
-
-  // Plugins tab (doc 29, GB-1040)
-  void delegate(overlay, 'change', '[data-plugin-toggle]', (_e, el) => {
-    const cb = asInput(el);
-    const scope = asEl(el).dataset.pluginToggle;
-    const id = asEl(el).dataset.pluginId;
-    if ((scope === 'global' || scope === 'project') && id !== undefined) {
-      togglePluginDisabled(id, scope, !cb.checked); // unchecked = disabled
-    }
-  });
-  void delegate(overlay, 'click', '[data-plugin-uninstall]', (_e, el) => {
-    const id = asEl(el).dataset.pluginUninstall;
-    if (id !== undefined) doUninstallPlugin(id);
-  });
-  void delegate(overlay, 'click', '#plugin-install-btn', () => {
-    const input = overlay.querySelector('#plugin-install-path');
-    if (input !== null) doInstallPlugin(asInput(input).value);
-  });
-  void delegate(overlay, 'click', '#plugin-browse-btn', () => { browsePluginFolder(); });
-  // Install an opt-in bundled plugin (doc 29 §29.2, GB-1069): readiness check +
-  // auto-provision; the result (ready / needs-setup instructions) renders in the row.
-  void delegate(overlay, 'click', '[data-plugin-install-bundled]', (_e, el) => {
-    const id = asEl(el).dataset.pluginInstallBundled;
-    if (id !== undefined) doInstallBundled(id);
-  });
-  // Config-layout button actions (doc 29 FR-29.18): run the plugin's onAction,
-  // then the refreshed list re-renders any dynamic labels the action set.
-  void delegate(overlay, 'click', '[data-plugin-action]', (_e, el) => {
-    const id = asEl(el).dataset.pluginAction;
-    const actionId = asEl(el).dataset.pluginActionId;
-    if (id !== undefined && actionId !== undefined) doPluginAction(id, actionId);
-  });
-  // Plugin preference edits (doc 29 FR-29.12). Selects/checkboxes save on change;
-  // text/number inputs save on blur (change) so we don't reload on every keystroke.
-  void delegate(overlay, 'change', '[data-plugin-pref-key]', (_e, el) => {
-    const node = asEl(el);
-    const id = node.dataset.pluginPrefId;
-    const key = node.dataset.pluginPrefKey;
-    if (id === undefined || key === undefined) return;
-    // A `select`-type preference is an HTMLSelectElement, not an <input>; read its
-    // value directly (asInput would throw on it — GB-1070).
-    const value = node instanceof HTMLSelectElement
-      ? node.value
-      : (() => { const input = asInput(node); return input.type === 'checkbox' ? String(input.checked) : input.value; })();
-    setPreference(id, key, value);
   });
 
   // General tab
@@ -741,54 +549,6 @@ function setupDelegates(args: {
     e.preventDefault();
     void triggerShare();
   });
-  void delegate(overlay, 'input', '#settings-app-name', (_e, input) => {
-    setUi({ appName: asInput(input).value });
-    actions.saveAppNameDebounced();
-  });
-  void delegate(overlay, 'click', '#difftool-register-btn', actions.registerDifftoolAction);
-  void delegate(overlay, 'click', '#difftool-unregister-btn', actions.unregisterDifftoolAction);
-  // Deleting a pre-upgrade database backup (doc 9 §9.1a). Confirmed first: it
-  // is the user's only fallback copy, and the deletion is irreversible.
-  void delegate(overlay, 'click', '[data-delete-backup]', (_e, btn) => {
-    const name = asEl(btn).dataset.deleteBackup;
-    if (name === undefined) return;
-    void (async () => {
-      if (!(await showDeleteBackupConfirm(name))) return;
-      try {
-        await deleteDatabaseBackup(name);
-      } catch {
-        showToast('Could not delete the backup');
-        return;
-      }
-      // Re-read from the server rather than filtering locally, so the list
-      // reflects what is actually on disk.
-      const fresh = await listDatabaseBackups();
-      setUi({ dbBackups: fresh.backups, dbQuarantined: fresh.quarantined });
-      showToast('Backup deleted');
-    })();
-  });
-  // Reveal a preserved directory in the OS file manager. The only action
-  // offered for quarantined unreadable data (doc 9 §9.5) — it may be the user's
-  // only copy, so Glassbox points at it rather than removing it.
-  void delegate(overlay, 'click', '[data-reveal-backup]', (_e, btn) => {
-    const name = asEl(btn).dataset.revealBackup;
-    if (name === undefined) return;
-    void (async () => {
-      try {
-        await revealDatabaseBackup(name);
-      } catch {
-        showToast('Could not open the folder');
-      }
-    })();
-  });
-
-  // Profile tab
-  void delegate(overlay, 'click', '.settings-tag', (_e, tag) => {
-    const topic = asEl(tag).dataset.topic;
-    if (topic !== undefined) actions.toggleTopic(topic);
-  });
-  void delegate(overlay, 'click', '#show-more-langs', () => { setUi({ showMoreLangs: true }); });
-
   // Experimental tab
   void delegate(overlay, 'click', '.settings-platform-control [data-platform]', (_e, btn) => {
     const platform = asEl(btn).dataset.platform;
@@ -862,37 +622,10 @@ function setupDelegates(args: {
     setTimeout(() => { el.textContent = 'Copy'; }, TOAST_DURATION_MS);
   });
 
-  // Updates tab
-  void delegate(overlay, 'click', '#check-updates-btn', (_e, btn) => {
-    void handleCheckUpdates(asButton(btn), overlay);
-  });
   // Note: backdrop-click dismissal and focus trap/restore are owned by
   // kerfjs/overlay, and Escape by a bubble-phase listener — all configured in
   // `showSettingsDialog`, so they're not wired here and already work during the
   // loading phase before this runs.
-}
-
-async function handleCheckUpdates(btn: HTMLButtonElement, overlay: HTMLElement): Promise<void> {
-  const status = overlay.querySelector<HTMLElement>('#check-updates-status');
-  if (status === null) return;
-  const invoke = getTauriInvoke();
-  if (!invoke) return;
-  btn.disabled = true;
-  btn.textContent = 'Checking...';
-  status.textContent = '';
-  try {
-    const version = (await invoke('check_for_update')) as string | null;
-    if (version !== null && version !== '') {
-      status.textContent = `Update available: v${version}`;
-      showUpdateBanner(version);
-    } else {
-      status.textContent = 'Your software is up to date.';
-    }
-  } catch {
-    status.textContent = 'Could not check for updates.';
-  }
-  btn.textContent = 'Check for Updates';
-  btn.disabled = false;
 }
 
 function renderShell(visible: Tab[], activeTabId: string, ctx: TabContext): SafeHtml {

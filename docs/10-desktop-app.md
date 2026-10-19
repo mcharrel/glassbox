@@ -83,3 +83,7 @@ Beyond opening a review window, the CLI wrapper also **forwards other CLI invoca
 - `--browser` is a launcher-level flag; the CLI parser accepts it as a no-op because the Windows shim forwards its untouched `%*` and cmd can't drop one token without re-quoting every argument.
 
 The fork’s native display name is `rev`; its legacy bundle identifier and internal executable remain stable to preserve WebView storage and launch compatibility. See the root README for current source installation and optional Codex shared-server integration. `main` is the current customized app, with upstream updates integrated separately.
+
+## Personal PR link routing
+
+The macOS build includes the small rev Links accessory app (macOS 12+). It registers HTTP/HTTPS through the supported NSWorkspace default-app API and respects system consent. It routes only direct github.com owner/repository/pull/number URLs, rejecting lookalike hosts, credentials, ports and malformed PR IDs. Other URLs use the previously selected browser; turning routing off restores the previous handler only while rev Links is still selected. Setup is requested once and can be retried in Profile. Explicit browser links inside rev bypass routing. Link delivery uses the authenticated local `rev open` adapter without inheriting CODEX_THREAD_ID, preserves existing chat links, remembers the last workspace for cold startup and activates the desktop window. Redirect links and navigation already inside a browser are not intercepted.

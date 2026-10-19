@@ -2,6 +2,7 @@ import { delegate } from 'kerfjs';
 
 import { openExternal } from '../api/system.js';
 import { asButton } from './dom.js';
+import { showToast } from './toast.js';
 
 interface TauriGlobal {
   core?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
@@ -38,10 +39,13 @@ export function getTauriInvoke(): ((cmd: string, args?: Record<string, unknown>)
  *  should be left alone. */
 export function openExternalUrl(url: string): boolean {
   if (getTauriGlobal() === undefined) return false;
-  // Fire-and-forget: we've already suppressed the anchor's default nav, so a
-  // failed open just means the link doesn't open — don't let it surface as an
-  // unhandled rejection.
-  openExternal({ url }).catch(() => { /* ignore */ });
+  const invoke = getTauriInvoke();
+  // Explicit GitHub/browser links inside rev bypass the system PR router.
+  if (invoke && /^https?:\/\//i.test(url)) {
+    void invoke('open_link_in_browser', { url }).then(handled => {
+      if (handled !== true) return openExternal({ url });
+    }).catch(() => { showToast('Could not open the browser.'); });
+  } else openExternal({ url }).catch(() => { showToast('Could not open the link.'); });
   return true;
 }
 

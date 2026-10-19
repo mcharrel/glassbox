@@ -1,11 +1,8 @@
 import type { SafeHtml } from 'kerfjs';
 
 import type { AgentAccess, ReasoningEffort } from '../../ai/options.js';
-import type { DatabaseBackup } from '../../api/db-backups.js';
 import type {
-  DifftoolStatusResp,
   GetAIKeyStatusResp,
-  GetProjectSettingsResp,
   ListAIModelsResp,
   ListThemesResp,
 } from '../../api/index.js';
@@ -16,7 +13,6 @@ export type {
   AIConfigResp as ConfigResponse,
   GetAIKeyStatusResp as KeyStatusResponse,
   ListAIModelsResp as ModelsResponse,
-  GetProjectSettingsResp as ProjectSettings,
   ListThemesResp as ThemesResponse,
   ThemeSummary,
 } from '../../api/index.js';
@@ -41,7 +37,6 @@ export interface TabContext {
   keyStatus: GetAIKeyStatusResp;
   modelsData: ListAIModelsResp;
   themesData: ListThemesResp;
-  projectSettings: GetProjectSettingsResp;
   channelState: ChannelState;
 
   // Live form state.
@@ -57,25 +52,7 @@ export interface TabContext {
   localEndpoint: string;
   guidedEnabled: boolean;
   guidedTopics: Set<string>;
-  showMoreLangs: boolean;
-  appName: string;
   activeThemeId: string;
-
-  // GB-850 — current `git difftool` registration state at --global scope.
-  // The General tab reads this to render either a "Register" or "Registered"
-  // affordance; the registerDifftool/unregisterDifftool actions refetch and
-  // update it.
-  difftoolStatus: DifftoolStatusResp;
-
-  // Retained pre-upgrade database backups (doc 9 §9.1a). Normally empty — the
-  // General tab renders its section only when a backup actually exists, since
-  // most users will never have upgraded across a Postgres major.
-  dbBackups: DatabaseBackup[];
-
-  // Quarantined directories the corrupt-database recovery set aside (doc 9
-  // §9.5). Kept separate from `dbBackups` so a tab cannot accidentally offer
-  // the delete affordance for data Glassbox could not read.
-  dbQuarantined: DatabaseBackup[];
 
   // Cross-tab actions kept for the small number of tabs whose render fn
   // emits inline event handlers (e.g. updates-tab status text). Most tab
@@ -84,8 +61,6 @@ export interface TabContext {
   saveConfig: () => void;
   saveKey: () => void;
   removeKey: () => void;
-  toggleTopic: (topic: string) => void;
-  saveAppNameDebounced: () => void;
   switchTheme: (id: string) => void;
   showThemeManager: (onClose: () => void) => void;
   refreshThemes: () => Promise<ListThemesResp>;

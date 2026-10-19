@@ -274,3 +274,12 @@ Automated coverage: thread/pagination/null-node mapping, private-content resolut
 - Scroll away, switch Main/File or PR tabs, and return: your position is preserved, even when at the top. First visits to other text files reveal their first change; files without changed blocks stay at the top. Tall first changes start at their beginning and `f` continues with overlap. Search or symbol navigation still reveals its explicit target.
 
 Automated coverage: ownership rejection before GitHub writes, raw Markdown edits, text rectangles and WebKit fallback, empty content, hidden/loading/stale-file guards, remembered zero/nonzero scroll positions, context padding and long changes. Native interaction remains manual under the no-browser-automation preference.
+
+## GitHub accounts and macOS PR links
+
+- General shows only Theme and Share rev; Profile contains account/organization rows and PR links. Plugins and Updates are absent; Experimental/company controls remain. Change the default and organization override, close/reopen Settings, and verify persistence. Invalid/missing logins must show an error. The terminal’s active `gh` account stays unchanged.
+- Queue a public comment offline, change its account mapping, and reconnect: it must remain queued under the original identity, never publish as the new user. Existing private comments stay local. Switch back to release the queued comment. Verify viewer permissions refresh after mapping changes without unloading code.
+- On macOS approve rev Links as default browser. Click a direct PR link in another app: it opens/selects that PR in rev. Non-PR links and explicit browser links from rev use the previous browser. Decline approval: Profile reports pending and offers Enable in macOS. Disable: restore the old browser; if the OS refuses restoration, links still forward to that browser while the preference is off.
+- Quit rev and open a PR link: the existing workspace and comments return, and the selected PR opens. The click must not attach an unrelated Codex chat. Test a URL with /files, query and fragment, and reject lookalike domains, user-info URLs and invalid PR numbers. Browser-internal navigation and redirects remain in the browser.
+
+Automated coverage includes account selection/migration/validation, simultaneous credentials, stale requests, queued publishing identity, Profile controls and async lifecycle, native compilation and synthetic URL matching. OS consent and external-app clicks remain manual under the no-UI-automation preference.

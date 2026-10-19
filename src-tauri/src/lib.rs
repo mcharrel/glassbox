@@ -1,3 +1,5 @@
+mod link_router;
+
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -526,11 +528,15 @@ pub fn run() {
             check_for_update,
             install_update,
             pick_plugin_folder,
-            set_app_zoom
+            set_app_zoom,
+            link_router::get_pr_link_routing,
+            link_router::set_pr_link_routing,
+            link_router::open_link_in_browser
         ])
         .setup(|_app| {
             #[allow(unused_variables)]
             let app = _app;
+            link_router::initialise(app.handle());
 
             // Build native menu with Edit > Find
             let app_handle = app.handle();
@@ -685,7 +691,9 @@ pub fn run() {
                 let app_args: Vec<String> = std::env::args().collect();
                 let has_project_dir = app_args.iter().any(|a| a == "--project-dir");
 
-                if !has_project_dir {
+                let has_workspace = app_args.iter().any(|a| a == "--workspace")
+                    && std::env::var("GLASSBOX_SERVER_URL").is_ok();
+                if !has_project_dir && !has_workspace {
                     // No --project-dir: show the welcome/setup screen
                     let window = app
                         .get_webview_window("main")

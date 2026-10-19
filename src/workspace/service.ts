@@ -22,6 +22,7 @@ import {
   updateAnnotation,
 } from '../db/queries.js';
 import { parseDiffData } from '../git/parseDiffData.js';
+import { githubAccount } from './accounts.js';
 import { ensureCheckout, importPull } from './checkout.js';
 import { flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment, reviseComment } from './codex.js';
 import { cancelDeployment, refreshDeployment, stopDeployments } from './deployments.js';
@@ -110,6 +111,7 @@ export function syncTab(tab: PullTab, mode: SyncMode = 'initial'): Promise<void>
   return promise;
 }
 async function performSync(tab: PullTab, mode: Exclude<SyncMode, 'auto'>): Promise<void> {
+  const account = githubAccount(tab.ref);
   const background = mode === 'background';
   const refreshRequest = tab.sourceRefreshRequested;
   if (!background) tab.loading = true;
@@ -119,11 +121,11 @@ async function performSync(tab: PullTab, mode: Exclude<SyncMode, 'auto'>): Promi
     const before = tab.info;
     const [info, viewer] = await Promise.all([
       loadPull(tab.ref),
-      tab.viewer
+      tab.viewer && (!account || tab.viewer.toLowerCase() === account.toLowerCase())
         ? Promise.resolve({ login: tab.viewer })
         : github(tab.ref, 'user').then((v) => z.object({ login: z.string() }).parse(v)),
     ]);
-    if (!workspaceData().tabs.includes(tab) || closingTabs.has(tab)) return;
+    if (!workspaceData().tabs.includes(tab) || closingTabs.has(tab) || account !== githubAccount(tab.ref)) return;
     tab.info = info;
     // Deployment lookup must never hold up metadata, comments, or the source view.
     void refreshDeployment(tab, mode !== 'initial');
@@ -265,6 +267,8 @@ export function startWorkspace(pinnedRoot?: string): () => void {
   const data = workspaceData();
   recoverCodexComments();
   for (const tab of [...data.tabs, ...data.archived]) {
+    const account = githubAccount(tab.ref);
+    if (account && account.toLowerCase() !== tab.viewer.toLowerCase()) tab.viewer = '';
     reconcileCommentRouting(tab);
     for (const message of tab.comments)
       if (message.kind === 'ai' && message.status === 'working') {
@@ -314,6 +318,7 @@ function enqueue(tab: PullTab, message: ThreadMessage, operation: 'create' | 'ed
   if (closingTabs.has(tab) || !workspaceData().tabs.includes(tab)) return;
   tab.lastUsedAt = Date.now();
   message.status = 'pending';
+  if (tab.viewer && message.publishAs === undefined) message.publishAs = tab.viewer;
   const data = workspaceData();
   if (
     !data.outbox.some(
@@ -357,7 +362,21 @@ export function reconcileCommentRouting(tab: PullTab): void {
   }
 }
 function canPublishComment(tab: PullTab, message: ThreadMessage): boolean {
-  return commentDestination(tab, message) === 'github' && message.destination !== 'local';
+  const author = message.publishAs ?? (message.remoteId === undefined && message.author !== 'You' ? message.author : undefined);
+  return commentDestination(tab, message) === 'github' && message.destination !== 'local'
+    && (author === undefined || author.toLowerCase() === tab.viewer.toLowerCase());
+}
+
+export function refreshAccountRouting(): void {
+  for (const tab of workspaceData().tabs) {
+    tab.viewer = '';
+    for (const message of tab.comments) if (message.remoteId !== undefined) message.editable = false;
+    // Let an older sync finish before replacing its identity and permissions.
+    void syncTab(tab, 'background').finally(() => {
+      if (!tab.viewer && workspaceData().tabs.includes(tab)) void syncTab(tab, 'background');
+    });
+  }
+  saveWorkspace();
 }
 export async function queueAnnotation(
   reviewId: string,
@@ -431,6 +450,7 @@ export async function flushOutbox(): Promise<void> {
         continue;
       try {
         if (!tab.viewer) throw new Error('Waiting for GitHub authentication');
+        message.publishAs ??= tab.viewer;
         const prefix = repoApi(tab.ref);
         const endpoint = message.kind === 'issue' ? 'issues/comments' : 'pulls/comments';
         const sentBody = message.body;

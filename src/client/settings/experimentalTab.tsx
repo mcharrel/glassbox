@@ -226,7 +226,7 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
         <span className="settings-beta-badge">Beta</span>
       </div>
       <p className="settings-disclaimer">
-        Get AI explanations tailored to your experience level. Configure your profile in the Profile tab.
+        Get AI explanations alongside the code.
       </p>
 
       <div className="settings-section">

@@ -179,3 +179,8 @@ After a Codex restart: reopen the originating chat. Automatic recovery depends o
 the separate connection setup; rev does not start or configure the Codex server.
 NEXT
 printf 'Full setup and restart guidance: %s/README.md#codex-feedback-setup\n' "$repo_dir"
+
+if [[ "$(uname -s)" == Darwin ]]; then
+  printf '\nDesktop PR links: approve “Use rev Links” when macOS asks.\n'
+  printf 'Other web links stay in your browser. Configure accounts and retry link setup in Settings → Profile.\n'
+fi

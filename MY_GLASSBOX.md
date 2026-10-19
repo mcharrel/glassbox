@@ -170,3 +170,9 @@ With shared-server mode enabled locally, rev connects directly to Codex’s Unix
 ## First-install Codex guidance
 
 - README and installer output explicitly distinguish PR review, chat linking, manual feedback handling and automatic delivery. The public installer does not install a Codex shared-server adapter. It prints a setup prompt and points to the README for compatibility, restart and manual fallback instructions. A successful PR link is not proof that push works.
+
+## Simplified settings and PR link routing
+
+- General keeps Theme and Share rev. Profile replaces experience/language controls with a default GitHub account, organization overrides and PR-link routing. Experimental keeps its controls; My company is unchanged. Plugins and Updates tabs are removed. Existing hidden preferences are retained.
+- Account mappings stay in local global settings, never project files or exports. Each request and Git fetch selects its own `gh` account without `gh auth switch`. Saving accounts refreshes viewer permissions while retaining tabs and private comments. Queued public comments keep their publishing identity across account changes.
+- On macOS, Open PR links in rev defaults on. The rev Links helper asks macOS to become the default browser once; setup is shown as pending until approved. Direct GitHub PR URLs open in rev, other URLs retain the previous browser, and disabling restores that browser. Explicit browser links inside rev bypass the router. Browser clicks never inherit a Codex chat ID, and cold starts preserve the last review workspace.

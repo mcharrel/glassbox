@@ -1,28 +1,13 @@
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { z } from 'zod';
 
 import { PullInfoSchema, type PullRef, type PullTab, type ThreadMessage } from '../api/workspace.js';
+import { githubAccount } from './accounts.js';
 
 const exec = promisify(execFile);
-const LocalConfigSchema = z.object({
-  accounts: z.record(z.string(), z.string()).default({}),
-  slack: z.record(z.string(), z.string()).default({}),
-  repositories: z.record(z.string(), z.string()).default({}),
-});
-export function localWorkspaceConfig() {
-  try {
-    return LocalConfigSchema.parse(
-      JSON.parse(readFileSync(join(homedir(), '.glassbox', 'workspace-config.json'), 'utf8')),
-    );
-  } catch {
-    return LocalConfigSchema.parse({});
-  }
-}
+export { localWorkspaceConfig } from './accounts.js';
 export function parsePullUrl(input: string): PullRef {
   const match = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?=$|[/?#\s])/i.exec(input.trim());
   if (!match || Number(match[3]) < 1) throw new Error('Paste a GitHub pull request URL');
@@ -38,8 +23,7 @@ export function pullKey(ref: PullRef): string {
 }
 const tokens = new Map<string, { value: string; until: number }>();
 export async function githubToken(ref: PullRef): Promise<string> {
-  const accounts = localWorkspaceConfig().accounts;
-  const account = accounts[`${ref.owner}/${ref.repo}`] || accounts[ref.owner] || '';
+  const account = githubAccount(ref);
   const cached = tokens.get(account);
   if (cached && cached.until > Date.now()) return cached.value;
   const { stdout } = await exec(
@@ -47,12 +31,15 @@ export async function githubToken(ref: PullRef): Promise<string> {
     ['auth', 'token', '--hostname', 'github.com', ...(account ? ['--user', account] : [])],
     { timeout: 15000 },
   );
+  if (account !== githubAccount(ref)) throw new Error('GitHub account changed; retry this request.');
   const value = stdout.trim();
   tokens.set(account, { value, until: Date.now() + 300_000 });
   return value;
 }
 export async function github(ref: PullRef, path: string, method = 'GET', body?: unknown, accept = 'application/vnd.github+json'): Promise<unknown> {
+  const account = githubAccount(ref);
   const token = await githubToken(ref);
+  if (account !== githubAccount(ref)) throw new Error('GitHub account changed; retry this request.');
   const response = await fetch(`https://api.github.com/${path}`, {
     method,
     headers: {
@@ -64,6 +51,8 @@ export async function github(ref: PullRef, path: string, method = 'GET', body?: 
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(25000),
   });
+  // Keep receipts for writes already accepted by GitHub, but discard stale identity reads.
+  if (['GET', 'HEAD'].includes(method) && account !== githubAccount(ref)) throw new Error('GitHub account changed; retry this request.');
   if (!response.ok) {
     const error = z.object({ message: z.string() }).safeParse(await response.json().catch(() => null));
     throw new Error(`GitHub ${response.status}: ${error.success ? error.data.message : response.statusText}`);

@@ -18,6 +18,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const { showToastMock } = vi.hoisted(() => ({ showToastMock: vi.fn() }));
+vi.mock('../../../src/client/toast.js', () => ({ showToast: showToastMock }));
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
 const openExternalMock = vi.fn<(req: { url: string }) => Promise<{ ok: true }>>();
 vi.mock('../../../src/api/system.js', () => ({
   openExternal: (req: { url: string }) => openExternalMock(req),
@@ -28,6 +32,7 @@ const { openExternalUrl } = await import('../../../src/client/tauri.js');
 afterEach(() => {
   vi.unstubAllGlobals();
   openExternalMock.mockReset();
+  showToastMock.mockReset();
 });
 
 describe('openExternalUrl (GB-808)', () => {
@@ -56,7 +61,7 @@ describe('openExternalUrl (GB-808)', () => {
     expect(openExternalMock).toHaveBeenCalledWith({ url });
   });
 
-  it('still reports handled when the request rejects (caller already preventDefault-ed)', () => {
+  it('still reports handled when the request rejects (caller already preventDefault-ed)', async () => {
     // Fire-and-forget: a rejected open must not flip the return value nor
     // surface as an unhandled rejection (the helper attaches a .catch).
     openExternalMock.mockRejectedValue(new Error('boom'));
@@ -64,5 +69,33 @@ describe('openExternalUrl (GB-808)', () => {
 
     expect(openExternalUrl('https://example.com')).toBe(true);
     expect(openExternalMock).toHaveBeenCalledWith({ url: 'https://example.com' });
+    await tick();
+    expect(showToastMock).toHaveBeenCalledWith('Could not open the link.');
   });
+});
+
+it('uses the native browser bypass so an explicit GitHub link cannot loop into rev', async () => {
+  const invoke = vi.fn().mockResolvedValue(true);
+  vi.stubGlobal('window', { __TAURI__: { core: { invoke } } });
+  const url = 'https://github.com/example/repo/pull/1';
+  expect(openExternalUrl(url)).toBe(true);
+  await tick();
+  expect(invoke).toHaveBeenCalledWith('open_link_in_browser', { url });
+  expect(openExternalMock).not.toHaveBeenCalled();
+});
+it('uses the usual OS opener on native platforms without the PR router', async () => {
+  const invoke = vi.fn().mockResolvedValue(false);
+  openExternalMock.mockResolvedValue({ ok: true });
+  vi.stubGlobal('window', { __TAURI__: { core: { invoke } } });
+  expect(openExternalUrl('https://example.com')).toBe(true);
+  await tick();
+  expect(openExternalMock).toHaveBeenCalledWith({ url: 'https://example.com' });
+});
+it('reports native browser failure without falling back into the PR router', async () => {
+  const invoke = vi.fn().mockRejectedValue(new Error('unavailable'));
+  vi.stubGlobal('window', { __TAURI__: { core: { invoke } } });
+  expect(openExternalUrl('https://github.com/example/repo/pull/1')).toBe(true);
+  await tick();
+  expect(openExternalMock).not.toHaveBeenCalled();
+  expect(showToastMock).toHaveBeenCalledWith('Could not open the browser.');
 });

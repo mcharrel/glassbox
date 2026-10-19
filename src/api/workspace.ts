@@ -70,6 +70,7 @@ export const ThreadMessageSchema = z.object({
   body: z.string(),
   bodyHTML: z.string().optional(),
   author: z.string(),
+  publishAs: z.string().optional(),
   date: z.string(),
   url: z.string().default(''),
   parentKey: z.string().optional(),

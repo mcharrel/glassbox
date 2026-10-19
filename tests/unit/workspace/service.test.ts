@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   focused: vi.fn(),
   discard: vi.fn(),
 }));
+vi.mock('../../../src/workspace/accounts.js', () => ({ githubAccount: () => '', localWorkspaceConfig: () => ({ accounts: {}, slack: {}, repositories: {} }) }));
 vi.mock('../../../src/workspace/storage.js', () => ({
   workspaceData: () => mocks.data,
   saveWorkspace: mocks.save,
@@ -792,4 +793,19 @@ describe('source refresh after an agent answer', () => {
     finish(t.info); await pending;
     expect(t.sourceRefreshRequested).toBe('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   });
+});
+
+it('holds queued public comments when their publishing account no longer matches', async () => {
+  const t = mocks.data.tabs[0];
+  t.comments.push({ id: 'pending-account', author: 'alice', publishAs: 'alice', body: 'Keep pending', kind: 'issue', destination: 'github', status: 'pending' });
+  mocks.data.outbox.push({ id: 'queue', tab: t.key, message: 'pending-account', operation: 'create', nextAttempt: 0, attempted: false });
+  t.viewer = 'other';
+  await flushOutbox();
+  expect(mocks.github).not.toHaveBeenCalled();
+  expect(mocks.data.outbox).toHaveLength(1);
+  t.viewer = 'alice';
+  mocks.github.mockResolvedValue(remote(99));
+  await flushOutbox();
+  expect(mocks.github).toHaveBeenCalledOnce();
+  expect(mocks.data.outbox).toHaveLength(0);
 });

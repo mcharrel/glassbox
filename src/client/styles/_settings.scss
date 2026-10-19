@@ -998,3 +998,7 @@
     flex-shrink: 0;
   }
 }
+
+.github-account-settings { border: 0; padding: 0; margin: 0; min-width: 0; }
+.github-account-row { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+.github-account-row .settings-input, .github-account-row .settings-select { min-width: 0; flex: 1; }

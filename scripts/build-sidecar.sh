@@ -155,3 +155,8 @@ fi
 
 echo "Server resources: $SERVER_DIR/ ($(du -sh "$SERVER_DIR" | cut -f1))"
 echo "Done."
+
+# A small macOS URL handler routes PR links without activating rev for other websites.
+if [[ "$TARGET" == *"apple-darwin"* ]]; then
+  bash scripts/build-link-router.sh "$TARGET"
+fi
