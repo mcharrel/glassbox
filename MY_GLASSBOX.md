@@ -134,4 +134,4 @@ GitHub descriptions and comments use GitHub-rendered HTML from the existing meta
 
 ## Source installation
 
-Use `git clone https://github.com/mcharrel/rev.git && ./rev/install.sh`. The installer builds the browser workspace, installs a user-local command, checks dependencies, and guides GitHub authentication. `--desktop` also builds and installs the native macOS app without release keys or upstream automatic updates. Rerun the script after pulling changes; existing review data and unrelated launchers are preserved.
+Use `git clone https://github.com/mcharrel/rev.git && ./rev/install.sh --desktop`. The recommended install and update commands include `--desktop` to build the native macOS app alongside the browser workspace, without release keys or upstream automatic updates. Omit the option for Linux or browser-only installs. The installer installs a user-local command, checks dependencies, and guides GitHub authentication. Rerun the script after pulling changes; existing review data and unrelated launchers are preserved.

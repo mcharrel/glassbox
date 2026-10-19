@@ -6,13 +6,13 @@ The `main` branch contains the current personal app, including its Git-graph ico
 
 ## Install from source
 
-Clone and run the installer:
+Clone and install the macOS desktop app:
 
 ```sh
-git clone https://github.com/mcharrel/rev.git && ./rev/install.sh
+git clone https://github.com/mcharrel/rev.git && ./rev/install.sh --desktop
 ```
 
-The script installs dependencies, builds rev, sets up `~/.local/bin/rev`, and guides you through GitHub sign-in if needed. It adds the command directory to your Bash/Zsh configuration. No `sudo` or global npm installation is needed.
+The script installs dependencies, builds rev into `~/Applications/rev.app`, sets up `~/.local/bin/rev`, and guides you through GitHub sign-in if needed. It adds the command directory to your Bash/Zsh configuration. No `sudo` or global npm installation is needed. On Linux, or for a browser-only installation, omit `--desktop`.
 
 You need Git to clone the repository. On macOS, the script uses an existing [Homebrew](https://brew.sh/) installation to install missing Node.js/npm and GitHub CLI dependencies. On Linux, or without Homebrew, install Node.js 22.12+, npm and [GitHub CLI](https://cli.github.com/) first; the installer checks these before building.
 
@@ -28,15 +28,9 @@ rev open https://github.com/OWNER/REPOSITORY/pull/123
 
 Trailing GitHub URL fragments and query parameters are accepted. Opening a PR reuses the running app; source downloads and GitHub metadata load in the background. Review state and the comment outbox persist locally.
 
-### Optional macOS desktop build
+### macOS desktop details
 
-Add `--desktop` to also build and install the native app into `~/Applications/rev.app`:
-
-```sh
-./rev/install.sh --desktop
-```
-
-This requires Xcode Command Line Tools; the script installs missing Rust through Homebrew when available. The first native build takes longer. Quit an existing rev desktop app before replacing it. `--app-dir /another/directory` changes the destination.
+The desktop build requires Xcode Command Line Tools; the script installs missing Rust through Homebrew when available. The first native build takes longer. Quit an existing rev desktop app before replacing it. `--app-dir /another/directory` changes the destination.
 
 The native bundle includes Node and uses local ad-hoc signing, so no release signing keys are required. Upstream automatic updates are disabled for this source build; rerun the installer to update. The `rev` command continues to provide the standalone browser workspace; legacy native `glassbox` launchers remain available in the app bundle.
 
@@ -107,10 +101,10 @@ Panel sizes and per-PR reading positions are remembered. Source files come first
 
 ```sh
 cd rev
-git pull --ff-only && ./install.sh
+git pull --ff-only && ./install.sh --desktop
 ```
 
-Repeat `--desktop` if you also want to rebuild the native app. Restart the app after updating. To incorporate upstream changes, fetch the original project into an `upstream` remote and merge on a separate branch before updating `main`; personal changes do not prevent future upstream updates.
+Omit `--desktop` for a browser-only installation. Restart the app after updating. To incorporate upstream changes, fetch the original project into an `upstream` remote and merge on a separate branch before updating `main`; personal changes do not prevent future upstream updates.
 
 Run `npm test -- --maxWorkers=4`, `npm run lint`, and `npm run typecheck` before publishing changes. Never commit `.env`, review databases, local workspace mappings, Codex connection files, API tokens, or private PR content. The inherited Glassbox architecture documentation remains under [docs/](docs/).
 
