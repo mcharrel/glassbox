@@ -1,5 +1,5 @@
 import type { PullTab } from '../../api/workspace.js';
-import { IconX } from '../../icons.js';
+import { IconShareApple, IconX } from '../../icons.js';
 
 /** Shared Main/File header; unavailable totals stay pending instead of looking empty. */
 export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null) {
@@ -11,6 +11,7 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
     : [['approve', 'Approve'], ['changes', 'Request code change'], ['humanize', 'Make explanations more human']];
   return <>
     <div className="pr-heading">
+      <button className="btn btn-xs" data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link"><IconShareApple /></button>
       <h2 data-workspace={own ? 'title' : undefined} title={own ? 'Click to edit PR title' : undefined}>
         {info?.title ?? `${tab.ref.owner}/${tab.ref.repo} #${tab.ref.number}`}
       </h2>

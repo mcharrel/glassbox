@@ -125,7 +125,7 @@ function switchTo(tab: PullTab): void {
 async function copyPullLink(tab: PullTab): Promise<void> {
   try {
     await navigator.clipboard.writeText(tab.ref.url);
-    showToast('PR link copied');
+    showToast('Link copied to clipboard');
   } catch {
     showToast('Couldn’t copy the PR link. Please try again.');
   }
@@ -244,12 +244,10 @@ export function initWorkspace(): void {
       : <><span className="analysis-spinner"></span> Loading PR #{tab?.ref.number}…</>;
   });
   body.append(add);
-  const shareButton = main.querySelector<HTMLButtonElement>('[data-workspace="share"]');
   let mountedHeader = false;
   effect(() => {
     const tab = activeTab();
     const adding = addingPull.value || workspace.value.tabs.length === 0;
-    if (shareButton) shareButton.disabled = !tab || adding;
     saveDiffScroll();
     // Gate visibility synchronously, before the selected session is restored.
     document.body.dataset.reviewPending = String(tab !== undefined && !activeReviewReady());
@@ -413,6 +411,7 @@ export function initWorkspace(): void {
       reviewRetry.value++;
       if (tab.reviewId === null) void mutate({ op: 'refresh', key: tab.key });
     }
+    else if (action === 'settings') void import('../settings/dialog.js').then((m) => { m.showSettingsDialog(); });
     else if (action === 'share' && tab && !addingPull.value) void copyPullLink(tab);
     else if (action === 'title' && tab) editTitle(tab);
     else if (action === 'close' && tab) void mutate({ op: 'close', key: tab.key });
