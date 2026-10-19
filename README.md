@@ -90,7 +90,7 @@ Codex supplies `CODEX_THREAD_ID`, so rev links your own PR to that original chat
 
 **Current limitation:** delivery requires a Codex installation whose desktop chat is connected to an existing shared app server exposing `thread/queue/add`, `thread/queue/start`, and `turn/steer`. A desktop session running its private stdio server cannot receive these messages from rev. Linking/opening still works, but comments stay visibly pending. This is not a substitute for the originating chat, and rev never resumes a second process against the same history.
 
-Only for a compatible shared-server setup, launch rev with `REV_CODEX_SHARED_SERVER=1` and a current `codex` on `PATH` (or set `REV_CODEX_BIN`). It connects through `codex app-server proxy`; it does not start a daemon. The chat's existing model and permissions remain in effect. If delivery is interrupted, rev asks you to check the chat before resending to avoid duplicate work.
+Only for a compatible shared-server setup, launch rev with `REV_CODEX_SHARED_SERVER=1` and have the desktop use that same server. It performs a WebSocket handshake on `$CODEX_HOME/app-server-control/app-server-control.sock` (default `~/.codex`); set `REV_CODEX_SOCKET` for a custom Unix socket. It does not spawn a CLI, start a daemon, or expose a network port. The chat's existing model and permissions remain in effect. If delivery is interrupted, rev asks you to check the chat before resending to avoid duplicate work.
 
 Local code comments have a thin status band inside a neutral card:
 

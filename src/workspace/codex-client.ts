@@ -1,67 +1,71 @@
-import { spawn } from 'node:child_process';
+import { createConnection } from 'node:net';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
+import WebSocket from 'ws';
 import { z } from 'zod';
 
 const ResponseSchema = z.object({
-  id: z.number().optional(), result: z.unknown().optional(),
+  id: z.union([z.number(), z.string(), z.null()]).optional(), result: z.unknown().optional(),
   error: z.object({ message: z.string() }).optional(),
 });
-const ThreadSchema = z.object({ thread: z.object({
-  status: z.object({ type: z.string() }),
-  turns: z.array(z.object({ id: z.string(), status: z.string() })).optional(),
-}) });
+const ThreadSchema = z.object({ thread: z.object({ status: z.object({ type: z.string() }) }) });
+const TurnsSchema = z.object({ data: z.array(z.object({ id: z.string(), status: z.string() })) });
 
 /** Connect only to an existing shared server; never start/resume a second agent. */
-export function connectCodex(): {
-  request: (method: string, params: unknown) => Promise<unknown>;
-  notify: (method: string) => void;
-  close: () => void;
-} {
-  const child = spawn(process.env.REV_CODEX_BIN ?? 'codex', ['app-server', 'proxy'], { stdio: 'pipe' });
+export function connectCodex() {
+  const socketPath = process.env.REV_CODEX_SOCKET
+    ?? join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'app-server-control', 'app-server-control.sock');
+  const socket = new WebSocket('ws://localhost/rpc', {
+    createConnection: () => createConnection(socketPath),
+    handshakeTimeout: 10_000, maxPayload: 16 * 1024 * 1024, perMessageDeflate: false,
+  });
   let nextId = 0;
-  let buffer = '';
+  let closed = false;
   const pending = new Map<number, { resolve: (data: unknown) => void; reject: (error: Error) => void }>();
+  const unavailable = () => new Error('Codex shared server is unavailable');
+  const ready = new Promise<void>((resolve, reject) => {
+    socket.once('open', () => { resolve(); });
+    socket.once('error', () => { reject(unavailable()); });
+    socket.once('close', () => { reject(unavailable()); });
+  });
   const fail = () => {
-    for (const item of pending.values()) item.reject(new Error('Codex shared server is unavailable'));
+    closed = true;
+    for (const item of pending.values()) item.reject(unavailable());
     pending.clear();
   };
-  child.on('error', fail);
-  child.on('exit', fail);
-  child.stdin.on('error', fail);
-  child.stderr.resume(); // Diagnostics may contain private paths; never send them to the UI.
-  child.stdout.setEncoding('utf8');
-  child.stdout.on('data', (chunk: string) => {
-    buffer += chunk;
-    if (buffer.length > 16 * 1024 * 1024) { child.kill(); fail(); return; }
-    for (let newline = buffer.indexOf('\n'); newline >= 0; newline = buffer.indexOf('\n')) {
-      const line = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      try {
-        const value = ResponseSchema.parse(JSON.parse(line));
-        if (value.id === undefined) continue;
-        const item = pending.get(value.id);
-        if (!item) continue;
-        pending.delete(value.id);
-        if (value.error) item.reject(new Error(value.error.message)); else item.resolve(value.result);
-      } catch { fail(); child.kill(); }
-    }
+  socket.on('error', fail);
+  socket.on('close', fail);
+  socket.on('message', data => {
+    try {
+      const value = ResponseSchema.parse(JSON.parse((Array.isArray(data) ? Buffer.concat(data) : data instanceof ArrayBuffer ? Buffer.from(data) : data).toString('utf8')));
+      if (typeof value.id !== 'number') return;
+      const item = pending.get(value.id);
+      if (!item) return;
+      pending.delete(value.id);
+      if (value.error) item.reject(new Error(value.error.message)); else item.resolve(value.result);
+    } catch { fail(); socket.terminate(); }
   });
   return {
-    request: (method, params) => new Promise((resolve, reject) => {
-      const id = ++nextId;
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        reject(new Error('Codex did not acknowledge the request'));
-        child.kill();
-      }, 10_000);
-      pending.set(id, {
-        resolve: value => { clearTimeout(timer); resolve(value); },
-        reject: error => { clearTimeout(timer); reject(error); },
+    request: async (method: string, params: unknown): Promise<unknown> => {
+      await ready;
+      if (closed) throw unavailable();
+      return new Promise((resolve, reject) => {
+        const id = ++nextId;
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error('Codex did not acknowledge the request'));
+          fail(); socket.terminate();
+        }, 10_000);
+        pending.set(id, {
+          resolve: value => { clearTimeout(timer); resolve(value); },
+          reject: error => { clearTimeout(timer); reject(error); },
+        });
+        socket.send(JSON.stringify({ id, method, params }), error => { if (error) fail(); });
       });
-      child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
-    }),
-    notify: method => { child.stdin.write(`${JSON.stringify({ method })}\n`); },
-    close: () => { child.kill(); fail(); },
+    },
+    notify: (method: string) => { socket.send(JSON.stringify({ method })); },
+    close: () => { fail(); socket.terminate(); },
   };
 }
 export async function codexConnection(threadId: string) {
@@ -71,10 +75,13 @@ export async function codexConnection(threadId: string) {
   try {
     await client.request('initialize', { clientInfo: { name: 'rev', version: '1.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } });
     client.notify('initialized');
-    const state = ThreadSchema.parse(await client.request('thread/read', { threadId, includeTurns: true }));
+    const state = ThreadSchema.parse(await client.request('thread/read', { threadId, includeTurns: false }));
     if (!['idle', 'active'].includes(state.thread.status.type))
       throw new Error('Open the originating chat in the shared-server Codex session');
-    const activeTurn = state.thread.turns?.slice().reverse().find(turn => turn.status === 'inProgress')?.id;
+    // Read only the latest turn, so long-running chats do not require their entire history.
+    const turns = state.thread.status.type === 'active'
+      ? TurnsSchema.parse(await client.request('thread/turns/list', { threadId, limit: 1, sortDirection: 'desc', itemsView: 'summary' })).data : [];
+    const activeTurn = turns.find(turn => turn.status === 'inProgress')?.id;
     if (state.thread.status.type === 'active' && activeTurn === undefined)
       throw new Error('Codex did not identify the active turn; leaving the comment pending');
     return { client, activeTurn };

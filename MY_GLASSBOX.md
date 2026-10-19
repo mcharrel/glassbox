@@ -150,3 +150,7 @@ Settings → **My company → Deployments** selects a local shell command or an 
 - An inset three-pixel left band is gray (`#656C76`) while pending pickup, yellow (`#D29922`) after explicit agent pickup, and green (`#00B401`) after an answer. A text label makes the state clear without relying on color. Transport delivery is not pickup.
 - The originating chat runs `rev comments <URL>`, `rev pickup <URL> --comment <ID> --revision <N>` before work, then `rev reply <URL> --comment <ID> --revision <N> --body-file <FILE>`. Prompts include the commands. These authenticated local controls check the chat binding and never publish to GitHub.
 - Editing a local request starts a new revision in pending state. Late answers to previous revisions cannot complete it; retries are idempotent. Existing Codex answers are recognized on startup, and follow-ups retain independent status.
+
+### Shared Codex connection
+
+With shared-server mode enabled locally, rev connects directly to Codex’s Unix WebSocket. The desktop and rev must use the same server. Feedback uses the existing chat’s queue or active-turn steering, preserving its model, permissions and history; an unloaded chat remains pending. The adapter reads only the latest turn and never launches another agent. `REV_CODEX_SOCKET` optionally selects a custom local socket.
