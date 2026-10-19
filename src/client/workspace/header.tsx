@@ -11,10 +11,10 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
     : [['approve', 'Approve'], ['changes', 'Request code change'], ['humanize', 'Make explanations more human']];
   return <>
     <div className="pr-heading">
-      <button className="btn btn-xs" data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link"><IconShareApple /></button>
       <h2 data-workspace={own ? 'title' : undefined} title={own ? 'Click to edit PR title' : undefined}>
         {info?.title ?? `${tab.ref.owner}/${tab.ref.repo} #${tab.ref.number}`}
       </h2>
+      <button className="btn btn-xs" data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link"><IconShareApple /></button>
       <button className="btn btn-xs" data-workspace="close" title="Remove PR tab"><IconX /></button>
     </div>
     <div className="pr-counts">
