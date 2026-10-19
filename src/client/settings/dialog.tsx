@@ -28,6 +28,7 @@ import { getTauriGlobal } from '../tauri.js';
 import { switchTheme as rawSwitchTheme } from '../themes.js';
 import { CHANNEL_STATUS_POLL_MS, SETTINGS_CONFIG_DEBOUNCE_MS, TOAST_DURATION_MS } from '../timing.js';
 import { showToast } from '../toast.js';
+import { bindCodexSettings, resetCodexSettings, showCodexSettings } from './codexConnection.js';
 import { bindCompanyTab, companyTab, loadCompanyTab, resetCompanyTab } from './companyTab.js';
 import { experimentalTab } from './experimentalTab.js';
 import { generalTab } from './generalTab.js';
@@ -100,6 +101,7 @@ const switchTheme = withInvalidate(rawSwitchTheme);
 export function showSettingsDialog(onClose?: () => void): void {
   resetCompanyTab();
   resetProfileTab();
+  resetCodexSettings();
 
   // The whole modal — `.modal-overlay` backdrop, the `.modal` content mount,
   // Escape/backdrop dismissal, focus trap, and focus restore — is owned by
@@ -137,6 +139,7 @@ export function showSettingsDialog(onClose?: () => void): void {
   void handle.result.then(() => {
     resetCompanyTab();
     resetProfileTab();
+    resetCodexSettings();
     while (teardowns.length > 0) teardowns.pop()?.();
     if (onClose !== undefined) onClose();
   });
@@ -519,12 +522,14 @@ function setupDelegates(args: {
   const { overlay, setUi, forceRerender, actions, modelsData, themesData, channelState, closeDialog } = args;
   bindCompanyTab(overlay);
   bindProfileTab(overlay);
+  bindCodexSettings(overlay);
 
   void delegate(overlay, 'click', '#settings-close', closeDialog);
   void delegate(overlay, 'click', '[data-tab]', (_e, btn) => {
     const t = asEl(btn).dataset.tab;
     if (t === undefined) return;
     setUi({ activeTab: t });
+    showCodexSettings(t === 'experimental');
     if (t === 'profile') loadProfileTab();
     if (t === 'company') loadCompanyTab();
   });

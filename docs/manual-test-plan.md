@@ -283,3 +283,12 @@ Automated coverage: ownership rejection before GitHub writes, raw Markdown edits
 - Quit rev and open a PR link: the existing workspace and comments return, and the selected PR opens. The click must not attach an unrelated Codex chat. Test a URL with /files, query and fragment, and reject lookalike domains, user-info URLs and invalid PR numbers. Browser-internal navigation and redirects remain in the browser.
 
 Automated coverage includes account selection/migration/validation, simultaneous credentials, stale requests, queued publishing identity, Profile controls and async lifecycle, native compilation and synthetic URL matching. OS consent and external-app clicks remain manual under the no-UI-automation preference.
+
+## Codex connection checkbox
+
+- Fresh macOS install: tick Experimental → Connect to Codex. If Codex was already open, expect a restart message; quit/reopen it and reopen the original chat. Expect Connected, with unchanged model, permissions, history and native tools. No setup prompt or terminal command is required.
+- Open an own PR without a chat link and pick its actual existing chat in Settings. Post a local code comment: it arrives there, pickup turns the band yellow, and reply turns it green. Other-PR comments and Main comments still use GitHub. Existing links cannot be silently replaced.
+- Disable while a chat is active: the chat continues; new forwarding stops. Restart/login and check that the previous launcher is restored. Re-enable and verify recovery. Custom non-rev overrides must be preserved with an error.
+- Check status after Codex closes/restarts, after closing Settings during setup, and after a desktop update. Native desktop authorization and external UI actions remain manual under the no-UI-automation preference.
+
+Automated coverage: disposable filesystem/launch environment install-enable-disable-repeat-rollback transitions, quoted paths, old-helper adoption, malformed unrelated login files, capability rejection, original argument preservation, no history/resume calls, ownership and linkage races, Settings lifecycle. A fresh bundled adapter also passes an isolated official CLI/second-client Unix handshake and shutdown smoke check without creating a chat.

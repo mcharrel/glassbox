@@ -1,5 +1,6 @@
 import { commentDestination, type PullTab, type ThreadMessage } from '../api/workspace.js';
 import { codexConnection, sendToCodex } from './codex-client.js';
+import { codexEnabled } from './codex-settings.js';
 import { closingTabs } from './lifecycle.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
@@ -56,6 +57,7 @@ export function recoverCodexComments(): void {
 let flushing = false;
 let flushAgain = false;
 export async function flushCodexComments(): Promise<void> {
+  if (!codexEnabled()) return;
   if (flushing) { flushAgain = true; return; }
   flushing = true;
   try {
@@ -82,7 +84,7 @@ export async function flushCodexComments(): Promise<void> {
         delivery.error ??= 'Waiting for Codex. Open the originating chat.';
         continue;
       }
-      if (closingTabs.has(tab) || !data.tabs.includes(tab) || message.deleted || message.codex !== delivery || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
+      if (!codexEnabled() || closingTabs.has(tab) || !data.tabs.includes(tab) || message.deleted || message.codex !== delivery || delivery.status !== 'queued' || commentDestination(tab, message) !== 'local'
         || message.destination !== 'local' || tab.codexThreadId !== delivery.threadId) continue;
       delete delivery.error;
       // Persist before dispatch: a lost acknowledgement must never cause an automatic duplicate.

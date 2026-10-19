@@ -91,6 +91,7 @@ mkdir -p "$SERVER_DIR"
 # Copy the built server bundle and client assets
 cp dist/cli.js "$SERVER_DIR/"
 cp dist/rev.js "$SERVER_DIR/"
+cp dist/codex-desktop.js "$SERVER_DIR/"
 # `glassbox-difftool` wrapper — resolves `cli.js` as a sibling via
 # `import.meta.url`, so it MUST sit next to cli.js. Forgetting this turns
 # `git difftool` into "command not found" for desktop-install users

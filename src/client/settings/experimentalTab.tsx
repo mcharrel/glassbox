@@ -4,6 +4,7 @@ import { reasoningOptions, selectedReasoning } from '../../ai/options.js';
 import type { AIKeyStatusEntry } from '../../api/index.js';
 import { IconCheck, IconFlask } from '../../icons.js';
 import { asPlatform } from '../narrow.js';
+import { renderCodexConnection } from './codexConnection.js';
 import type { ChannelState, KeyStatusResponse, Tab, TabContext } from './tabContext.js';
 
 /** Element ids for one API-key block, so the same markup serves the primary
@@ -118,6 +119,8 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
 
   return (
     <>
+      {renderCodexConnection()}
+      <div className="settings-divider"></div>
       <div className="settings-section-header">
         <span className="settings-heading">AI</span>
         <span className="settings-beta-badge">Beta</span>
@@ -173,7 +176,7 @@ function renderExperimentalTab(ctx: TabContext): SafeHtml {
         </select>
       </div>
       <div className="settings-section">
-        <p className="settings-hint">Review comments are saved for the Codex chat linked by <code>rev open</code>, using that chat’s history, model and permissions. Ordinary comments wait until Codex is idle; prefix a comment with [steer] to send it immediately. Delivery requires Codex’s shared app server; unsupported desktop sessions keep comments pending. These model settings only control GUIDE/LEARN.</p>
+        <p className="settings-hint">Review comments are saved for the Codex chat linked by <code>rev open</code>, using that chat’s history, model and permissions. Ordinary comments wait until Codex is idle; prefix a comment with [steer] to send it immediately. Enable Connect to Codex above for automatic delivery. These model settings only control GUIDE/LEARN.</p>
       </div>
 
       {!isApple && (

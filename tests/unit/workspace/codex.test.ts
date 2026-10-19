@@ -1,7 +1,8 @@
 import { pullInfo } from './fixtures.js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { PullTabSchema, ThreadMessageSchema, type PullTab } from '../../../src/api/workspace.js';
-const mocks = vi.hoisted(() => ({ data: { tabs: [] as PullTab[], archived: [] as PullTab[] }, connect: vi.fn(), send: vi.fn(), save: vi.fn(), close: vi.fn() }));
+const mocks = vi.hoisted(() => ({ enabled: true, data: { tabs: [] as PullTab[], archived: [] as PullTab[] }, connect: vi.fn(), send: vi.fn(), save: vi.fn(), close: vi.fn() }));
+vi.mock('../../../src/workspace/codex-settings.js', () => ({ codexEnabled: () => mocks.enabled }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks.data, saveWorkspace: mocks.save }));
 vi.mock('../../../src/workspace/codex-client.js', () => ({ codexConnection: mocks.connect, sendToCodex: mocks.send }));
 import { commentPrompt, flushCodexComments, queueCodexComment, recoverCodexComments, retryCodexComment, reviseComment } from '../../../src/workspace/codex.js';
@@ -11,7 +12,7 @@ function tab() {
   return PullTabSchema.parse({ key: 'owner/repo#1', ref: { owner: 'owner', repo: 'repo', number: 1, url: 'https://github.com/owner/repo/pull/1' }, repoRoot: null, reviewId: null, info: pullInfo(), viewer: 'alice', codexThreadId: chat });
 }
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.clearAllMocks(); mocks.enabled = true;
   mocks.data.tabs = [tab()]; mocks.data.archived = [];
   mocks.connect.mockResolvedValue({ client: { close: mocks.close }, activeTurn: 'active' });
   mocks.send.mockResolvedValue(undefined);
@@ -142,4 +143,13 @@ it('does not turn an explicit pickup into uncertain delivery after a late transp
   await vi.waitFor(() => expect(mocks.close).toHaveBeenCalled());
   expect(m.codex).toMatchObject({ status: 'sent' });
   expect(m.agentStatus).toBe('processing');
+});
+
+it('keeps feedback queued when disabled, including during an in-flight connection', async () => {
+  const t = mocks.data.tabs[0]; const m = message(); t.comments.push(m);
+  mocks.enabled = false; queueCodexComment(t, m); await flushCodexComments();
+  expect(mocks.connect).not.toHaveBeenCalled(); expect(m.codex?.status).toBe('queued');
+  mocks.enabled = true;
+  mocks.connect.mockImplementationOnce(async () => { mocks.enabled = false; return { client: { close: mocks.close } }; });
+  await flushCodexComments(); expect(mocks.send).not.toHaveBeenCalled(); expect(m.codex?.status).toBe('queued');
 });

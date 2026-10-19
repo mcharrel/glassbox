@@ -9,6 +9,7 @@ export default defineConfig([
       rev: 'src/rev.ts',
       'cli-difftool': 'src/cli-difftool.ts',
       channel: 'src/channel.ts',
+      'codex-desktop': 'src/codex/transport.ts',
     },
     format: 'esm',
     outDir: 'dist',

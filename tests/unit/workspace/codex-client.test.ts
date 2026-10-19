@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WebSocketServer } from 'ws';
 
+vi.mock('../../../src/global-config.js', () => ({ readGlobalConfig: () => ({}) }));
+
 import { codexConnection, connectCodex, sendToCodex } from '../../../src/workspace/codex-client.js';
 
 let directory: string;

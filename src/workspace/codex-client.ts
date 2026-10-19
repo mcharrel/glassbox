@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import { z } from 'zod';
 
+import { codexEnabled } from './codex-settings.js';
+
 const ResponseSchema = z.object({
   id: z.union([z.number(), z.string(), z.null()]).optional(), result: z.unknown().optional(),
   error: z.object({ message: z.string() }).optional(),
@@ -69,8 +71,8 @@ export function connectCodex() {
   };
 }
 export async function codexConnection(threadId: string) {
-  if (process.env.REV_CODEX_SHARED_SERVER !== '1')
-    throw new Error('Codex forwarding needs a desktop session using the shared app server');
+  if (!codexEnabled())
+    throw new Error('Enable Connect to Codex in Settings → Experimental to use the shared app server');
   const client = connectCodex();
   try {
     await client.request('initialize', { clientInfo: { name: 'rev', version: '1.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } });

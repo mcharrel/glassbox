@@ -4,7 +4,7 @@
 
 The `main` branch contains the current personal app, including its Git-graph icon. Legacy `glassbox` commands and data directories remain compatible. This fork is not the upstream `glassbox` npm package.
 
-**A fresh install supports PR review and GitHub comments. Automatic replies from your existing Codex chat require additional, version-dependent setup.** The installer does not configure Codex or install a shared-server adapter. See [Codex feedback setup](#codex-feedback-setup) before relying on automatic replies.
+**For automatic Codex replies on macOS, enable Settings → Experimental → Connect to Codex, then quit and reopen Codex once.** rev handles setup and shows the connection status. No setup prompts or terminal configuration are needed. See [Codex feedback setup](#codex-feedback-setup).
 
 ## Install from source
 
@@ -83,48 +83,40 @@ Choose a provider and model in Settings to generate review guidance. API keys be
 
 ## Codex feedback setup
 
-| Capability | Fresh installation |
-| --- | --- |
-| Review PRs, read GitHub comments and publish public comments | Works after GitHub sign-in; no Codex required |
-| Link your own PR to its original Codex chat | Run `rev open <PR URL>` inside that chat |
-| Ask that chat to read local feedback and answer in rev | Works with the comment commands below; no shared server required |
-| Push comments automatically into that chat | Requires a separately configured, compatible Codex desktop connection |
+On macOS, install the Codex desktop app in Applications, then:
 
-**There is currently no bundled one-command setup for automatic Codex replies.** The working development installation uses a separately configured desktop-owned connection; the public installer does not reproduce it. `--desktop` installs rev's native window, not a Codex connection. Enabling an environment variable or linking a PR alone is insufficient.
+1. Open **Settings → Experimental** in rev and tick **Connect to Codex**.
+2. Quit and reopen Codex once if rev says a restart is needed. Reopen the chat that created your PR.
+3. Wait for **Connected**. For an unlinked PR, select its original chat from **Chat for this PR** in the same settings section.
+
+That is the complete setup. rev installs its connection helper, retains it across login, checks compatibility, and reports errors directly in Settings. It does not modify Codex's app bundle, model, permissions, chat history or native-tool authorization. Turning the option off stops forwarding immediately and restores the previous startup setting for the next Codex launch. Existing chats continue running. GitHub review works whether Codex is connected or not.
 
 ### Link the original chat
 
-After creating a draft PR, run this **inside the Codex chat that created it**:
+PRs opened with `rev open <PR URL>` from their originating Codex chat are linked automatically through `CODEX_THREAD_ID`. Existing links are preserved. PRs opened from Slack or a normal terminal have no implicit chat: choose the actual originating chat in Settings; rev never guesses or creates a separate agent. The picker lists chats already open in Codex. Other people's PRs cannot be linked.
+
+For agent-driven workflows, run this after creating your draft PR:
 
 ```sh
 rev open https://github.com/OWNER/REPOSITORY/pull/123
 ```
 
-Codex supplies `CODEX_THREAD_ID`, so rev links your own PR to that original chat once ownership is known. Other people’s PRs are opened without a Codex binding. Opening it from a normal terminal still works, without linking a chat. An existing link cannot silently be replaced by another chat. Add the command to your personal agent instructions to make draft-PR opening automatic. A successful “linked” message confirms the association, **not** that automatic delivery works. Use `~/.local/bin/rev` if your shell finds the unrelated system `rev` command first.
+This is an agent workflow command, not a setup prompt for the user. Use `~/.local/bin/rev` if your shell resolves the unrelated system `rev` command first. You can also use the chat picker without running any command.
 
 **Main-view comments publish to GitHub on every PR**, including your own, and never go to Codex. Their deletes sync with GitHub too. On **your own PRs**, comments on code, their follow-ups, deletes, and Codex replies stay **local to rev**. Linked comments are saved as `new comment: …`, with the PR URL and source location. With a working push connection, ordinary comments use the original chat's queue; a leading `[steer]` requests immediate steering of its active turn. On **other people’s PRs**, your code comments also publish to **GitHub only**, without Codex watching or answering them. Code comments wait until ownership is known; Main-view comments only need GitHub authentication. A private comment can never become public through a refresh, retry, or account change. Imported GitHub comments and old annotations do not trigger Codex; existing published comments remain on GitHub. rev never starts a separate comment agent.
 
-### Ask Codex to check automatic delivery
+### Connection and restarts
 
-Paste this into the originating chat, replacing the checkout path and PR URL:
+The checkbox installs a small, private desktop transport adapter and a login helper. The Codex desktop still starts and owns its official server, with all its original arguments and environment. rev connects over a local Unix socket; it never starts a second server against your chat or exposes a TCP listener. The helper and its runtime are copied outside the source checkout so moving rev's sources does not break Codex startup.
 
-> Read `/path/to/rev/README.md`, especially “Codex feedback setup”, and help set up rev feedback for `<PR URL>` in this chat. Check whether this installed desktop can expose the same app server over a private Unix endpoint with the queue and steer methods rev uses. Preserve this chat's history, model, permissions and native tools. Do not start a second server or agent for this chat. Explain any required configuration and restart, save recovery instructions first, and verify a real comment is picked up and answered in rev before claiming success. If this installation cannot support push safely, say so and use `rev comments`, `rev pickup` and `rev reply` when I ask you to handle feedback.
+The app-server transport is experimental. Setup checks the installed version for the queue/steer methods rev needs. An incompatible version or conflicting custom launcher produces an actionable error without replacing that configuration. Failed setup restores previous startup settings. Existing older rev connections can be adopted without interrupting their running chats.
 
-This is a setup request, not a guarantee that every Codex version supports the connection. The [official App Server documentation](https://learn.chatgpt.com/docs/app-server) describes Unix socket transport; it does not establish that starting a separate server attaches to an existing desktop chat. **Do not simply start another `codex app-server` against that chat.** A compatible setup must keep the desktop and rev connected to the same server and retain desktop tool authorization. Changes to Codex can require checking that setup again.
+- **Codex closed:** local code comments wait in rev. Open Codex and the original chat; delivery resumes automatically.
+- **Codex restarted:** the connection returns automatically. Reopen the originating chat so it is loaded; its PR association persists.
+- **Connection unavailable after an update:** reopen Settings to check status. Turn Connect to Codex off and on to repair the setup, then restart Codex if requested.
+- **Uncertain delivery:** check the chat before using Resend. rev does not duplicate a message whose acknowledgement was lost.
 
-**Current limitation:** delivery requires a Codex installation whose desktop chat is connected to an existing shared app server exposing `thread/queue/add`, `thread/queue/start`, and `turn/steer`. A desktop session running its private stdio server cannot receive these messages from rev. Linking/opening still works, but comments stay visibly pending. This is not a substitute for the originating chat, and rev never resumes a second process against the same history.
-
-Only for a compatible shared-server setup, launch rev with `REV_CODEX_SHARED_SERVER=1` and have the desktop use that same server. It performs a WebSocket handshake on `$CODEX_HOME/app-server-control/app-server-control.sock` (default `~/.codex`); set `REV_CODEX_SOCKET` for a custom Unix socket. It does not spawn a CLI, start a daemon, or expose a network port. The chat's existing model and permissions remain in effect. If delivery is interrupted, rev asks you to check the chat before resending to avoid duplicate work.
-
-Set that variable in the environment of the **running rev server**, not only the shell running `rev open`: opening a PR reuses the existing server. Restart rev after changing its environment. The installer leaves existing Codex launch configuration untouched.
-
-### Restarts and unavailable connections
-
-- **Codex closed:** reviewing still works, and local feedback waits in rev.
-- **Codex restarted:** reopen the originating chat. Its PR link persists, but the chat must be loaded in the shared server. rev retries queued deliveries every ten seconds; it never starts or resumes another Codex process.
-- **A persistent desktop connection was configured:** the desktop should recreate its endpoint when launched, so no per-chat server-start instruction is needed. This depends on that separate setup; it is not provided by rev's installer. Verify again after Codex updates or moving the app.
-- **No compatible connection:** automatic delivery remains unavailable. Asking the linked chat to handle feedback manually still works. Installation, a reachable socket, or a chat link alone is not proof of end-to-end delivery.
-- **Uncertain delivery:** check the chat before using Resend. rev deliberately avoids automatically duplicating a message whose acknowledgement was lost.
+No human needs to copy a setup prompt. Settings reports transport readiness; individual comments separately show pending, picked-up and answered status.
 
 ### Replies without automatic delivery
 
@@ -149,7 +141,7 @@ rev reply https://github.com/OWNER/REPOSITORY/pull/123 --comment COMMENT_ID --re
 
 Posted comments are read-only; use a follow-up to clarify. Resolved GitHub code threads appear folded at their source line; expand them to read, or find their text through search. A new agent reply checks for pushed commits. Rev refreshes the code while you are away from it, or shows an orange **Refresh** button while you are reading. Click it or press Cmd/Ctrl+R to refresh immediately. Unfinished code-comment drafts defer automatic refresh.
 
-Incoming messages include these instructions. Pickup and reply are idempotent, restricted to the bound chat, and work even when incoming push delivery is unavailable. Revision checks still reject stale pickup/reply attempts for historical requests. A follow-up is a separate request with its own status. Already-posted answers remain visible. Replies appear as **Codex** below the original comment and stay local to rev. Add this workflow to the originating agent's instructions; no separate chat or model is started.
+Incoming messages include these instructions. Pickup and reply are idempotent, restricted to the bound chat, and work even when incoming push delivery is unavailable. Revision checks still reject stale pickup/reply attempts for historical requests. A follow-up is a separate request with its own status. Already-posted answers remain visible. Replies appear as **Codex** below the original comment and stay local to rev. No separate chat or model is started.
 
 ## Keyboard navigation
 
