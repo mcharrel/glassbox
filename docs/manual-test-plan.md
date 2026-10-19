@@ -254,3 +254,11 @@ Both items came from GitHub #59.
 - A reply without a new commit does not replace the source or show Refresh. Multiple rev windows protect the PR while any focused window reads its code.
 
 Automated coverage: ownership-aware placeholders/avatar markup, immutable workspace/API mutations, pending/read-only replies, duplicate delivery, multi-tab/window focus, deferred import after focus returns, explicit refresh, expired checkouts, failed import retry and concurrent reply requests have unit/API coverage. Native focus appearance remains a manual check.
+
+## Resolved threads and hover deletion
+
+- Resolve a GitHub code thread and refresh rev: the thread is folded at its line, with a Resolved row. Expand it, switch files/tabs and refresh metadata: it stays expanded. Reopen it on GitHub and refresh: normal thread content returns. Unanchored old threads remain hidden.
+- Search text in a folded reply and navigate to the match: the thread expands. Use comment navigation around a folded local annotation: it counts as one thread.
+- Hover your comment or reply and press `d`: the same deletion as its button occurs. Hover someone else's non-deletable comment, a folded summary or empty code: nothing happens. Typing `d` into a composer/search, holding a modifier, or keeping the key held must not delete anything. Verify local own-PR comments remain local and public comments use the GitHub retry queue.
+
+Automated coverage: thread/pagination/null-node mapping, private-content resolution sync, collapsed/expanded/reopened markup, nested navigation, fresh pointer hit-testing, permissions and keyboard guards. Native interaction remains manual under the no-browser-automation preference.

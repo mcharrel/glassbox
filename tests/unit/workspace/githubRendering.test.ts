@@ -29,15 +29,55 @@ it('keeps null authors and absent check rollups usable, and surfaces GraphQL err
   expect(await loadPull(ref)).toMatchObject({ author: { login: 'ghost' }, statusCheckRollup: [], reviews: [], reviewRequests: [] });
   await expect(loadPull(ref)).rejects.toThrow('Not accessible');
 });
-it('gets editable source and rendered HTML for issue, inline and review comments without extra calls', async () => {
-  const fetch = vi.fn(async (url: string) => Response.json([{ id: 1, body: '**body**\n<!-- glassbox:local-id -->', body_html: '<p><strong>body</strong></p>', user: { login: 'author' },
-    html_url: 'https://github.com/example/project/pull/1#comment', created_at: '2026-01-01', submitted_at: '2026-01-01', state: 'COMMENTED',
-    ...(url.includes('/pulls/1/comments') ? { path: 'file.ts', line: 3, side: 'RIGHT' } : {}),
-  }])); vi.stubGlobal('fetch', fetch);
-  const tab = PullTabSchema.parse({ key: 'example/project#1', ref, info: null, reviewId: null, repoRoot: null, viewer: 'author' });
-  const comments = await loadComments(tab);
-  expect(fetch).toHaveBeenCalledTimes(3); expect(comments).toHaveLength(3);
-  for (const call of fetch.mock.calls) expect(call[1].headers.Accept).toBe('application/vnd.github.full+json');
+const tab = () => PullTabSchema.parse({ key: 'example/project#1', ref, info: null, reviewId: null, repoRoot: null, viewer: 'author' });
+const pageInfo = { hasNextPage: false, endCursor: null };
+const row = (id = 1) => ({ id: `comment-${id}`, fullDatabaseId: String(id), body: '**body**', bodyHTML: '<p><strong>body</strong></p>',
+  author: { login: 'author' }, createdAt: '2026-01-01', url: `${ref.url}#discussion_r${id}`, commit: { oid: 'head' }, viewerCanDelete: true, state: 'SUBMITTED' });
+const thread = (id = 1, isResolved = true) => ({ id: `thread-${id}`, isResolved, path: 'file.ts', line: 3, diffSide: 'RIGHT',
+  comments: { nodes: [row(id)], pageInfo } });
+const graph = (nodes: unknown[], info = pageInfo) => ({ data: { repository: { pullRequest: { reviewThreads: { nodes, pageInfo: info } } } } });
+it('loads resolved threads and rendered bodies without increasing the normal request count', async () => {
+  const fetch = vi.fn(async (url: string) => Response.json(url.endsWith('/graphql') ? graph([{ ...thread(), comments: { nodes: [{ ...row(), body: '**body**\n<!-- glassbox:local-inline -->' }, row(2)], pageInfo } }]) : [{ id: 1, body: '**body**\n<!-- glassbox:local-id -->', body_html: '<p><strong>body</strong></p>', user: { login: 'author' },
+    html_url: `${ref.url}#comment`, created_at: '2026-01-01', submitted_at: '2026-01-01', state: 'COMMENTED' }]));
+  vi.stubGlobal('fetch', fetch);
+  const comments = await loadComments(tab());
+  expect(fetch).toHaveBeenCalledTimes(3); expect(comments).toHaveLength(4);
+  expect(comments[1]).toMatchObject({ id: 'local-inline', body: '**body**', resolved: true, line: 3, remoteId: 1, editable: true });
+  expect(comments[2]).toMatchObject({ remoteId: 2, parentId: 1, resolved: true });
   for (const comment of comments) expect(comment.bodyHTML).toBe('<p><strong>body</strong></p>');
-  expect(comments[0].body).toBe('**body**'); expect(comments[1]).toMatchObject({ path: 'file.ts', line: 3 });
+  expect(comments[0].resolved).toBeUndefined(); expect(comments[3].resolved).toBeUndefined();
+});
+it('paginates both threads and long conversations, retaining root identity and unresolved state', async () => {
+  const fetch = vi.fn(async (url: string, options: RequestInit) => {
+    if (!url.endsWith('/graphql')) return Response.json([]);
+    const { variables } = JSON.parse(String(options.body));
+    if (variables.id) return Response.json({ data: { node: { comments: { nodes: [row(2)], pageInfo } } } });
+    return Response.json(variables.cursor ? graph([thread(3, false)]) : graph([
+      { ...thread(), comments: { nodes: [row()], pageInfo: { hasNextPage: true, endCursor: 'more-comments' } } },
+    ], { hasNextPage: true, endCursor: 'more-threads' }));
+  }); vi.stubGlobal('fetch', fetch);
+  const comments = await loadComments(tab());
+  expect(comments.map(c => [c.remoteId, c.parentId, c.resolved])).toEqual([[1, undefined, true], [2, 1, true], [3, undefined, false]]);
+  const variables = fetch.mock.calls.filter(([url]) => url.endsWith('/graphql')).map(([, opts]) => JSON.parse(String(opts.body)).variables);
+  expect(variables).toContainEqual({ id: 'thread-1', cursor: 'more-comments' });
+  expect(variables).toContainEqual({ owner: 'example', repo: 'project', number: 1, cursor: 'more-threads' });
+});
+it('keeps current anchors, handles deleted authors and missing numeric IDs, and excludes unpublished comments', async () => {
+  const fetch = vi.fn(async (url: string) => Response.json(url.endsWith('/graphql') ? graph([null,
+    { ...thread(), line: null, diffSide: 'LEFT', comments: { nodes: [null, { ...row(9), state: 'PENDING' },
+      { ...row(10), author: null, fullDatabaseId: null }, { ...row(11), fullDatabaseId: '9000000000', viewerCanDelete: false }], pageInfo } },
+    { ...thread(3), comments: { nodes: [], pageInfo } },
+  ]) : [])); vi.stubGlobal('fetch', fetch);
+  const comments = await loadComments(tab());
+  expect(comments).toHaveLength(2);
+  expect(comments[0]).toMatchObject({ id: 'github-review-comment-10', author: 'ghost', editable: false, line: null, side: 'old' });
+  expect(comments[1]).toMatchObject({ remoteId: 9000000000, parentKey: comments[0].id, editable: false });
+});
+it.each([graph([]), graph([null, { ...thread(), comments: { nodes: [{ ...row(), state: 'PENDING' }], pageInfo } }])])('accepts an empty or entirely filtered thread collection', async result => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/graphql') ? result : [])));
+  expect(await loadComments(tab())).toEqual([]);
+});
+it.each([{ errors: [{ message: 'Unavailable' }] }, graph([], { hasNextPage: true, endCursor: null })])('rejects incomplete snapshots rather than deleting cached comments', async result => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/graphql') ? result : [])));
+  await expect(loadComments(tab())).rejects.toThrow();
 });

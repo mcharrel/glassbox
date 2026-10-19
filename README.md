@@ -109,7 +109,7 @@ rev pickup https://github.com/OWNER/REPOSITORY/pull/123 --comment COMMENT_ID --r
 rev reply https://github.com/OWNER/REPOSITORY/pull/123 --comment COMMENT_ID --revision 1 --body-file reply.txt
 ```
 
-Posted comments are read-only; use a follow-up to clarify. A new agent reply checks for pushed commits. Rev refreshes the code while you are away from it, or shows an orange **Refresh** button while you are reading. Click it or press Cmd/Ctrl+R to refresh immediately. Unfinished code-comment drafts defer automatic refresh.
+Posted comments are read-only; use a follow-up to clarify. Resolved GitHub code threads appear folded at their source line; expand them to read, or find their text through search. A new agent reply checks for pushed commits. Rev refreshes the code while you are away from it, or shows an orange **Refresh** button while you are reading. Click it or press Cmd/Ctrl+R to refresh immediately. Unfinished code-comment drafts defer automatic refresh.
 
 Incoming messages include these instructions. Pickup and reply are idempotent, restricted to the bound chat, and work even when incoming push delivery is unavailable. Revision checks still reject stale pickup/reply attempts for historical requests. A follow-up is a separate request with its own status. Already-posted answers remain visible. Replies appear as **Codex** below the original comment and stay local to rev. Add this workflow to the originating agent's instructions; no separate chat or model is started.
 
@@ -121,6 +121,7 @@ Incoming messages include these instructions. Pickup and reply are idempotent, r
 | Tab / `f` | Next change not fully visible; continue to the next file |
 | Shift+Tab / `g` | Previous change |
 | `c` / `v` | Next / previous comment with source context |
+| `d` | Delete the hovered comment, when permitted |
 | Cmd/Ctrl+F | Toggle search focus while keeping matches |
 | `n` / `m` | Next / previous match across files and comments |
 | Escape | Close search without leaving fullscreen |

@@ -81,6 +81,7 @@ export const ThreadMessageSchema = z.object({
   side: z.enum(['old', 'new']).optional(),
   commit: z.string().optional(),
   fileComment: z.boolean().optional(),
+  resolved: z.boolean().optional(),
   kind: z.enum(['issue', 'review', 'ai']),
   status: z.enum(['pending', 'synced', 'error', 'working', 'done']).default('synced'),
   error: z.string().optional(),

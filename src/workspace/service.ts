@@ -221,11 +221,12 @@ async function syncComments(tab: PullTab): Promise<void> {
   );
   tab.comments = [
     ...local,
-    ...remote.filter((m) => !local.some((l) => l.remoteId === m.remoteId || l.id === m.id)),
+    ...remote.filter((m) => !local.some((l) => (m.remoteId !== undefined && l.remoteId === m.remoteId) || l.id === m.id)),
   ];
   // Reconcile externally edited replies while retaining local annotation identity.
   for (const message of local) {
-    const match = remote.find((r) => r.remoteId === message.remoteId);
+    const match = message.remoteId === undefined ? undefined : remote.find((r) => r.remoteId === message.remoteId);
+    if (match?.kind === 'review') message.resolved = match.resolved;
     if (message.destination !== 'local' && !pendingIds.has(message.id) && message.remoteId !== undefined) {
       if (!match) {
         message.deleted = true;

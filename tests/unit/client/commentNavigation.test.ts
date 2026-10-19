@@ -29,6 +29,7 @@ function fixture(specs: Spec[] = [[100, 180], [200, 280], [700, 780]]) {
   let scroll = 0;
   const rect = (top: number, bottom: number) => () => ({ top: 100 + top - scroll, bottom: 100 + bottom - scroll });
   const makeThread = ([top, bottom, replies]: Spec) => ({
+    parentElement: null as { closest: () => object } | null,
     getBoundingClientRect: rect(top, bottom),
     nextElementSibling: replies === undefined ? null : {
       classList: { contains: (name: string) => name === 'local-thread-details' },
@@ -59,7 +60,7 @@ function fixture(specs: Spec[] = [[100, 180], [200, 280], [700, 780]]) {
   vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '20px', borderTopWidth: '0px', borderBottomWidth: '0px' }));
   const navigate = createCommentNavigator();
   return {
-    pane, tab, view, navigate, disconnect,
+    pane, tab, view, navigate, disconnect, threads,
     render: (fileId: string, newSpecs: Spec[]) => {
       view.dataset.fileId = fileId;
       threads = newSpecs.map(makeThread);
@@ -73,6 +74,12 @@ function fixture(specs: Spec[] = [[100, 180], [200, 280], [700, 780]]) {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('page-aware comment navigation', () => {
+  it('treats a folded thread and its nested local annotation as one navigation target', async () => {
+    const f = fixture([[100, 140], [700, 780]]);
+    f.threads[1].parentElement = { closest: () => f.threads[0] };
+    await f.navigate(1);
+    expect(f.pane.scrollTop).toBe(0);
+  });
   it('skips every fully visible thread, leaving ten code lines below the sticky header', async () => {
     const f = fixture();
     await f.navigate(1);

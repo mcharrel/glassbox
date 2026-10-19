@@ -4,6 +4,7 @@ import { deleteAnnotation, keepAnnotation } from '../../api/index.js';
 import { asEl, asElOrNull } from '../dom.js';
 import type { Annotation } from '../state.js';
 import { reviewStore } from '../stores/index.js';
+import { showToast } from '../toast.js';
 import { bindAttachmentEvents } from './attachments.js';
 import { buildAnnotationItemHtml } from './render.js';
 
@@ -21,7 +22,10 @@ export function bindAnnotationEvents(diffContainer: HTMLElement): void {
     e.stopPropagation();
     const item = asEl(btn).closest<HTMLElement>('.annotation-item');
     if (item === null) return;
-    void handleDelete(item);
+    const button = btn as HTMLButtonElement;
+    if (button.disabled) return;
+    button.disabled = true;
+    void handleDelete(item).catch((error: unknown) => { showToast(String(error)); }).finally(() => { button.disabled = false; });
   });
 
   void delegate(diffContainer, 'click', '.annotation-item [data-action="keep"]', (e, btn) => {

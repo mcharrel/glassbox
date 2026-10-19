@@ -61,3 +61,24 @@ it('shows an avatar before the author and never makes posted messages editable',
   expect(agent).toContain('comment-avatar-fallback');
   expect(agent).not.toContain('github.com/Codex');
 });
+
+it('folds a resolved code thread and its replies together, keeping searchable content', () => {
+  const r = { ...root(), resolved: true, destination: 'github' as const, remoteId: 123 };
+  const reply = { ...r, id: 'reply', remoteId: 124, parentId: 123, body: 'Reply text' };
+  const html = String(threadHtml(r, [r, reply]));
+  expect(html).toContain('<details class="resolved-thread"');
+  expect(html).toContain('>Resolved</span>');
+  expect(html).not.toMatch(/<details[^>]*\sopen(?:\s|=|>)/);
+  expect(html).toContain('Request'); expect(html).toContain('Reply text');
+  expect(html.match(/data-comment-thread=/g)).toHaveLength(1);
+  expect(html.indexOf('<summary>')).toBeLessThan(html.indexOf('data-message="root"'));
+  expect(html.indexOf('data-message="reply"')).toBeLessThan(html.indexOf('</details>'));
+  expect(String(threadHtml(r, [r, reply], true))).toMatch(/<details[^>]*\sopen(?:\s|=|>)/);
+});
+
+it('unfolds reopened threads and leaves unresolved code and Main comments unchanged', () => {
+  for (const r of [root(), { ...root(), resolved: false }, { ...root(), kind: 'issue' as const, resolved: true }]) {
+    const html = String(threadHtml(r, [r], true));
+    expect(html).not.toContain('class="resolved-thread"'); expect(html).toContain('Request');
+  }
+});

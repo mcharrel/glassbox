@@ -419,16 +419,30 @@ it('recovers interrupted agents in closed tabs so they cannot block retention fo
     expect(archived.comments[0].error).toContain('local edits were preserved');
   } finally { stop(); }
 });
-it('migrates an existing code conversation to local-only and preserves it on GitHub refresh', async () => {
+it('migrates an existing code conversation to local-only and preserves it while syncing resolution', async () => {
   const tab = mocks.data.tabs[0];
   const info = { id: 'pr', author: { login: 'alice' }, title: 'PR', reviews: [], reviewRequests: [], state: 'OPEN', isDraft: true, mergeStateStatus: 'DRAFT', baseRefName: 'main', headRefName: 'topic' };
   tab.info = info; vi.mocked(loadPull).mockResolvedValue(info as any);
   const original = { id: 'local-comment', remoteId: 42, kind: 'review', path: 'file.ts', body: 'Please fix this', author: 'alice', date: '', url: '', deleted: false, status: 'synced', editable: true, codex: { threadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', status: 'queued', mode: 'queue' } };
   tab.comments.push(original);
-  vi.mocked(loadComments).mockResolvedValueOnce([{ ...original, id: 'remote-comment', codex: undefined, body: 'Updated from GitHub' }] as any);
+  vi.mocked(loadComments).mockResolvedValueOnce([{ ...original, id: 'remote-comment', codex: undefined, body: 'Updated from GitHub', resolved: true }] as any);
   await syncTab(tab);
-  expect(tab.comments[0]).toMatchObject({ id: 'local-comment', body: 'Please fix this', destination: 'local', codex: original.codex });
+  expect(tab.comments[0]).toMatchObject({ id: 'local-comment', body: 'Please fix this', destination: 'local', codex: original.codex, resolved: true });
   expect(tab.comments[0].codex?.threadId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  vi.mocked(loadComments).mockResolvedValueOnce([{ ...original, resolved: false }] as any);
+  await syncTab(tab);
+  expect(tab.comments[0]).toMatchObject({ body: 'Please fix this', destination: 'local', resolved: false });
+  expect(mocks.github).not.toHaveBeenCalled();
+});
+
+it('keeps distinct remote comments without numeric IDs alongside private comments', async () => {
+  const t = mocks.data.tabs[0]; vi.mocked(loadPull).mockResolvedValue(t.info);
+  const local = { id: 'local', body: 'Private', kind: 'review', destination: 'local', status: 'done' };
+  const remote = { id: 'node-comment', body: 'Public', kind: 'review', resolved: true, status: 'synced' };
+  t.comments.push(local); vi.mocked(loadComments).mockResolvedValue([remote] as any);
+  await syncTab(t);
+  expect(t.comments).toEqual([local, remote]);
+  expect(local).not.toHaveProperty('resolved');
 });
 
 describe('comment scope and ownership routing', () => {

@@ -8,7 +8,7 @@ interface Thread { element: HTMLElement; top: number; bottom: number }
 function threadsIn(view: HTMLElement): Thread[] {
   return [...view.querySelectorAll<HTMLElement>(
     '[data-comment-thread], .annotation-item:not([data-comment-thread])',
-  )].map(element => {
+  )].filter(element => !element.parentElement?.closest('[data-comment-thread]')).map(element => {
     const rect = element.getBoundingClientRect();
     // Local annotations render their replies beside the root, not inside it.
     const replies = element.nextElementSibling;

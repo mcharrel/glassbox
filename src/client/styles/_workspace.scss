@@ -545,3 +545,27 @@ body[data-review-pending='true'] {
   cursor: pointer;
   &:disabled { opacity: .6; cursor: wait; }
 }
+
+.resolved-thread {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: var(--font-code-size);
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+    &::before { content: ''; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(-45deg); }
+    > svg { width: 14px; height: 14px; color: var(--green); }
+    &:hover { color: var(--text); }
+  }
+  &[open] > summary::before { transform: rotate(45deg); }
+  .resolved-thread-author { margin-left: auto; }
+  > .resolved-thread-content { padding: 0 10px 10px; }
+}

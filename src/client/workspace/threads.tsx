@@ -1,8 +1,8 @@
-import { delegate, effect } from 'kerfjs';
+import { delegate, delegateCapture, effect } from 'kerfjs';
 
 import { commentAgentStatus, commentDestination, type ThreadMessage } from '../../api/workspace.js';
 import { codeCommentPlaceholder,CommentAuthor } from '../../components/commentAuthor.js';
-import { IconTrash } from '../../icons.js';
+import { IconCheck, IconTrash } from '../../icons.js';
 import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
 import { toElement } from '../dom.js';
@@ -80,24 +80,27 @@ export function messageHtml(message: ThreadMessage) {
     </article>
   );
 }
-export function threadHtml(root: ThreadMessage, comments: ThreadMessage[]) {
+function resolvedThread(root: ThreadMessage, content: ReturnType<typeof messageHtml>, open: boolean) {
+  return <details className="resolved-thread" data-resolved-thread={root.id} data-resolved-tab={activeTab()?.key} open={open}>
+    <summary><IconCheck /><span>Resolved</span><span className="resolved-thread-author">{root.author}</span></summary>
+    <div className="resolved-thread-content">{content}</div>
+  </details>;
+}
+export function threadHtml(root: ThreadMessage, comments: ThreadMessage[], expanded = false) {
   const replies = comments.filter(
-    (m) =>
-      !m.deleted &&
-      (m.parentKey === root.id || (root.remoteId !== undefined && m.parentId === root.remoteId)),
+    (m) => !m.deleted && (m.parentKey === root.id || (root.remoteId !== undefined && m.parentId === root.remoteId)),
   );
-  return (
-    <div className="pr-thread" data-comment-thread={root.id} data-key={root.id}>
-      {messageHtml(root)}
-      {replies.map((reply) => (
-        <>
-          {messageHtml(reply)}
-          {comments.filter((child) => !child.deleted && child.parentKey === reply.id).map(messageHtml)}
-        </>
-      ))}
-      {replyInput(root)}
-    </div>
-  );
+  const content = <>
+    {messageHtml(root)}
+    {replies.map((reply) => <>
+      {messageHtml(reply)}
+      {comments.filter((child) => !child.deleted && child.parentKey === reply.id).map(messageHtml)}
+    </>)}
+    {replyInput(root)}
+  </>;
+  return <div className="pr-thread" data-comment-thread={root.id} data-key={root.id}>
+    {root.kind === 'review' && root.resolved === true ? resolvedThread(root, content, expanded) : content}
+  </div>;
 }
 function replyInput(root: ThreadMessage) {
   const tab = activeTab();
@@ -111,6 +114,8 @@ export function bindThreads(): void {
   const candidate = document.getElementById('diff-container');
   if (!candidate) return;
   const pane = candidate;
+  const expanded = new Set<string>();
+  const expansionKey = (tab: string, id: string) => JSON.stringify([tab, id]);
   let previousView: Element | null = null;
   let previous = '';
   function render(): void {
@@ -123,6 +128,18 @@ export function bindThreads(): void {
     if (pane.querySelector('textarea:focus')) return;
     previousView = view;
     previous = signature;
+    // Preserve expansion even if a native details toggle has not fired yet.
+    for (const details of pane.querySelectorAll<HTMLDetailsElement>('.resolved-thread')) {
+      const id = details.dataset.resolvedThread;
+      if (id === undefined || details.dataset.resolvedTab !== tab.key || !tab.comments.some(message => message.id === id && message.resolved === true)) continue;
+      const key = expansionKey(tab.key, id);
+      if (details.open) expanded.add(key); else expanded.delete(key);
+    }
+    // Unwrap local annotations before rebuilding their thread decoration.
+    for (const folded of pane.querySelectorAll('.local-resolved-thread')) {
+      const content = folded.querySelector('.resolved-thread-content');
+      if (content) folded.replaceWith(...content.childNodes);
+    }
     pane
       .querySelectorAll(
         '.pr-inline-thread, .local-thread-details, .local-comment-header, .local-agent-status, .local-comment-share',
@@ -195,22 +212,38 @@ export function bindThreads(): void {
           </div>,
         );
         local.after(details);
+        if (root.resolved === true) {
+          const folded = toElement(resolvedThread(root, <></>, expanded.has(expansionKey(tab.key, root.id))));
+          folded.classList.add('local-resolved-thread');
+          folded.dataset.commentThread = root.id;
+          delete local.dataset.commentThread;
+          local.before(folded);
+          folded.querySelector('.resolved-thread-content')?.append(local, details);
+        }
         continue;
       }
       const line = commentAnchor(view, root);
       // Outdated/unanchored remote comments belong to history, not the current code.
       if (!line) continue;
       const holder = toElement(
-        <div className="annotation-row pr-inline-thread">{threadHtml(root, comments)}</div>,
+        <div className="annotation-row pr-inline-thread">{threadHtml(root, comments, expanded.has(expansionKey(tab.key, root.id)))}</div>,
       );
       (line.closest('.split-row') ?? line).after(holder);
     }
     refreshFind();
   }
   effect(() => {
-    void workspace.value;
+    const resolved = new Set(workspace.value.tabs.flatMap(tab => tab.comments
+      .filter(message => message.resolved === true && !message.deleted)
+      .map(message => expansionKey(tab.key, message.id))));
+    for (const key of expanded) if (!resolved.has(key)) expanded.delete(key);
     void reviewStore.state.value.currentFileId;
     render();
+  });
+  void delegateCapture<HTMLDetailsElement>(document.body, 'toggle', '.resolved-thread', (_event, element) => {
+    if (!element.isConnected || element.dataset.resolvedTab === undefined || element.dataset.resolvedThread === undefined) return;
+    const key = expansionKey(element.dataset.resolvedTab, element.dataset.resolvedThread);
+    if (element.open) expanded.add(key); else expanded.delete(key);
   });
   document.addEventListener('glassbox-diff-ready', () => {
     previousView = null;
@@ -234,7 +267,12 @@ export function bindThreads(): void {
       void mutate({ op: 'retry-codex', key: tab.key, id: message.id });
     else if ((element as HTMLElement).dataset.commentAction === 'retry')
       void mutate({ op: 'retry-agent', key: tab.key, id: message.id });
-    else void mutate({ op: 'delete-comment', key: tab.key, id: message.id });
+    else {
+      const button = element as HTMLButtonElement;
+      if (button.disabled || !message.editable) return;
+      button.disabled = true;
+      void mutate({ op: 'delete-comment', key: tab.key, id: message.id }).finally(() => { button.disabled = false; });
+    }
   });
   void delegate(document.body, 'keydown', '.pr-reply-input', (event, element) => {
     const e = event as KeyboardEvent;

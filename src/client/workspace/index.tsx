@@ -11,6 +11,7 @@ import { reviewStore } from '../stores/index.js';
 import { openExternalUrl } from '../tauri.js';
 import { showToast } from '../toast.js';
 import { checks } from './checks.js';
+import { initCommentDelete } from './commentDelete.js';
 import { createCommentNavigator } from './commentNavigation.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
@@ -108,6 +109,7 @@ async function copyPullLink(tab: PullTab): Promise<void> {
 }
 export function initWorkspace(): void {
   initSourceRefresh();
+  initCommentDelete();
   const body = document.querySelector('.review-body');
   const sidebar = document.querySelector<HTMLElement>('.sidebar');
   const main = document.querySelector('.main-content');
