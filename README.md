@@ -6,19 +6,19 @@ The `main` branch contains the current personal app, including its Git-graph ico
 
 ## Install from source
 
-Requirements: Node.js 22.12+, npm, Git, and the [GitHub CLI](https://cli.github.com/). Authenticate with an account that can access the repositories you review:
+Clone and run the installer:
 
 ```sh
-gh auth login
-git clone https://github.com/mcharrel/rev.git
-cd rev
-npm ci
-npm run build
-npm link
-rev serve
+git clone https://github.com/mcharrel/rev.git && ./rev/install.sh
 ```
 
-`rev serve` starts the local app at `http://localhost:4183`. Add `--no-open` to launch the server without opening a browser. The server binds only to your computer. If your shell already has another `rev` command, use `node dist/rev.js` instead, or put npm's bin directory first on `PATH`.
+The script installs dependencies, builds rev, sets up `~/.local/bin/rev`, and guides you through GitHub sign-in if needed. It adds the command directory to your Bash/Zsh configuration. No `sudo` or global npm installation is needed.
+
+You need Git to clone the repository. On macOS, the script uses an existing [Homebrew](https://brew.sh/) installation to install missing Node.js/npm and GitHub CLI dependencies. On Linux, or without Homebrew, install Node.js 22.12+, npm and [GitHub CLI](https://cli.github.com/) first; the installer checks these before building.
+
+Start rev from a new terminal with `rev`, or run `~/.local/bin/rev` immediately. This starts the local app in your browser at `http://localhost:4183`. Use `rev serve --no-open` to run without opening a browser. The server binds only to your computer.
+
+Keep the cloned directory: the command runs the build from that checkout. Rerunning the installer rebuilds it without changing review data or GitHub credentials. It refuses to overwrite an unrelated existing `rev` launcher; use `--bin-dir /another/directory` if needed. Run `./rev/install.sh --help` for the options, including `--no-auth` and `--no-path` for unattended installs.
 
 Open a PR from another terminal or paste its URL into the app's **+** tab:
 
@@ -28,15 +28,17 @@ rev open https://github.com/OWNER/REPOSITORY/pull/123
 
 Trailing GitHub URL fragments and query parameters are accepted. Opening a PR reuses the running app; source downloads and GitHub metadata load in the background. Review state and the comment outbox persist locally.
 
-### macOS desktop build
+### Optional macOS desktop build
 
-Install Rust and Xcode Command Line Tools, then build the native app from the same checkout:
+Add `--desktop` to also build and install the native app into `~/Applications/rev.app`:
 
 ```sh
-npm run tauri:build -- --bundles app
+./rev/install.sh --desktop
 ```
 
-The native bundle is under `src-tauri/target/release/bundle/macos/rev.app`. The build includes the Node sidecar. Release signing/updater distribution is separate from a local build. The existing native launchers keep their `glassbox` filenames for compatibility; `rev serve` is the simplest standalone setup.
+This requires Xcode Command Line Tools; the script installs missing Rust through Homebrew when available. The first native build takes longer. Quit an existing rev desktop app before replacing it. `--app-dir /another/directory` changes the destination.
+
+The native bundle includes Node and uses local ad-hoc signing, so no release signing keys are required. Upstream automatic updates are disabled for this source build; rerun the installer to update. The `rev` command continues to provide the standalone browser workspace; legacy native `glassbox` launchers remain available in the app bundle.
 
 ### GitHub accounts
 
@@ -104,13 +106,11 @@ Panel sizes and per-PR reading positions are remembered. Source files come first
 ## Update and develop
 
 ```sh
-git switch main
-git pull --ff-only
-npm ci
-npm run build
+cd rev
+git pull --ff-only && ./install.sh
 ```
 
-Restart the app after rebuilding. To incorporate upstream changes, fetch the original project into an `upstream` remote and merge on a separate branch before updating `main`; personal changes do not prevent future upstream updates.
+Repeat `--desktop` if you also want to rebuild the native app. Restart the app after updating. To incorporate upstream changes, fetch the original project into an `upstream` remote and merge on a separate branch before updating `main`; personal changes do not prevent future upstream updates.
 
 Run `npm test -- --maxWorkers=4`, `npm run lint`, and `npm run typecheck` before publishing changes. Never commit `.env`, review databases, local workspace mappings, Codex connection files, API tokens, or private PR content. The inherited Glassbox architecture documentation remains under [docs/](docs/).
 

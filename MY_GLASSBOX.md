@@ -131,3 +131,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 ## GitHub Markdown and bot reports
 
 GitHub descriptions and comments use GitHub-rendered HTML from the existing metadata/comment requests, with a sanitized local GitHub-flavored Markdown fallback for cached or pending content. Tables, task lists, nested lists, fenced code, images and expandable bot reports render as content. Raw Markdown remains the editing/publishing source, and edits invalidate stale rendered HTML. Links and disclosure toggles do not start editing; local polling preserves expanded reports. Search indexes displayed comment text and opens collapsed reports when navigating to a match. This adds no GitHub requests and preserves comment fonts/colors.
+
+## Source installation
+
+Use `git clone https://github.com/mcharrel/rev.git && ./rev/install.sh`. The installer builds the browser workspace, installs a user-local command, checks dependencies, and guides GitHub authentication. `--desktop` also builds and installs the native macOS app without release keys or upstream automatic updates. Rerun the script after pulling changes; existing review data and unrelated launchers are preserved.

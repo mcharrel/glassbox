@@ -109,3 +109,9 @@ Requirements for building, packaging, and distributing the application.
 - `npm run tauri:dev` shall start both the Node server and Tauri window in development mode.
 - A sidecar stub script shall be created for dev mode so Tauri's build system doesn't require the real Node binary.
 - `npm run test:e2e:docker` shall run the Playwright e2e suite inside the same pinned Linux container image CI uses (`scripts/test-e2e-docker.sh`), so developers can reproduce CI-only e2e failures locally — in particular environment-dependent ones (no keychain/API key, Linux paths/fonts) that a macOS run masks.
+
+## Personal fork source installer
+
+Run `git clone https://github.com/mcharrel/rev.git && ./rev/install.sh` to install the standalone browser workspace. The installer checks prerequisites, uses existing Homebrew for missing macOS Node/npm/gh dependencies, offers interactive GitHub login, builds with the lockfile and installs a user-local launcher without global npm changes. Bash/Zsh PATH setup is idempotent. Existing unrelated launchers are preserved. Unattended installs can skip authentication and profile edits.
+
+`--desktop` additionally builds and installs the native macOS bundle, requiring Xcode tools and Rust (installed through Homebrew if needed). Local builds disable release updater artifacts and upstream update endpoints, use ad-hoc signing and verify the bundle before replacement. Active/unrelated apps are never overwritten. The installer is rerunnable, leaves review data intact, and supports custom command/app directories.
