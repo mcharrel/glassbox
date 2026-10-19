@@ -461,3 +461,12 @@ body[data-review-pending='true'] {
 .deployment-name {
   overflow-wrap: anywhere;
 }
+.deployment-service + .deployment-service {
+  margin-top: 16px;
+}
+.deployment-service-name {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

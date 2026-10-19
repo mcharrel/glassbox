@@ -53,7 +53,7 @@ Existing local checkouts can speed up first imports. Every open PR tab refreshes
 
 ### Deployment status
 
-Merged PRs show datacenters instead of CI checks, with fully reached datacenters first. Partial, deploying, missing and unknown states are distinct; hover over a row for service and namespace details. Status refreshes every five minutes and with Cmd/Ctrl+R, without blocking the review.
+Merged PRs show deployment status grouped by service instead of CI checks. Each service lists staging datacenters first, then production, then federal (including federal staging); unclassified datacenters follow. Fully reached datacenters come first within each tier. Partial, deploying, missing and unknown states are distinct; hover over a row for environment and namespace details. Status refreshes every five minutes and with Cmd/Ctrl+R, without blocking the review.
 
 This optional integration uses an installed, authenticated `ddr` CLI for Devflow repositories in the `ddoghq`/`DataDog` organisations. It runs `ddr devflow whereismycode --pr <URL>` locally and never posts a GitHub comment. If authentication expires, run that command in your terminal, then refresh rev. Other repositories show that deployment tracking is unavailable.
 

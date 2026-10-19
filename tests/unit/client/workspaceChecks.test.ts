@@ -1,18 +1,48 @@
 import { expect, it } from 'vitest';
 import { PullTabSchema, type DeploymentTarget } from '../../../src/api/workspace.js';
-import { checks, datacenterStatus } from '../../../src/client/workspace/checks.js';
+import { checks, deploymentServices } from '../../../src/client/workspace/checks.js';
 import { pullInfo } from '../workspace/fixtures.js';
 const target = (datacenter: string, status: DeploymentTarget['status'], service = 'api'): DeploymentTarget =>
   ({ datacenter, status, service, environment: 'prod', namespace: 'app' });
 const tab = () => PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' },
   info: { ...pullInfo(), state: 'MERGED', statusCheckRollup: [{ name: 'Build', conclusion: 'FAILURE' }] }, reviewId: null, repoRoot: null });
-it('aggregates conservatively with fully reached datacenters first, regardless of input order', () => {
-  const rows = [target('a.example', 'reached'), target('z.example', 'reached'), target('a.example', 'missing', 'worker')];
+it('keeps services separate and aggregates namespaces only within each service', () => {
+  const rows = [target('a.example', 'reached'), target('z.example', 'reached'),
+    { ...target('a.example', 'missing'), namespace: 'secondary' }, target('a.example', 'reached', 'worker')];
   for (const input of [rows, [...rows].reverse()]) {
-    expect(datacenterStatus(input).map(g => [g.datacenter, g.status])).toEqual([['z.example', 'reached'], ['a.example', 'partial']]);
+    expect(deploymentServices(input).map(group => [group.service, group.datacenters.map(dc => [dc.datacenter, dc.status])])).toEqual([
+      ['api', [['z.example', 'reached'], ['a.example', 'partial']]],
+      ['worker', [['a.example', 'reached']]],
+    ]);
   }
-  expect(datacenterStatus([])).toEqual([]);
-  expect(datacenterStatus([target('east', 'unknown'), target('east', 'deploying', 'worker')])[0].status).toBe('unknown');
+  expect(deploymentServices([])).toEqual([]);
+  expect(deploymentServices([target('east', 'unknown'), target('east', 'deploying')])[0].datacenters[0].status).toBe('unknown');
+});
+it('sorts staging, prod, federal and unclassified datacenters before considering reached status', () => {
+  const rows = [
+    { ...target('federal.example', 'reached'), environment: 'gov' },
+    { ...target('unknown.example', 'reached'), environment: 'other' },
+    target('a.prod.example', 'missing'), target('z.prod.example', 'reached'),
+    { ...target('z.stage.example', 'missing'), environment: 'staging' },
+    { ...target('a.stage.example', 'reached'), environment: 'staging' },
+    { ...target('x.staging-fed.example', 'reached'), environment: 'staging' },
+    { ...target('y.prod.example', 'reached'), environment: 'other' },
+  ];
+  const expected = ['a.stage.example', 'z.stage.example', 'y.prod.example', 'z.prod.example', 'a.prod.example',
+    'federal.example', 'x.staging-fed.example', 'unknown.example'];
+  for (const input of [rows, [...rows].reverse()])
+    expect(deploymentServices(input)[0].datacenters.map(dc => dc.datacenter)).toEqual(expected);
+  expect(rows[0].datacenter).toBe('federal.example');
+});
+it('renders an escaped service heading per group, including the same datacenter in multiple services', () => {
+  const t = tab();
+  t.deployment = { status: 'ready', updatedAt: 1, attemptedAt: 1,
+    targets: [target('east.example', 'missing', 'worker'), target('east.example', 'reached', '<api>')] };
+  const html = String(checks(t));
+  expect(html).toContain('class="deployment-service-name">&lt;api&gt;</h3>');
+  expect(html).toContain('class="deployment-service-name">worker</h3>');
+  expect(html.match(/class="deployment-name">east.example/g)).toHaveLength(2);
+  expect(html).toContain('deployment-reached'); expect(html).toContain('deployment-missing');
 });
 it('replaces checks with deployments only after merge and keeps names escaped', () => {
   const t = tab();
