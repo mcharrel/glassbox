@@ -15,6 +15,7 @@ import { initCommentDelete } from './commentDelete.js';
 import { createCommentNavigator } from './commentNavigation.js';
 import { conversation as conversationHtml } from './conversation.js';
 import { clickedDescriptionText } from './description.js';
+import { descriptionEditOffset, focusDescriptionEditor, resizeDescriptionEditor } from './descriptionEditor.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
@@ -285,14 +286,22 @@ export function initWorkspace(): void {
         </section>,
       );
   });
+  new ResizeObserver(() => {
+    const textarea = description.querySelector<HTMLTextAreaElement>('.pr-description-editor textarea');
+    if (textarea && description.clientWidth > 0) resizeDescriptionEditor(textarea);
+  }).observe(description);
   description.addEventListener('click', (event) => {
     const tab = activeTab();
     const text = description.querySelector<HTMLElement>('.pr-description-body');
-    if (editingDescription || !tab?.info || !isPullAuthor(tab) || !text || !clickedDescriptionText(event, text)) return;
+    if (editingDescription || !tab?.info || !isPullAuthor(tab) || !text) return;
+    const click = clickedDescriptionText(event, text);
+    if (!click) return;
+    const offset = descriptionEditOffset(tab.info.body, text, click);
+    const previousScroll = description.scrollTop;
     editingDescription = true;
     const form = toElement(
       <div className="pr-description-editor">
-        <textarea>{tab.info.body}</textarea>
+        <textarea aria-label="PR description" spellCheck="true">{tab.info.body}</textarea>
         <button className="btn btn-primary" data-save>
           Save
         </button>
@@ -303,7 +312,8 @@ export function initWorkspace(): void {
     );
     description.replaceChildren(form);
     const textarea = asTextarea(form.querySelector('textarea'));
-    textarea.focus();
+    focusDescriptionEditor(textarea, description, offset, click.top, previousScroll);
+    textarea.addEventListener('input', () => { resizeDescriptionEditor(textarea); });
     const finish = async (save: boolean) => {
       if (save && !(await mutate({ op: 'edit', key: tab.key, body: textarea.value }))) return;
       descriptionDrafts.delete(tab.key);

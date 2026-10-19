@@ -307,3 +307,10 @@ Automated coverage includes accepted/failed review transitions, metadata races a
 - Close the tab, change accounts or disable the setting while work is pending: no further reactions. Already-sent reactions stay. Restart during a job: show a retryable interruption, do not resend automatically.
 
 Automated coverage uses synthetic data for exact/misleading links, zero/filtered/multiple results, pagination, duplicate reactions, rate limits, safe authentication failures, keychain-only storage, defaults, UI lifecycle, accepted-only review hooks, cancellation and late-response races. No real Slack reactions are sent by tests. UI automation remains excluded by user preference.
+
+## Description editing continuity
+
+- On an own PR, click a word in the beginning, middle and end of its description. The editor should keep the centered text column, body font size/family/line spacing and start the caret at the clicked occurrence. Test repeated words, formatting, code, tables and text below long links. The clicked line should stay near its prior screen height where scroll bounds allow; raw Markdown may wrap differently.
+- Resize the mid-panel while editing, type enough to add several wrapped lines, switch PRs and return: keep the draft, caret and usable scrolling. Save and Cancel retain their existing behavior. Another person’s PR, links, whitespace and drag selections must not open the editor.
+
+Automated coverage checks source mapping for repeated text, links/definitions/images, hidden HTML, entities, code, tables, nested blocks, UTF-16 offsets, empty input and bounded fallback; synthetic geometry checks caret/scroll placement and late-layout guards. Pixel-level UI verification remains manual under the no-browser-automation preference.
