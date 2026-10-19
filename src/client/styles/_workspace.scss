@@ -383,7 +383,7 @@ body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
   display: flex;
 }
 .pr-message a {
-  color: inherit;
+  color: var(--link);
   text-decoration: underline;
 }
 .pr-message p {
