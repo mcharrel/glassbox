@@ -486,9 +486,9 @@ those platforms.
 ## 12. Build and distribution (`11-build-and-distribution.md`) — **Shipped**
 
 `npm i -g glassbox` ships a single-file server bundle (`dist/cli.js`)
-with a Node shebang. Requires Node 20+ and git. Desktop builds via
+with a Node shebang. Requires Node 22.12+ and git. Desktop builds via
 `npm run tauri:build` produce `.dmg` (macOS), `.AppImage` + `.deb`
-(Linux), `.msi` + `.exe` (Windows). Build pipeline downloads Node v20
+(Linux), `.msi` + `.exe` (Windows). Build pipeline downloads Node v22.23.3
 for the target and bundles it as a sidecar; sidecar stubs (< 1 MB)
 are detected and rejected in production.
 
@@ -1349,3 +1349,5 @@ Personal Main view: reviewers, checks/deployment and the PR conversation have no
 Personal tab-panel footer: a persistent `rev` link below the scrolling PR list opens `https://github.com/mcharrel/rev` through the existing external-browser handler. The compact width keeps the link readable even with no PR tabs.
 
 Permanent tab deletion: `workspace/discard.ts` removes managed source/agent workspaces, review rows, attachments and exports; `service.ts` waits for in-flight imports, cancels queued delivery and purges legacy archives. Shared object borrowers are made independent first. Unsafe local work prevents closure and remains visible. Client sessions, drafts, navigation/diff caches and per-review storage are evicted; late responses cannot restore them. A deleted launch review falls back to an empty workspace shell. GitHub content and user clones stay intact.
+
+GitHub prose rendering: `utils/githubMarkdown.ts` uses `marked` and an explicit `sanitize-html` allowlist; optional `bodyHTML` fields in workspace metadata/messages carry GitHub’s rendering without additional requests. `workspace/github.ts` requests `bodyHTML` in the metadata GraphQL query and `application/vnd.github.full+json` for existing comment reads. `client/styles/_github-markdown.scss` supplies scoped GFM styling; descriptions use DOM morphing to preserve disclosures. Editing invalidates cached HTML, and comment search uses the same sanitized text, opening collapsed details for selected matches. The bundled Node runtime and CI are 22.23.3 (minimum 22.12 for the safe HTML parser).

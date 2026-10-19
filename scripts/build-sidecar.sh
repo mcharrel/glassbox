@@ -11,7 +11,7 @@
 #   bash scripts/build-sidecar.sh aarch64-apple-darwin      # builds for specific target
 set -e
 
-NODE_VERSION="v20.19.0"
+NODE_VERSION="v22.23.3"
 TARGET="${1:-$(rustc --print host-tuple 2>/dev/null || echo "unknown")}"
 
 # Map Rust target triple to Node.js download target
@@ -51,10 +51,10 @@ mkdir -p src-tauri/binaries
 NEED_DOWNLOAD=true
 if [ -f "$SIDECAR" ]; then
   FILESIZE=$(wc -c < "$SIDECAR" | tr -d ' ')
-  if [ "$FILESIZE" -gt 1000000 ]; then
+  if [ "$FILESIZE" -gt 1000000 ] && [ "$(cat "${SIDECAR}.version" 2>/dev/null)" = "$NODE_VERSION" ]; then
     NEED_DOWNLOAD=false
   else
-    echo "Removing dev-mode stub..."
+    echo "Replacing outdated sidecar or dev-mode stub..."
     rm -f "$SIDECAR"
   fi
 fi
@@ -77,6 +77,7 @@ if [ "$NEED_DOWNLOAD" = true ]; then
   fi
 
   chmod +x "$SIDECAR"
+  echo "$NODE_VERSION" > "${SIDECAR}.version"
   echo "Node.js binary: $SIDECAR ($(du -h "$SIDECAR" | cut -f1))"
 else
   echo "Node.js binary already exists: $SIDECAR"

@@ -6,7 +6,7 @@ A locally-running web application for reviewing AI-generated code. Launched from
 
 ## Tech Stack
 
-- **Runtime**: Node.js 20+
+- **Runtime**: Node.js 22.12+
 - **Language**: TypeScript (strict mode)
 - **Server**: Hono framework with `@hono/node-server`
 - **Desktop**: Tauri v2 (Rust) — wraps the Node.js server in a native window

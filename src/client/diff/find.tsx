@@ -431,5 +431,10 @@ function activateMatch(index: number, scroll = true) {
   // (one per text node it crosses). Mark all of them active so styling
   // applies to the whole highlight, and scroll the first into view.
   marks.forEach(el => { el.classList.add(ACTIVE_HIGHLIGHT_CLASS); });
-  if (scroll) marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (scroll) {
+    // A match inside a bot's collapsed report must become visible before scrolling.
+    for (let parent = marks[0].parentElement; parent; parent = parent.parentElement)
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
+    marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 }

@@ -39,7 +39,7 @@ function noteIconJsx(fileId: string): SafeHtml | null {
 export function fileListJsx(): SafeHtml {
   const review = reviewStore.state.value;
   if (review.files.length > 0 && review.files.every(file => review.hiddenFileIds.has(file.id))) {
-    return <p className="review-finished" role="status">You reviewed all the files, congrats!</p>;
+    return <p className="review-finished" role="status">You reviewed all the files 👍</p>;
   }
   const ai = aiStore.state.value;
   const banner = analysisBannerJsx(ai);

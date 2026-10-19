@@ -86,7 +86,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 
 ## Review workflow polish
 
-- Change-block counts show only the number, without a diff icon. When navigation has hidden every file, show “You reviewed all the files, congrats!”; empty or loading reviews do not count as finished.
+- Change-block counts show only the number, without a diff icon. When navigation has hidden every file, show “You reviewed all the files 👍”; empty or loading reviews do not count as finished.
 - Dividers are one pixel normally and widen on hover/focus without moving the panels.
 - Cmd/Ctrl+F works through both the desktop menu and a keyboard fallback; duplicate native/key events toggle only once. Repeated presses keep the query while moving focus between search and code.
 - AI settings persist reasoning effort and agent access. GPT-5.5 offers Default, None, Low, Medium, High, and Extra high; Pro offers Default, Medium, High, and Extra high. Unsupported models retain their provider default.
@@ -127,3 +127,7 @@ PR tabs, cached metadata, comment queue and agent threads persist in `workspace.
 - New local code comments are queued for that original chat as `new comment: ...` plus PR/source context. `[steer]` requests immediate steering. Only code comments on my own PRs route to Codex, and these conversations never publish to GitHub. Imported comments and old annotations never dispatch automatically. No new isolated comment agents are started; GUIDE/LEARN still use the model settings.
 - Delivery uses an existing shared Codex app server only when explicitly enabled. The currently installed desktop session uses a private stdio server, so live forwarding is unavailable and comments remain visibly pending. No second agent is resumed as a fallback. The adapter is protocol-tested; live delivery awaits a compatible desktop connection.
 - Delivery state survives restarts. Ambiguous acknowledgements require checking the original chat before manually resending. The same chat can post answers back into the original rev thread with `rev reply <URL> --comment <ID> --body-file <FILE>`. Replies are local, attributed to Codex, and preserve the existing thread appearance. Repeated identical submissions are deduplicated.
+
+## GitHub Markdown and bot reports
+
+GitHub descriptions and comments use GitHub-rendered HTML from the existing metadata/comment requests, with a sanitized local GitHub-flavored Markdown fallback for cached or pending content. Tables, task lists, nested lists, fenced code, images and expandable bot reports render as content. Raw Markdown remains the editing/publishing source, and edits invalidate stale rendered HTML. Links and disclosure toggles do not start editing; local polling preserves expanded reports. Search indexes displayed comment text and opens collapsed reports when navigating to a match. This adds no GitHub requests and preserves comment fonts/colors.

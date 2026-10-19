@@ -2,7 +2,7 @@ import type { SearchHit } from '../api/workspace.js';
 import { getAnnotationsForReview, getReview, getReviewFiles } from '../db/queries.js';
 import { getModeFileContent, parseModeString } from '../git/diff.js';
 import { parseDiffData } from '../git/parseDiffData.js';
-import { noteMarkdownText } from '../utils/noteMarkdown.js';
+import { githubMarkdownText } from '../utils/githubMarkdown.js';
 import { tabForReview } from './service.js';
 
 export function occurrences(text: string, query: string): number[] {
@@ -73,7 +73,7 @@ export async function searchAllFiles(reviewId: string, query: string): Promise<S
   for (const message of tab?.comments ?? []) {
     if (message.deleted || (message.annotationId !== undefined && message.kind !== 'ai')) continue;
     const file = files.find((f) => f.file_path === message.path);
-    occurrences(noteMarkdownText(message.body), query).forEach((_, occurrence) => {
+    occurrences(githubMarkdownText(message.body, message.bodyHTML), query).forEach((_, occurrence) => {
       hits.push({
         fileId: file?.id ?? null,
         path: message.path ?? '',

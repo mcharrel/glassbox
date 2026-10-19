@@ -10,7 +10,7 @@ specific files only when you need detail beyond what is here.
 
 ## 1. Stack at a glance
 
-- **Runtime**: Node.js 20+
+- **Runtime**: Node.js 22.12+
 - **Language**: TypeScript (strict, ESM, `.js` extensions in imports)
 - **HTTP server**: Hono + `@hono/node-server`, bound to `127.0.0.1`
 - **Database**: PGLite (embedded Postgres, WASM), stored in `~/.glassbox/data/`
@@ -985,3 +985,5 @@ Personal tab-panel footer: a persistent `rev` link below the scrolling PR list o
 Permanent tab deletion: `workspace/discard.ts` removes managed source/agent workspaces, review rows, attachments and exports; `service.ts` waits for in-flight imports, cancels queued delivery and purges legacy archives. Shared object borrowers are made independent first. Unsafe local work prevents closure and remains visible. Client sessions, drafts, navigation/diff caches and per-review storage are evicted; late responses cannot restore them. A deleted launch review falls back to an empty workspace shell. GitHub content and user clones stay intact.
 
 `workspace/storage.ts` remembers only whether PR mode was initialized, allowing `cli.ts --resume` to start an empty workspace after the final tab is deleted without scanning or recreating the old launch diff.
+
+GitHub prose rendering: `utils/githubMarkdown.ts` uses `marked` and an explicit `sanitize-html` allowlist; optional `bodyHTML` fields in workspace metadata/messages carry GitHub’s rendering without additional requests. `workspace/github.ts` requests `bodyHTML` in the metadata GraphQL query and `application/vnd.github.full+json` for existing comment reads. `client/styles/_github-markdown.scss` supplies scoped GFM styling; descriptions use DOM morphing to preserve disclosures. Editing invalidates cached HTML, and comment search uses the same sanitized text, opening collapsed details for selected matches. The bundled Node runtime and CI are 22.23.3 (minimum 22.12 for the safe HTML parser).

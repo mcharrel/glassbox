@@ -51,13 +51,13 @@ export async function githubToken(ref: PullRef): Promise<string> {
   tokens.set(account, { value, until: Date.now() + 300_000 });
   return value;
 }
-export async function github(ref: PullRef, path: string, method = 'GET', body?: unknown): Promise<unknown> {
+export async function github(ref: PullRef, path: string, method = 'GET', body?: unknown, accept = 'application/vnd.github+json'): Promise<unknown> {
   const token = await githubToken(ref);
   const response = await fetch(`https://api.github.com/${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
+      Accept: accept,
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
     },
@@ -71,30 +71,45 @@ export async function github(ref: PullRef, path: string, method = 'GET', body?: 
   return response.status === 204 ? null : response.json();
 }
 export const repoApi = (ref: PullRef) => `repos/${ref.owner}/${ref.repo}`;
+const PullGraphSchema = PullInfoSchema.omit({ reviewRequests: true, reviews: true, statusCheckRollup: true }).extend({
+  author: z.object({ login: z.string() }).nullable(),
+  reviewRequests: z.object({ nodes: z.array(z.object({ requestedReviewer: z.object({ login: z.string().optional(), name: z.string().optional() }).nullable() })) }),
+  reviews: z.object({ nodes: PullInfoSchema.shape.reviews }),
+  commits: z.object({ nodes: z.array(z.object({ commit: z.object({ statusCheckRollup: z.object({ contexts: z.object({ nodes: PullInfoSchema.shape.statusCheckRollup }) }).nullable() }) })) }),
+});
 export async function loadPull(ref: PullRef) {
-  const token = await githubToken(ref);
-  const { stdout } = await exec(
-    'gh',
-    [
-      'pr',
-      'view',
-      String(ref.number),
-      '--repo',
-      `${ref.owner}/${ref.repo}`,
-      '--json',
-      'id,number,url,title,body,author,state,isDraft,baseRefName,headRefName,baseRefOid,headRefOid,mergeable,mergeStateStatus,reviewDecision,mergedAt,reviewRequests,reviews,statusCheckRollup',
-    ],
-    {
-      env: { ...process.env, GH_TOKEN: token },
-      timeout: 30000,
-      maxBuffer: 8 * 1024 * 1024,
-    },
-  );
-  return PullInfoSchema.parse(JSON.parse(stdout));
+  // Fetch rendered description in the same metadata request, without per-body Markdown API calls.
+  const result = z.object({
+    data: z.object({ repository: z.object({ pullRequest: PullGraphSchema.nullable() }).nullable() }).nullish(),
+    errors: z.array(z.object({ message: z.string() })).optional(),
+  }).parse(await github(ref, 'graphql', 'POST', {
+    query: `query($owner:String!,$repo:String!,$number:Int!) {
+      repository(owner:$owner,name:$repo) { pullRequest(number:$number) {
+        id number url title body bodyHTML author { login } state isDraft
+        baseRefName headRefName baseRefOid headRefOid mergeable mergeStateStatus reviewDecision mergedAt
+        reviewRequests(first:100) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
+        reviews(last:100) { nodes { author { login } state submittedAt } }
+        commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100) { nodes {
+          ... on CheckRun { name status conclusion detailsUrl }
+          ... on StatusContext { context state targetUrl }
+        } } } } } }
+      } }
+    }`,
+    variables: { owner: ref.owner, repo: ref.repo, number: ref.number },
+  }));
+  if (result.errors !== undefined && result.errors.length > 0) throw new Error(result.errors.map(error => error.message).join('; '));
+  const pull = result.data?.repository?.pullRequest;
+  if (!pull) throw new Error('Pull request not found');
+  return PullInfoSchema.parse({ ...pull, author: pull.author ?? { login: 'ghost' },
+    reviewRequests: pull.reviewRequests.nodes.flatMap(node => node.requestedReviewer ? [node.requestedReviewer] : []),
+    reviews: pull.reviews.nodes,
+    statusCheckRollup: pull.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? [],
+  });
 }
 export const RemoteCommentSchema = z.object({
   id: z.number(),
   body: z.string().nullable(),
+  body_html: z.string().nullable().optional(),
   user: z.object({ login: z.string() }).nullable(),
   created_at: z.string(),
   html_url: z.string(),
@@ -114,12 +129,13 @@ export async function loadComments(tab: PullTab): Promise<ThreadMessage[]> {
       for (let page = 1; ; page++) {
         const rows = z
           .array(RemoteCommentSchema)
-          .parse(await github(tab.ref, `${repoApi(tab.ref)}/${endpoint}?per_page=100&page=${page}`));
+          .parse(await github(tab.ref, `${repoApi(tab.ref)}/${endpoint}?per_page=100&page=${page}`, 'GET', undefined, 'application/vnd.github.full+json'));
         result.push(
           ...rows.map((row) => ({
             id: /<!-- glassbox:([\w-]+) -->/.exec(row.body ?? '')?.[1] ?? `github-${kind}-${row.id}`,
             remoteId: row.id,
             body: (row.body ?? '').replace(/\n?<!-- glassbox:[\w-]+ -->/g, '').trimEnd(),
+            bodyHTML: row.body_html ?? undefined,
             author: row.user?.login ?? 'ghost',
             date: row.created_at,
             url: row.html_url,
@@ -152,6 +168,7 @@ export async function loadComments(tab: PullTab): Promise<ThreadMessage[]> {
         await github(
           tab.ref,
           `${repoApi(tab.ref)}/pulls/${tab.ref.number}/reviews?per_page=100&page=${page}`,
+          'GET', undefined, 'application/vnd.github.full+json',
         ),
       );
     for (const row of rows) {
@@ -159,6 +176,7 @@ export async function loadComments(tab: PullTab): Promise<ThreadMessage[]> {
       summaries.push({
         id: `github-summary-${row.id}`,
         body: row.body,
+        bodyHTML: row.body_html ?? undefined,
         author: row.user?.login ?? 'ghost',
         date: row.submitted_at,
         url: row.html_url,

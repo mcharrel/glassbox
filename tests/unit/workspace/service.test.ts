@@ -118,6 +118,15 @@ describe('durable comment outbox', () => {
     expect(mocks.github).not.toHaveBeenCalled();
   });
 });
+it('drops stale description HTML after editing while preserving the raw Markdown', async () => {
+  const t = mocks.data.tabs[0];
+  t.info.bodyHTML = '<p>Previous description</p>';
+  mocks.github.mockResolvedValue({});
+  await mutateWorkspace({ op: 'edit', key: t.key, body: '# New description' }, 'review');
+  expect(t.info.body).toBe('# New description');
+  expect(t.info.bodyHTML).toBeUndefined();
+  expect(mocks.github.mock.calls[0][3]).toEqual({ body: '# New description' });
+});
 describe('PR ordering', () => {
   it('handles an empty workspace and rejects missing or repeated reorder ids', async () => {
     const tabs: ReturnType<typeof tab>[] = [];
@@ -446,7 +455,9 @@ describe('comment scope and ownership routing', () => {
     await mutateWorkspace({ op: 'comment', key: t.key, body: 'Status update' }, 'review');
     await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
     const original = t.comments[0];
+    original.bodyHTML = '<p>Status update</p>';
     await mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Updated status' }, 'review');
+    expect(original.bodyHTML).toBeUndefined();
     await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
     expect(mocks.github.mock.calls[1].slice(1, 3)).toEqual(['repos/example/project/issues/comments/121', 'PATCH']);
     vi.mocked(loadComments).mockResolvedValue([{ ...original, body: 'Edited on GitHub' }]);

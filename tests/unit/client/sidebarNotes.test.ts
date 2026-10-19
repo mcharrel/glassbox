@@ -91,11 +91,11 @@ describe('sidebar guidance', () => {
 describe('sidebar order agrees with keyboard navigation', () => {
   it('congratulates only after all loaded files are reviewed, not while loading or filtering', () => {
     reviewStore.actions.update({ hiddenFileIds: new Set(files.map(file => file.id)) });
-    expect(fileListJsx().toString()).toContain('You reviewed all the files, congrats!');
+    expect(fileListJsx().toString()).toContain('You reviewed all the files 👍');
     reviewStore.actions.update({ hiddenFileIds: new Set([files[0].id]), filterText: 'missing' });
-    expect(fileListJsx().toString()).not.toContain('congrats');
+    expect(fileListJsx().toString()).not.toContain('You reviewed all the files');
     reviewStore.actions.update({ files: [] });
-    expect(fileListJsx().toString()).not.toContain('congrats');
+    expect(fileListJsx().toString()).not.toContain('You reviewed all the files');
     reviewStore.actions.update({ hiddenFileIds: new Set() });
   });
   it.each(['narrative', 'risk', 'folder'] as const)('keeps change and comment counts separate in %s, including after a PR switch', sortMode => {

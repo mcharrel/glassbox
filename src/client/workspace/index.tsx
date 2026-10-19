@@ -1,8 +1,8 @@
-import { delegate, effect, mount } from 'kerfjs';
+import { delegate, effect, morph, mount } from 'kerfjs';
 
 import { commentDestination, type PullTab, reportVisibility, reviewerStates } from '../../api/workspace.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
-import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
+import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
 import { invalidateDiffCache, restoreDiffScroll, saveDiffScroll } from '../diff/index.js';
 import { asEl, asInput, asTextarea, toElement } from '../dom.js';
@@ -301,16 +301,16 @@ export function initWorkspace(): void {
       if (draft) description.replaceChildren(...draft);
     }
     if (!editingDescription)
-      description.replaceChildren(
-        toElement(
-          <div className="pr-description-body">
-            {renderNoteMarkdown(tab?.info?.body ?? 'Loading description…')}
-          </div>,
-        ),
+      morph(description,
+        <section className="pr-description" aria-label="PR description">
+          <div className="pr-description-body github-markdown">
+            {renderGitHubMarkdown(tab?.info?.body ?? 'Loading description…', tab?.info?.bodyHTML)}
+          </div>
+        </section>,
       );
   });
   description.addEventListener('click', (event) => {
-    if (editingDescription || (event.target as Element).closest('a')) return;
+    if (editingDescription || (event.target as Element).closest('a, summary, input, button')) return;
     const tab = activeTab();
     if (!tab?.info) return;
     editingDescription = true;

@@ -214,6 +214,7 @@ async function syncComments(tab: PullTab): Promise<void> {
         codex: message.codex,
         annotationId,
         body,
+        bodyHTML: body === match.body ? match.bodyHTML : undefined,
         ...(annotationId !== undefined ? { line, side } : {}),
       });
     }
@@ -366,7 +367,7 @@ export function queueAnnotationChange(
   if (!tab || !message) return;
   if (!message.editable) throw new Error('Only your comments can be edited');
   if (operation === 'delete') message.deleted = true;
-  else message.body = content ?? message.body;
+  else { message.body = content ?? message.body; delete message.bodyHTML; }
   enqueue(tab, message, Boolean(message.remoteId) || operation === 'delete' ? operation : 'create');
 }
 export async function flushOutbox(): Promise<void> {
@@ -597,7 +598,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     });
     if (tab.info) {
       if (input.title !== undefined) tab.info.title = input.title;
-      if (input.body !== undefined) tab.info.body = input.body;
+      if (input.body !== undefined) { tab.info.body = input.body; delete tab.info.bodyHTML; }
     }
   }
   if (input.op === 'action') {
@@ -639,7 +640,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
   if (input.op === 'edit-comment' || input.op === 'delete-comment') {
     const message = tab.comments.find((m) => m.id === input.id);
     if (message?.editable !== true) throw new Error('Only your comments can be edited');
-    if (input.op === 'edit-comment') message.body = input.body;
+    if (input.op === 'edit-comment') { message.body = input.body; delete message.bodyHTML; }
     else message.deleted = true;
     enqueue(
       tab,

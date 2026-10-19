@@ -6,7 +6,7 @@ The `main` branch contains the current personal app, including its Git-graph ico
 
 ## Install from source
 
-Requirements: Node.js 20+, npm, Git, and the [GitHub CLI](https://cli.github.com/). Authenticate with an account that can access the repositories you review:
+Requirements: Node.js 22.12+, npm, Git, and the [GitHub CLI](https://cli.github.com/). Authenticate with an account that can access the repositories you review:
 
 ```sh
 gh auth login

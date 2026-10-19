@@ -160,7 +160,7 @@ The launch form (`node --import tsx`, not `npx tsx`) matters for quit: `npx tsx`
 ### `npm run tauri:build`
 
 1. **`scripts/build-sidecar.sh`** runs first:
-   - Downloads Node.js v20 for the target platform (cached if already present)
+   - Downloads Node.js v22.23.3 for the target platform (cached if already present)
    - Places it at `src-tauri/binaries/glassbox-node-{target-triple}`
    - Runs `npm run build` (tsup → `dist/cli.js` + client assets)
    - Copies `dist/`, client assets, and runtime `node_modules` into `src-tauri/server/`

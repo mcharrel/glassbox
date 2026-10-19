@@ -8,7 +8,7 @@ Requirements for building, packaging, and distributing the application.
 
 - The application shall be installable via `npm install -g glassbox`.
 - The npm package shall include a single-file server bundle (`dist/cli.js`) with a Node shebang.
-- The npm package shall require Node.js 20+ and git.
+- The npm package shall require Node.js 22.12+ and git.
 
 ### 11.2 Desktop Distribution
 
@@ -17,7 +17,7 @@ Requirements for building, packaging, and distributing the application.
   - macOS: `.dmg` installer
   - Linux: `.AppImage`, `.deb`, and `.rpm` (Tauri `targets: "all"`; the `.rpm` is linked in the release Download summary as "Red Hat / Fedora")
   - Windows: `.msi` and `.exe`
-- The build pipeline shall download Node.js v20 for the target platform and bundle it as a sidecar.
+- The build pipeline shall download Node.js v22.23.3 for the target platform and bundle it as a sidecar.
 - The build shall detect a dev-mode sidecar stub (file size < 1MB) in a production build and **replace** it by re-downloading the real Node binary, so a stub can never ship (`scripts/build-sidecar.sh`).
 
 ### 11.3 Version Management

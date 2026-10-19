@@ -53,6 +53,13 @@ it('searches every file including full context and comments, without duplicating
   expect(hits.filter((h) => h.fileId === null).map((h) => h.commentId)).toEqual(['issue']);
   expect(hits.filter((h) => h.commentId === 'remote').map((h) => h.occurrence)).toEqual([0, 1]);
 });
+it('searches rendered bot reports including collapsed details, without matching HTML or hidden metadata', async () => {
+  fixtures.comments = [{ id: 'bot', kind: 'issue', body: 'outdated raw body',
+    bodyHTML: '<details><summary>Report</summary><table><tr><td>target &amp; target</td></tr></table></details><!-- target -->' }];
+  expect((await searchAllFiles('review', 'target')).map(hit => hit.occurrence)).toEqual([0, 1]);
+  expect(await searchAllFiles('review', 'table')).toEqual([]);
+  expect(await searchAllFiles('review', 'outdated')).toEqual([]);
+});
 it('handles zero files, empty queries and non-overlapping repeated matches', async () => {
   expect(await searchAllFiles('review', 'target')).toEqual([]);
   expect(await searchAllFiles('review', '')).toEqual([]);

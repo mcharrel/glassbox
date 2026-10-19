@@ -2,7 +2,7 @@ import { delegate, effect } from 'kerfjs';
 
 import { commentDestination, type ThreadMessage } from '../../api/workspace.js';
 import { IconTrash } from '../../icons.js';
-import { renderNoteMarkdown } from '../../utils/noteMarkdown.js';
+import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
 import { asTextarea, toElement } from '../dom.js';
 import { reviewStore } from '../stores/index.js';
@@ -61,7 +61,7 @@ export function messageHtml(message: ThreadMessage) {
         </span>
       </div>
       {codexStatus(message)}
-      <div className="pr-message-body">{renderNoteMarkdown(message.body)}</div>
+      <div className="pr-message-body github-markdown">{renderGitHubMarkdown(message.body, message.bodyHTML)}</div>
       {message.status === 'working' && <div className="agent-status">AI working…</div>}
       {Boolean(message.error) && (
         <div className="workspace-error">
@@ -227,7 +227,7 @@ export function bindThreads(): void {
   });
   void delegate(document.body, 'click', '.pr-message[data-editable="true"]', (event, element) => {
     if (
-      (event.target as Element).closest('button, a, textarea, input') ||
+      (event.target as Element).closest('button, a, textarea, input, summary') ||
       window.getSelection()?.isCollapsed === false
     )
       return;

@@ -19,6 +19,7 @@ export const PullInfoSchema = z.object({
   url: z.string(),
   title: z.string(),
   body: z.string(),
+  bodyHTML: z.string().optional(),
   author: z.object({ login: z.string() }),
   state: z.string(),
   isDraft: z.boolean(),
@@ -67,6 +68,7 @@ export const CodexDeliverySchema = z.object({
 export const ThreadMessageSchema = z.object({
   id: z.string(),
   body: z.string(),
+  bodyHTML: z.string().optional(),
   author: z.string(),
   date: z.string(),
   url: z.string().default(''),
