@@ -195,6 +195,9 @@
   opacity: 1;
   cursor: default;
 }
+.pr-action-select.pr-review-approved { background: #238636; }
+.pr-action-select.pr-review-changes { background: #d29922; color: #161b22; }
+.pr-actions:has(.pr-review-changes)::after { border-color: #161b22; }
 .pr-branches { overflow-wrap: anywhere; }
 .pr-main-sections {
   display: flex;
@@ -356,25 +359,28 @@ body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
   line-height: 20px;
 }
 .pr-message {
-  background: var(--accent);
-  color: white;
+  position: relative;
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   padding: 10px 12px;
   margin: 10px 0;
-  border-radius: 7px;
+  border-radius: 12px;
   overflow-wrap: anywhere;
 }
 .pr-message-meta {
   display: flex;
   gap: 6px;
   align-items: center;
-  font: 10px/16px var(--font-mono);
-  opacity: 0.85;
+  font: 11px/16px var(--font-mono);
+  color: var(--text-dim);
   margin-bottom: 5px;
   flex-wrap: wrap;
 }
 .pr-message-meta time {
-  font-size: 9px;
+  font-size: 11px;
 }
+.pr-message-meta .comment-author { color: var(--text); }
 .pr-message-actions {
   margin-left: auto;
   display: flex;
@@ -397,9 +403,20 @@ body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
   display: block;
   padding: 0 30px;
 }
-.agent-message {
-  background: color-mix(in srgb, var(--accent) 30%, var(--bg-surface));
-  color: var(--text);
+.pr-bot-comments {
+  margin: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  > summary {
+    padding: 8px 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 11px;
+    &:hover { color: var(--text); }
+    &:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  }
+  .pr-bot-authors { display: block; margin-left: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  > .pr-thread { padding: 0 8px; }
 }
 .agent-status {
   font-size: 11px;
@@ -422,11 +439,6 @@ body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
 }
 .local-agent-status { width: 100%; }
 .pr-message[data-code-comment='true'] {
-  position: relative;
-  background: var(--bg-surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   padding: 14px 20px;
   .pr-message-meta { font-size: 11px; opacity: 1; color: var(--text-dim); }
   .pr-message-meta > span:first-of-type { font-size: var(--font-code-size); color: var(--text); }

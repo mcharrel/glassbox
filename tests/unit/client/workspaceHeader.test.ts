@@ -29,3 +29,21 @@ it('keeps merged PRs disabled without action choices', () => {
   expect(html).toContain('disabled>Merged');
   expect(html).not.toContain('<select');
 });
+
+it('reflects the viewer’s submitted review through comments, pending drafts, dismissal and account changes', () => {
+  const t = tab('main', 'someone');
+  const review = (state: string, submittedAt: string | null, login = 'ME') => ({ author: { login }, state, submittedAt });
+  t.info!.reviews = [review('APPROVED', '2026-01-01')];
+  let html = String(pullHeader(t, null));
+  expect(html).toContain('pr-review-approved'); expect(html).toContain('selected disabled>Approved');
+  t.info!.reviews.push(review('COMMENTED', '2026-01-03'), review('PENDING', null), review('CHANGES_REQUESTED', '2026-01-04', 'someone-else'));
+  expect(String(pullHeader(t, null))).toContain('selected disabled>Approved');
+  t.info!.reviews.unshift(review('CHANGES_REQUESTED', '2026-01-05'));
+  html = String(pullHeader(t, null));
+  expect(html).toContain('pr-review-changes'); expect(html).toContain('selected disabled>Changes requested');
+  t.info!.reviews.push(review('DISMISSED', '2026-01-06'));
+  expect(String(pullHeader(t, null))).toContain('selected disabled>Review');
+  t.viewer = 'new-viewer'; t.action = 'approve'; t.info!.reviewDecision = 'APPROVED';
+  expect(String(pullHeader(t, null))).toContain('selected disabled>Review');
+  t.viewer = ''; expect(String(pullHeader(t, null))).not.toContain('pr-review-approved');
+});

@@ -99,7 +99,7 @@ export const RemoteCommentSchema = z.object({
   id: z.number(),
   body: z.string().nullable(),
   body_html: z.string().nullable().optional(),
-  user: z.object({ login: z.string() }).nullable(),
+  user: z.object({ login: z.string(), type: z.string().optional() }).nullable(),
   created_at: z.string(),
   html_url: z.string(),
   path: z.string().optional(),
@@ -198,6 +198,7 @@ export async function loadComments(tab: PullTab): Promise<ThreadMessage[]> {
             body: (row.body ?? '').replace(/\n?<!-- glassbox:[\w-]+ -->/g, '').trimEnd(),
             bodyHTML: row.body_html ?? undefined,
             author: row.user?.login ?? 'ghost',
+            authorIsBot: row.user?.type === undefined ? undefined : row.user.type === 'Bot',
             date: row.created_at,
             url: row.html_url,
             kind,
@@ -239,6 +240,7 @@ export async function loadComments(tab: PullTab): Promise<ThreadMessage[]> {
         body: row.body,
         bodyHTML: row.body_html ?? undefined,
         author: row.user?.login ?? 'ghost',
+        authorIsBot: row.user?.type === undefined ? undefined : row.user.type === 'Bot',
         date: row.submitted_at,
         url: row.html_url,
         kind: 'issue',
@@ -280,9 +282,13 @@ export async function mutatePull(tab: PullTab, action: string, body?: string): P
       body = 'Could you make the explanations (description, in-line comments) easier to digest for a human ?';
     if (action === 'changes' && (body?.trim() ?? '') === '')
       throw new Error('Explain the requested changes before submitting');
-    await github(ref, `${repoApi(ref)}/pulls/${ref.number}/reviews`, 'POST', {
+    const receipt = z.object({ user: z.object({ login: z.string() }), state: z.string(), submitted_at: z.string() }).parse(
+      await github(ref, `${repoApi(ref)}/pulls/${ref.number}/reviews`, 'POST', {
       event: action === 'approve' ? 'APPROVE' : 'REQUEST_CHANGES',
       ...(body !== undefined ? { body } : {}),
-    });
+    }));
+    // Show GitHub's accepted decision immediately; subsequent metadata refreshes remain authoritative.
+    tab.info = { ...tab.info, reviews: [...tab.info.reviews,
+      { author: { login: receipt.user.login }, state: receipt.state, submittedAt: receipt.submitted_at }] };
   }
 }

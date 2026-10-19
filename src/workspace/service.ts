@@ -126,6 +126,11 @@ async function performSync(tab: PullTab, mode: Exclude<SyncMode, 'auto'>): Promi
         : github(tab.ref, 'user').then((v) => z.object({ login: z.string() }).parse(v)),
     ]);
     if (!workspaceData().tabs.includes(tab) || closingTabs.has(tab) || account !== githubAccount(tab.ref)) return;
+    // A metadata read started before a submitted review must not erase its confirmed receipt.
+    const newReviews = tab.info?.reviews.filter(review => before?.reviews.includes(review) !== true) ?? [];
+    info.reviews.push(...newReviews.filter(review => !info.reviews.some(remote =>
+      remote.author?.login.toLowerCase() === review.author?.login.toLowerCase() && remote.submittedAt === review.submittedAt &&
+      (remote.state === review.state || remote.state === 'DISMISSED'))));
     tab.info = info;
     // Deployment lookup must never hold up metadata, comments, or the source view.
     void refreshDeployment(tab, mode !== 'initial');

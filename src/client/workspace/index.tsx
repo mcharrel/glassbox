@@ -13,13 +13,14 @@ import { showToast } from '../toast.js';
 import { checks } from './checks.js';
 import { initCommentDelete } from './commentDelete.js';
 import { createCommentNavigator } from './commentNavigation.js';
+import { conversation as conversationHtml } from './conversation.js';
 import { clickedDescriptionText } from './description.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
 import { initSourceRefresh, refreshActivePull } from './sourceRefresh.js';
 import { activeReviewReady, activeTab, addingPull, mutate, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
-import { bindThreads, threadHtml } from './threads.js';
+import { bindThreads } from './threads.js';
 
 function lifecycle(tab: PullTab): string {
   return tab.info?.state === 'MERGED'
@@ -253,10 +254,7 @@ export function initWorkspace(): void {
     queueMicrotask(refreshFind);
     return (
       <>
-        {tab?.comments
-          .filter((m) => !m.deleted && m.kind === 'issue' && m.parentKey === undefined && m.parentId === undefined)
-          .sort((a, b) => b.date.localeCompare(a.date))
-          .map((m) => threadHtml(m, tab.comments))}
+        {tab && conversationHtml(tab)}
         {tab && !tab.commentsLoaded && <p>Loading comments…</p>}
       </>
     );
@@ -403,8 +401,8 @@ export function initWorkspace(): void {
     const action = element.value;
     const tab = activeTab();
     if (!tab) return;
-    // Keep the confirmed status (or neutral Review label) until GitHub accepts the action.
-    element.value = tab.info?.author.login === tab.viewer
+    // Keep the confirmed status until GitHub accepts the next action.
+    element.value = isPullAuthor(tab) && tab.info
       ? (tab.info.state === 'CLOSED' ? 'close' : tab.info.isDraft ? 'draft' : 'ready') : '';
     oldHeader.querySelector('.request-changes-form')?.remove();
     if (action === 'changes') {

@@ -1,6 +1,6 @@
 import { pullInfo } from './fixtures.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PullTabSchema } from '../../../src/api/workspace.js';
+import { PullTabSchema, viewerReviewState } from '../../../src/api/workspace.js';
 
 const mocks = vi.hoisted(() => ({
   data: { tabs: [] as any[], archived: [] as any[], active: null as string | null, outbox: [] as any[] },
@@ -648,6 +648,21 @@ it('still refreshes other people’s GitHub comments on own PRs', async () => {
   vi.mocked(loadComments).mockResolvedValue([{ ...t.comments[0], body: 'Updated feedback' }]);
   await syncTab(t); expect(t.comments[0].body).toBe('Updated feedback');
   expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.github).not.toHaveBeenCalled();
+});
+
+it('keeps a review accepted during a stale metadata read, then honors a later dismissal', async () => {
+  const t = mocks.data.tabs[0];
+  let finish!: (info: ReturnType<typeof pullInfo>) => void;
+  vi.mocked(loadPull).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const sync = syncTab(t, 'background');
+  const receipt = { author: { login: t.viewer }, state: 'APPROVED', submittedAt: '2026-01-01T12:00:00Z' };
+  t.info = { ...t.info, reviews: [receipt] };
+  finish(pullInfo('bob')); await sync;
+  expect(viewerReviewState(t)).toBe('APPROVED');
+  vi.mocked(loadPull).mockResolvedValue({ ...pullInfo('bob'), reviews: [{ ...receipt, state: 'DISMISSED' }] });
+  await syncTab(t, 'background');
+  expect(viewerReviewState(t)).toBe('DISMISSED');
+  expect(t.info.reviews).toHaveLength(1);
 });
 
 it('starts a fresh review after closing and reopening the same PR', async () => {

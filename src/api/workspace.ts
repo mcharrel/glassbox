@@ -70,6 +70,7 @@ export const ThreadMessageSchema = z.object({
   body: z.string(),
   bodyHTML: z.string().optional(),
   author: z.string(),
+  authorIsBot: z.boolean().optional(),
   publishAs: z.string().optional(),
   date: z.string(),
   url: z.string().default(''),
@@ -144,6 +145,14 @@ export const PullTabSchema = z.object({
   deployment: DeploymentSnapshotSchema.optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
+/** Comments and pending drafts do not replace a submitted approval/change request. */
+export function viewerReviewState(tab: Pick<PullTab, 'info' | 'viewer'>): string {
+  if (!tab.viewer) return '';
+  const reviews = (tab.info?.reviews ?? []).filter(review =>
+    review.author?.login.toLowerCase() === tab.viewer.toLowerCase() && review.submittedAt !== null &&
+    ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state));
+  return reviews.sort((a, b) => (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '')).at(-1)?.state ?? '';
+}
 export function isPullAuthor(tab: Pick<PullTab, 'info' | 'viewer'>): boolean {
   return Boolean(tab.viewer) && tab.viewer.toLowerCase() === tab.info?.author.login.toLowerCase();
 }

@@ -47,6 +47,15 @@ it('loads resolved threads and rendered bodies without increasing the normal req
   for (const comment of comments) expect(comment.bodyHTML).toBe('<p><strong>body</strong></p>');
   expect(comments[0].resolved).toBeUndefined(); expect(comments[3].resolved).toBeUndefined();
 });
+it('retains GitHub bot identity for both issue comments and submitted review summaries', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/graphql') ? graph([]) : [
+    { id: 1, body: 'Automated report', user: { login: 'automation', type: 'Bot' }, html_url: `${ref.url}#comment`,
+      created_at: '2026-01-01', submitted_at: '2026-01-01', state: 'COMMENTED' },
+    { id: 2, body: 'Human comment', user: { login: 'alice', type: 'User' }, html_url: `${ref.url}#comment`,
+      created_at: '2026-01-02', submitted_at: '2026-01-02', state: 'COMMENTED' },
+  ])));
+  expect((await loadComments(tab())).map(comment => comment.authorIsBot)).toEqual([true, false, true, false]);
+});
 it('paginates both threads and long conversations, retaining root identity and unresolved state', async () => {
   const fetch = vi.fn(async (url: string, options: RequestInit) => {
     if (!url.endsWith('/graphql')) return Response.json([]);

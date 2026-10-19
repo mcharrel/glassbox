@@ -1,11 +1,14 @@
-import type { PullTab } from '../../api/workspace.js';
+import { isPullAuthor, type PullTab, viewerReviewState } from '../../api/workspace.js';
 import { IconShareApple, IconX } from '../../icons.js';
 
 /** Shared Main/File header; unavailable totals stay pending instead of looking empty. */
 export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null) {
   const info = tab.info;
-  const own = info !== null && info.author.login === tab.viewer;
-  const selected = own ? (info.state === 'CLOSED' ? 'close' : info.isDraft ? 'draft' : 'ready') : '';
+  const own = isPullAuthor(tab);
+  const selected = own && info ? (info.state === 'CLOSED' ? 'close' : info.isDraft ? 'draft' : 'ready') : '';
+  const review = own ? '' : viewerReviewState(tab);
+  const reviewLabel = review === 'APPROVED' ? 'Approved' : review === 'CHANGES_REQUESTED' ? 'Changes requested' : 'Review';
+  const reviewClass = review === 'APPROVED' ? ' pr-review-approved' : review === 'CHANGES_REQUESTED' ? ' pr-review-changes' : '';
   const options = own
     ? [['draft', 'Draft'], ['ready', 'Ready for Review'], ['close', 'Close']]
     : [['approve', 'Approve'], ['changes', 'Request code change'], ['humanize', 'Make explanations more human']];
@@ -26,8 +29,8 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
     </div>
     <div className="pr-actions">
       {info?.state === 'MERGED' ? <button className="pr-merged-status" disabled>Merged</button> :
-        <select className="pr-action-select" aria-label={own ? 'PR status' : 'Review PR'} data-pr-action="" disabled={!info}>
-          {!own && <option value="" selected disabled>Review</option>}
+        <select className={`pr-action-select${reviewClass}`} aria-label={own ? 'PR status' : 'Review PR'} data-pr-action="" disabled={!info}>
+          {!own && <option value="" selected disabled>{reviewLabel}</option>}
           {options.map(([action, label]) => <option value={action} selected={selected === action}>{label}</option>)}
         </select>}
     </div>

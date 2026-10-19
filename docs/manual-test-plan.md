@@ -292,3 +292,10 @@ Automated coverage includes account selection/migration/validation, simultaneous
 - Check status after Codex closes/restarts, after closing Settings during setup, and after a desktop update. Native desktop authorization and external UI actions remain manual under the no-UI-automation preference.
 
 Automated coverage: disposable filesystem/launch environment install-enable-disable-repeat-rollback transitions, quoted paths, old-helper adoption, malformed unrelated login files, capability rejection, original argument preservation, no history/resume calls, ownership and linkage races, Settings lifecycle. A fresh bundled adapter also passes an isolated official CLI/second-client Unix handshake and shutdown smoke check without creating a chat.
+
+## Review status and Main comment presentation
+
+- On another PR, submit an approval: expect green Approved. Request changes or more human explanations: expect yellow Changes requested. Cancel or fail a submission: the prior confirmed state remains. Refresh after a dismissal/account change and check the status reconciles. Merged stays green and disabled.
+- Main comments have neutral borders/backgrounds. Adjacent bot comments share a collapsed row; human comments separate groups and remain visible. Expand a group and refresh: it remains open. Find inside a folded bot body expands the group and highlights its result; sharing/deleting still targets the individual message.
+
+Automated coverage includes accepted/failed review transitions, metadata races and dismissal, viewer isolation, bot identity from issue/review responses, empty/all-filtered/single/mixed groups, shuffled input, nested human replies, stable group keys and retained searchable content. UI automation remains excluded by user preference.
