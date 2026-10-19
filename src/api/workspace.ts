@@ -143,11 +143,14 @@ export const PullTabSchema = z.object({
   deployment: DeploymentSnapshotSchema.optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;
+export function isPullAuthor(tab: Pick<PullTab, 'info' | 'viewer'>): boolean {
+  return Boolean(tab.viewer) && tab.viewer.toLowerCase() === tab.info?.author.login.toLowerCase();
+}
 // Unknown ownership must never default to publishing a private comment.
 export function codeCommentDestination(tab: Pick<PullTab, 'info' | 'viewer'>): 'local' | 'github' | null {
   const author = tab.info?.author.login;
   if (!tab.viewer || author === undefined || author === '') return null;
-  return tab.viewer.toLowerCase() === author.toLowerCase() ? 'local' : 'github';
+  return isPullAuthor(tab) ? 'local' : 'github';
 }
 export function commentDestination(tab: Pick<PullTab, 'info' | 'viewer'>, message: Pick<ThreadMessage, 'kind'>): 'local' | 'github' | null {
   if (message.kind === 'ai') return 'local';

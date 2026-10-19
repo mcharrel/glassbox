@@ -124,12 +124,32 @@ describe('durable comment outbox', () => {
 });
 it('drops stale description HTML after editing while preserving the raw Markdown', async () => {
   const t = mocks.data.tabs[0];
+  t.viewer = 'BOB';
   t.info.bodyHTML = '<p>Previous description</p>';
   mocks.github.mockResolvedValue({});
   await mutateWorkspace({ op: 'edit', key: t.key, body: '# New description' }, 'review');
   expect(t.info.body).toBe('# New description');
   expect(t.info.bodyHTML).toBeUndefined();
   expect(mocks.github.mock.calls[0][3]).toEqual({ body: '# New description' });
+});
+it.each([
+  { viewer: 'alice', author: 'bob' }, { viewer: '', author: 'bob' },
+  { viewer: 'alice', author: null }, { viewer: 'alice', author: '' },
+])('rejects description edits without verified ownership: %j', async ({ viewer, author }) => {
+  const t = mocks.data.tabs[0];
+  t.viewer = viewer;
+  t.info = author === null ? null : { author: { login: author }, body: 'Unchanged' };
+  await expect(mutateWorkspace({ op: 'edit', key: t.key, body: 'Replacement' }, 'review')).rejects.toThrow('Only the PR author');
+  expect(mocks.github).not.toHaveBeenCalled();
+  if (t.info) expect(t.info.body).toBe('Unchanged');
+});
+it('allows the author to clear a description', async () => {
+  const t = mocks.data.tabs[0];
+  t.viewer = 'bob';
+  mocks.github.mockResolvedValue({});
+  await mutateWorkspace({ op: 'edit', key: t.key, body: '' }, 'review');
+  expect(t.info.body).toBe('');
+  expect(mocks.github.mock.calls[0][3]).toEqual({ body: '' });
 });
 describe('PR ordering', () => {
   it('handles an empty workspace and rejects missing or repeated reorder ids', async () => {

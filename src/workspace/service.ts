@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   codeCommentDestination,
   commentDestination,
+  isPullAuthor,
   type PullTab,
   PullTabSchema,
   reviewerStates,
@@ -629,8 +630,7 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     tab.loading = false;
   }
   if (input.op === 'edit') {
-    if (input.title !== undefined && (!tab.info || tab.info.author.login !== tab.viewer))
-      throw new Error('Only the PR author can edit its title in rev');
+    if (!isPullAuthor(tab)) throw new Error('Only the PR author can edit its title or description in rev');
     await github(tab.ref, `${repoApi(tab.ref)}/pulls/${tab.ref.number}`, 'PATCH', {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.body !== undefined ? { body: input.body } : {}),

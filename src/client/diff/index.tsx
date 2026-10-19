@@ -10,7 +10,7 @@ import { asEl, asElement } from '../dom.js';
 import { openLightbox } from '../lightbox.js';
 import { diffViewStore, dragStore, reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
-import { bindChangeNavigation } from './changeNavigation.js';
+import { bindChangeNavigation, restoreChangeScroll } from './changeNavigation.js';
 import { refreshFind } from './find.js';
 import { navigateToLocation } from './goToDefinition.js';
 import { applyHighlighting, detectLanguage } from './highlight.js';
@@ -55,18 +55,22 @@ const diffControllers = new Map<string, AbortController>();
 const diffResource = resource<CachedDiff, { fileId: string; reviewId: string; key: string }>();
 
 export function saveDiffScroll(): void {
-  if (document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add') return;
+  if (document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add'
+    || document.body.dataset.reviewPending === 'true') return;
   const key = diffContentSignal.peek().cacheKey;
   const cached = key === undefined ? undefined : diffCache.get(key);
   const pane = document.getElementById('diff-container');
-  if (cached && pane) cached.scrollTop = pane.scrollTop;
+  if (cached && (cached.kind !== 'text' || cached.scrollTop !== undefined) && pane) cached.scrollTop = pane.scrollTop;
 }
 
 export function restoreDiffScroll(): void {
-  const key = diffContentSignal.peek().cacheKey;
+  const content = diffContentSignal.peek();
+  const key = content.cacheKey;
   const cached = key === undefined ? undefined : diffCache.get(key);
   const pane = document.getElementById('diff-container');
-  if (cached && pane) pane.scrollTop = cached.scrollTop ?? 0;
+  if (!cached || !pane || key?.startsWith(reviewStore.state.peek().reviewId + '|') !== true) return;
+  if (cached.kind === 'text') restoreChangeScroll(pane, cached);
+  else pane.scrollTop = cached.scrollTop ?? 0;
 }
 
 export function initDiffView(): void {
@@ -220,13 +224,19 @@ function setupMount(container: HTMLElement, onDiffRendered: (fileId: string | nu
         queueMicrotask(() => {
           if (diffContentSignal.value !== content) return;
           runPostRender(container, content, reused);
-          container.scrollTop = cached?.scrollTop ?? 0;
+          restoreDiffScroll();
           onDiffRendered(content.fileId);
+          if (content.kind === 'text' || content.kind === 'raw') {
+            refreshFind();
+            document.dispatchEvent(new Event('glassbox-diff-ready'));
+          }
         });
         return () => {
           if (cached && node) {
             cached.node = node;
-            if (document.body.dataset.workspaceView !== 'main' && document.body.dataset.workspaceView !== 'add') cached.scrollTop = container.scrollTop;
+            if ((cached.kind !== 'text' || cached.scrollTop !== undefined)
+              && document.body.dataset.workspaceView !== 'main' && document.body.dataset.workspaceView !== 'add'
+              && document.body.dataset.reviewPending !== 'true') cached.scrollTop = container.scrollTop;
           }
         };
       },
@@ -333,8 +343,6 @@ function runTextPostRender(container: HTMLElement, kind: DiffContent['kind'], fi
     ...(diffViewStore.state.value.highlightAuto ? { highlightLang: detectedLang } : {}),
   });
   if (!reused) applyHighlighting();
-  refreshFind();
-  document.dispatchEvent(new Event('glassbox-diff-ready'));
   updateToolbarLanguage();
   syncSplitColumnHeights();
   // Outline keys off a real review file; skip for raw views.

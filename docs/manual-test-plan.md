@@ -266,3 +266,11 @@ Automated coverage: thread/pagination/null-node mapping, private-content resolut
 ## First-install feedback guidance
 
 - Installer completion should state that GitHub review works without Codex, while automatic replies require separate connection setup. Its example command and setup prompt use the actual command/checkout destinations, including spaces. It must not claim push is ready or change Codex configuration. The existing isolated installer tests exercise completion for successful installs and reruns.
+
+## Description clicks and initial file position
+
+- Open another author’s PR: clicking description text or surrounding space must never open an editor. On your own PR, click text to edit; margins, gaps between wrapped lines, images, links, disclosure controls and selection gestures must leave the description displayed. An empty own description offers “Add a description…”. Save/Cancel still work.
+- Open a PR on Main and press `r`: the first change should already be visible with up to five preceding lines. Repeat before a slow file finishes loading. A different PR’s previous file must not be positioned.
+- Scroll away, switch Main/File or PR tabs, and return: your position is preserved, even when at the top. First visits to other text files reveal their first change; files without changed blocks stay at the top. Tall first changes start at their beginning and `f` continues with overlap. Search or symbol navigation still reveals its explicit target.
+
+Automated coverage: ownership rejection before GitHub writes, raw Markdown edits, text rectangles and WebKit fallback, empty content, hidden/loading/stale-file guards, remembered zero/nonzero scroll positions, context padding and long changes. Native interaction remains manual under the no-browser-automation preference.

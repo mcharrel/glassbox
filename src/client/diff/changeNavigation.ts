@@ -19,6 +19,38 @@ function blocksIn(view: Element): ChangeBlock[] {
   return [...blocks.values()].sort((a, b) => a.id - b.id);
 }
 
+function viewport(container: HTMLElement): { top: number; bottom: number } {
+  const top = container.getBoundingClientRect().top + container.clientTop;
+  const bottom = top + container.clientHeight;
+  // Sticky chrome obscures code even though it lies inside the scrolling pane.
+  const chrome = [...container.querySelectorAll<HTMLElement>('.diff-header, .outline-bar')];
+  return { top: Math.max(top, ...chrome.map(el => el.getBoundingClientRect().bottom)), bottom };
+}
+
+function blockSpacing(block: ChangeBlock, height: number): { lineHeight: number; fits: boolean; padding: number } {
+  const style = getComputedStyle(block.rows[0].element);
+  const lineHeight = (parseFloat(style.lineHeight) || 20)
+    + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+  const fits = block.bottom - block.top <= height;
+  const padding = Math.min(5 * lineHeight, Math.max(0, height - (fits ? block.bottom - block.top : lineHeight)));
+  return { lineHeight, fits, padding };
+}
+
+/** Initialize only when visible; a saved position, including zero, always wins. */
+export function restoreChangeScroll(container: HTMLElement, position: { scrollTop?: number }): void {
+  if (document.body.dataset.workspaceView === 'main' || document.body.dataset.workspaceView === 'add'
+    || document.body.dataset.reviewPending === 'true' || container.clientHeight <= 0) return;
+  const view = container.querySelector<HTMLElement>('.diff-view');
+  if (!view || view.dataset.fileId !== reviewStore.state.value.currentFileId) return;
+  if (position.scrollTop !== undefined) { container.scrollTop = position.scrollTop; return; }
+  const { top, bottom } = viewport(container);
+  if (bottom <= top) return;
+  const first = blocksIn(view).at(0);
+  if (first) container.scrollTop += first.top - blockSpacing(first, bottom - top).padding - top;
+  else container.scrollTop = 0;
+  position.scrollTop = container.scrollTop;
+}
+
 /** Tab reveals unread changes, paging through long blocks before continuing to other files. */
 export function bindChangeNavigation(): (fileId: string | null) => void {
   const element = document.getElementById('diff-container');
@@ -28,23 +60,11 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
   let highlighted: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  function viewport(): { top: number; bottom: number } {
-    const top = container.getBoundingClientRect().top + container.clientTop;
-    const bottom = top + container.clientHeight;
-    // Sticky chrome obscures code even though it lies inside the scrolling pane.
-    const chrome = [...container.querySelectorAll<HTMLElement>('.diff-header, .outline-bar')];
-    return { top: Math.max(top, ...chrome.map(el => el.getBoundingClientRect().bottom)), bottom };
-  }
-
   function jump(block: ChangeBlock, backward: boolean, fromEdge = false): void {
-    const { top, bottom } = viewport();
+    const { top, bottom } = viewport(container);
     const height = bottom - top;
     if (height <= 0) return;
-    const style = getComputedStyle(block.rows[0].element);
-    const lineHeight = (parseFloat(style.lineHeight) || 20)
-      + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
-    const fits = block.bottom - block.top <= height;
-    const padding = Math.min(5 * lineHeight, Math.max(0, height - (fits ? block.bottom - block.top : lineHeight)));
+    const { lineHeight, fits, padding } = blockSpacing(block, height);
     let delta = backward ? block.bottom + padding - bottom : block.top - padding - top;
     if (!fromEdge && !fits && (backward ? block.bottom >= bottom - padding : block.top <= top + padding)) {
       // Preserve ten lines while advancing; tiny windows still reveal at least one new line.
@@ -81,7 +101,7 @@ export function bindChangeNavigation(): (fileId: string | null) => void {
     if (currentFileId === null || !view || view.dataset.fileId !== currentFileId) return;
 
     event.preventDefault();
-    const { top, bottom } = viewport();
+    const { top, bottom } = viewport(container);
     if (bottom <= top) return;
     const blocks = blocksIn(view);
     if (backward) blocks.reverse();

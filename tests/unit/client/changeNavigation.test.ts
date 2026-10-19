@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reviewStore, allFileOrder } from '../../../src/client/stores/index.js';
 import { selectFile } from '../../../src/client/diff/selection.js';
-import { bindChangeNavigation } from '../../../src/client/diff/changeNavigation.js';
+import { bindChangeNavigation, restoreChangeScroll } from '../../../src/client/diff/changeNavigation.js';
 
 vi.mock('../../../src/client/stores/index.js', () => ({
   reviewStore: { state: { value: { currentFileId: 'f1', reviewId: 'review', hiddenFileIds: new Set() } }, actions: { update: vi.fn() } },
@@ -70,6 +70,67 @@ function fixture(specs: Rows[] = [change(100), change(200), change(700)], option
 }
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+describe('first file visit', () => {
+  it('opens at the first change with five lines of context without focusing or marking anything reviewed', () => {
+    const f = fixture([change(700), change(1900)]);
+    const position: { scrollTop?: number } = {};
+    restoreChangeScroll(f.container as any, position);
+    expect(f.container.scrollTop).toBe(540);
+    expect(position.scrollTop).toBe(540);
+    expect(f.blocks[0][0].focus).not.toHaveBeenCalled();
+    expect(reviewStore.state.value.hiddenFileIds.size).toBe(0);
+    expect(selectFile).not.toHaveBeenCalled();
+    f.key();
+    expect(f.container.scrollTop).toBe(1740);
+  });
+  it.each([0, 300, 1000])('restores a previous reading position of %i instead of jumping again', scrollTop => {
+    const f = fixture([change(700)]);
+    restoreChangeScroll(f.container as any, { scrollTop });
+    expect(f.container.scrollTop).toBe(scrollTop);
+  });
+  it.each(['main', 'add'])('waits for a preloaded file to become visible from %s view', workspaceView => {
+    const f = fixture([change(700)]);
+    const position = {};
+    f.doc.body.dataset.workspaceView = workspaceView;
+    restoreChangeScroll(f.container as any, position);
+    expect(position).toEqual({});
+    f.doc.body.dataset.workspaceView = 'file';
+    restoreChangeScroll(f.container as any, position);
+    expect(f.container.scrollTop).toBe(540);
+  });
+  it('waits for layout and the correct file, without accepting stale content from a pending PR', () => {
+    const f = fixture([change(700)], { height: 0 });
+    const position = {};
+    restoreChangeScroll(f.container as any, position);
+    expect(position).toEqual({});
+    f.container.clientHeight = 660;
+    document.body.dataset.reviewPending = 'true';
+    restoreChangeScroll(f.container as any, position);
+    expect(position).toEqual({});
+    document.body.dataset.reviewPending = 'false';
+    reviewStore.state.value.currentFileId = 'f2';
+    restoreChangeScroll(f.container as any, position);
+    expect(position).toEqual({});
+    f.render('f2', [change(900)]);
+    restoreChangeScroll(f.container as any, position);
+    expect(f.container.scrollTop).toBe(740);
+  });
+  it.each([{ specs: [] }, { specs: [change(10)] }])('stays at the top for no changes or a change at the start: %j', ({ specs }) => {
+    const f = fixture(specs);
+    const position = {};
+    restoreChangeScroll(f.container as any, position);
+    expect(position).toEqual({ scrollTop: 0 });
+    expect(selectFile).not.toHaveBeenCalled();
+  });
+  it('starts a tall first change at its beginning, allowing subsequent overlapping pages', () => {
+    const f = fixture([change(700, 80)]);
+    restoreChangeScroll(f.container as any, {});
+    expect(f.container.scrollTop).toBe(540);
+    f.key();
+    expect(f.container.scrollTop).toBe(940);
+  });
+});
 
 describe('page-aware change navigation', () => {
   it('skips fully visible changes and leaves five lines above the next change, below sticky chrome', () => {

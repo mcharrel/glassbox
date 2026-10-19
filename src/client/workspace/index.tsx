@@ -1,6 +1,6 @@
 import { delegate, effect, morph, mount } from 'kerfjs';
 
-import { commentDestination, type PullTab, reviewerStates } from '../../api/workspace.js';
+import { commentDestination, isPullAuthor, type PullTab, reviewerStates } from '../../api/workspace.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
 import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
@@ -13,6 +13,7 @@ import { showToast } from '../toast.js';
 import { checks } from './checks.js';
 import { initCommentDelete } from './commentDelete.js';
 import { createCommentNavigator } from './commentNavigation.js';
+import { clickedDescriptionText } from './description.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
@@ -265,7 +266,7 @@ export function initWorkspace(): void {
   const descriptionDrafts = new Map<string, Node[]>();
   effect(() => {
     const tab = activeTab();
-    const keys = new Set(workspace.value.tabs.map(item => item.key));
+    const keys = new Set(workspace.value.tabs.filter(isPullAuthor).map(item => item.key));
     for (const key of descriptionDrafts.keys()) if (!keys.has(key)) descriptionDrafts.delete(key);
     if (descriptionKey !== tab?.key) {
       if (descriptionKey !== undefined && keys.has(descriptionKey) && editingDescription) descriptionDrafts.set(descriptionKey, [...description.childNodes]);
@@ -274,19 +275,22 @@ export function initWorkspace(): void {
       editingDescription = draft !== undefined;
       if (draft) description.replaceChildren(...draft);
     }
+    if (!tab || !isPullAuthor(tab)) editingDescription = false;
     if (!editingDescription)
       morph(description,
         <section className="pr-description" aria-label="PR description">
           <div className="pr-description-body github-markdown">
-            {renderGitHubMarkdown(tab?.info?.body ?? 'Loading description…', tab?.info?.bodyHTML)}
+            {tab?.info && !tab.info.body.trim()
+              ? <p>{isPullAuthor(tab) ? 'Add a description…' : 'No description.'}</p>
+              : renderGitHubMarkdown(tab?.info?.body ?? 'Loading description…', tab?.info?.bodyHTML)}
           </div>
         </section>,
       );
   });
   description.addEventListener('click', (event) => {
-    if (editingDescription || (event.target as Element).closest('a, summary, input, button')) return;
     const tab = activeTab();
-    if (!tab?.info) return;
+    const text = description.querySelector<HTMLElement>('.pr-description-body');
+    if (editingDescription || !tab?.info || !isPullAuthor(tab) || !text || !clickedDescriptionText(event, text)) return;
     editingDescription = true;
     const form = toElement(
       <div className="pr-description-editor">
