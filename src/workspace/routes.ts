@@ -8,7 +8,7 @@ import { authorizeControl, CodexCommentSchema, CodexCommentsSchema, CodexOpenSch
 import { parsePullUrl, pullKey } from './github.js';
 import { reportVisibility } from './notifications.js';
 import { searchAllFiles } from './search.js';
-import { mutateWorkspace, reconcileCommentRouting } from './service.js';
+import { flushSourceRefreshes, mutateWorkspace, reconcileCommentRouting, refreshAfterReply } from './service.js';
 import { saveWorkspace, workspaceData  } from './storage.js';
 
 export const workspaceRoutes = new Hono<AppEnv>();
@@ -30,7 +30,12 @@ workspaceRoutes.post('/codex-reply', async c => {
   if (!authorizeControl(c.req.header('x-rev-token'))) return c.json({ error: 'Unauthorized' }, 401);
   const parsed = await parseBody(c, CodexReplySchema);
   if (!parsed.ok) return parsed.response;
-  try { return c.json({ ok: true, id: postCodexReply(parsed.data) }); }
+  try {
+    const id = postCodexReply(parsed.data);
+    const tab = workspaceData().tabs.find(item => item.key === pullKey(parsePullUrl(parsed.data.url)));
+    if (tab?.sourceRefreshRequested !== undefined) void refreshAfterReply(tab);
+    return c.json({ ok: true, id });
+  }
   catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Could not post reply' }, 400); }
 });
 workspaceRoutes.post('/codex-open', async c => {
@@ -56,7 +61,8 @@ workspaceRoutes.post('/codex-open', async c => {
 workspaceRoutes.post('/visibility', async c => {
   const parsed = await parseBody(c, VisibilitySchema);
   if (!parsed.ok) return parsed.response;
-  reportVisibility(parsed.data.id, parsed.data.visible);
+  reportVisibility(parsed.data.id, parsed.data.visible, Date.now(), parsed.data.codeTab, parsed.data.draftTab);
+  void flushSourceRefreshes();
   return c.json({ ok: true });
 });
 workspaceRoutes.get('/', (c) => {

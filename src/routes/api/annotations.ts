@@ -11,7 +11,7 @@ import { scheduleAutoExport } from '../../export/auto-export.js';
 import type { AppEnv } from '../../types.js';
 import { parseBody, requirePathParam } from '../../utils/parseBody.js';
 import { resolveReviewId } from '../../utils/resolveReviewId.js';
-import { assertOwnAnnotation, queueAnnotation, queueAnnotationChange } from '../../workspace/service.js';
+import { assertOwnAnnotation, queueAnnotation, queueAnnotationChange, tabForReview } from '../../workspace/service.js';
 
 export const annotationsRoutes = new Hono<AppEnv>();
 
@@ -37,6 +37,7 @@ annotationsRoutes.post('/annotations', async (c) => {
 });
 
 annotationsRoutes.patch('/annotations/:id', async (c) => {
+  if (tabForReview(c.get('reviewId'))) return c.json({ error: 'Posted comments cannot be edited. Add a reply instead.' }, 409);
   const id = requirePathParam(c, 'id');
   if (!id.ok) return id.response;
   const parsed = await parseBody(c, UpdateAnnotationBodySchema);

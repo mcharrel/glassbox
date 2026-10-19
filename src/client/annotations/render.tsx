@@ -45,7 +45,7 @@ export function renderAnnotationInline(annotation: Annotation, lineNumber: numbe
          data-annotation-id={annotation.id}
          data-is-stale={annotation.is_stale ? 'true' : undefined}
          data-category={annotation.category} data-reply-to-note-id={annotation.reply_to_note_id ?? undefined}
-         tabIndex={0} aria-label="Edit comment" data-region-data={annotation.region_data ?? undefined}>
+         aria-label="Comment" data-region-data={annotation.region_data ?? undefined}>
       {buildAnnotationItemHtml(annotation)}
     </div>
   );

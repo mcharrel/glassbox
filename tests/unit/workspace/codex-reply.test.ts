@@ -98,3 +98,16 @@ it('filters a mixed request list without losing eligible requests or exposing pr
   tab.info = null;
   expect(listCodexComments(input)).toEqual([]);
 });
+
+it('requests a source check for a new answer but not for a duplicate delivery', () => {
+  const tab = mocks.data.tabs[0];
+  postCodexReply(input);
+  const request = tab.sourceRefreshRequested;
+  expect(request).toEqual(expect.any(String));
+  postCodexReply(input); expect(tab.sourceRefreshRequested).toBe(request);
+  delete tab.sourceRefreshRequested;
+  postCodexReply(input); expect(tab.sourceRefreshRequested).toBeUndefined();
+  postCodexReply({ ...input, body: 'Pushed a follow-up fix.' });
+  expect(tab.sourceRefreshRequested).toEqual(expect.any(String));
+  expect(tab.sourceRefreshRequested).not.toBe(request);
+});

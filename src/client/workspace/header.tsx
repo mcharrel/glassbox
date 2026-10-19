@@ -32,7 +32,7 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
         </select>}
     </div>
     {Boolean(tab.error) && <div className="workspace-error" title={tab.error}>{tab.error}</div>}
-    {tab.reviewedHead && info && tab.reviewedHead !== info.headRefOid &&
+    {tab.sourceRefreshRequested === undefined && tab.reviewedHead && info && tab.reviewedHead !== info.headRefOid &&
       <div className="workspace-error">New commits on GitHub. Press Cmd+R to refresh this review.</div>}
   </>;
 }

@@ -12,7 +12,7 @@ it('shows local follow-ups and Codex answers without a GitHub ID, share button o
   const r = root(); const followup = { ...r, id: 'followup', parentKey: r.id, body: 'Follow-up' };
   const answer = { ...r, id: 'answer', parentKey: followup.id, author: 'Codex', body: 'Fixed', kind: 'ai' as const };
   const html = String(threadHtml(r, [r, followup, answer]));
-  expect(html).toContain('data-parent-key="root"'); expect(html).toContain('Reply locally');
+  expect(html).toContain('data-parent-key="root"'); expect(html).toContain('Leave a comment, agent will respond...');
   expect(html).toContain('Follow-up'); expect(html).toContain('Fixed'); expect(html).toContain('>Local<');
   expect(html).not.toContain('comment-share'); expect(html).not.toContain('comment-offline');
   expect(html.match(/data-message="followup"/g)).toHaveLength(1);
@@ -21,7 +21,7 @@ it('uses GitHub reply IDs on another PR and does not expose local reply controls
   mocks.active().info = pullInfo('bob');
   const r = { ...root(), kind: 'review' as const, destination: 'github' as const, remoteId: 123, status: 'synced' as const, url: 'https://github.com/example/project/pull/1#discussion_r123' };
   const html = String(threadHtml(r, [r]));
-  expect(html).toContain('data-reply-to="123"'); expect(html).toContain('Reply on GitHub');
+  expect(html).toContain('data-reply-to="123"'); expect(html).toContain('Post a comment on GitHub...');
   expect(html).toContain('comment-share'); expect(html).not.toContain('data-parent-key');
 });
 it('shows Main comments on own PRs as public without local reply controls', () => {
@@ -29,7 +29,7 @@ it('shows Main comments on own PRs as public without local reply controls', () =
     remoteId: 124, status: 'synced' as const, url: 'https://github.com/example/project/pull/1#issuecomment-124' };
   const html = String(threadHtml(r, [r]));
   expect(html).toContain('comment-share');
-  expect(html).not.toContain('Reply locally'); expect(html).not.toContain('data-parent-key');
+  expect(html).not.toContain('Leave a comment, agent will respond...'); expect(html).not.toContain('data-parent-key');
   expect(html).not.toContain('>Local<'); expect(html).not.toContain('Codex');
 });
 
@@ -49,4 +49,15 @@ it('shows unacknowledged delivery as pending and omits agent status on GitHub co
   expect(String(messageHtml({ ...r, destination: 'github' }))).not.toContain('data-agent-status');
   expect(String(messageHtml({ ...r, kind: 'ai' }))).not.toContain('data-agent-status');
   expect(String(messageHtml({ ...r, kind: 'issue' }))).not.toContain('data-agent-status');
+});
+
+it('shows an avatar before the author and never makes posted messages editable', () => {
+  const html = String(messageHtml({ ...root(), editable: true }));
+  expect(html).toContain('https://github.com/alice.png?size=48');
+  expect(html.indexOf('comment-avatar')).toBeLessThan(html.indexOf('<strong>alice</strong>'));
+  expect(html).not.toContain('data-editable');
+  expect(html).toContain('data-comment-action="delete"');
+  const agent = String(messageHtml({ ...root(), kind: 'ai', author: 'Codex' }));
+  expect(agent).toContain('comment-avatar-fallback');
+  expect(agent).not.toContain('github.com/Codex');
 });

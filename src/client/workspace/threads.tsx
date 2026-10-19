@@ -1,10 +1,11 @@
 import { delegate, effect } from 'kerfjs';
 
 import { commentAgentStatus, commentDestination, type ThreadMessage } from '../../api/workspace.js';
+import { codeCommentPlaceholder,CommentAuthor } from '../../components/commentAuthor.js';
 import { IconTrash } from '../../icons.js';
 import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
-import { asTextarea, toElement } from '../dom.js';
+import { toElement } from '../dom.js';
 import { reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
 import { commentAnchor } from './commentAnchor.js';
@@ -30,7 +31,6 @@ export function messageHtml(message: ThreadMessage) {
       className={`pr-message ${message.kind === 'ai' ? 'agent-message' : ''}`}
       data-message={message.id}
       data-key={message.id}
-      data-editable={message.editable ? 'true' : 'false'}
       data-code-comment={message.kind === 'review' || message.path !== undefined ? 'true' : undefined}
       data-agent-status={commentAgentStatus(message)}
     >
@@ -43,7 +43,7 @@ export function messageHtml(message: ThreadMessage) {
             ☁
           </span>
         )}
-        <span>{message.author}</span>
+        <CommentAuthor author={message.author} agent={message.kind === 'ai'} />
         {message.destination === 'local' && <span>Local</span>}
         <time dateTime={message.date}>{new Date(message.date).toLocaleString()}</time>
         <span className="pr-message-actions">
@@ -102,9 +102,9 @@ export function threadHtml(root: ThreadMessage, comments: ThreadMessage[]) {
 function replyInput(root: ThreadMessage) {
   const tab = activeTab();
   if (tab && commentDestination(tab, root) === 'local')
-    return <textarea className="pr-reply-input" data-parent-key={root.id} placeholder="Reply locally ..." />;
+    return <div className="code-comment-composer"><CommentAuthor author={tab.viewer || 'You'} /><textarea className="pr-reply-input" data-parent-key={root.id} placeholder={codeCommentPlaceholder(tab)} /></div>;
   if (root.destination !== 'local' && root.kind === 'review' && root.remoteId !== undefined)
-    return <textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder="Reply on GitHub ..." />;
+    return <div className="code-comment-composer"><CommentAuthor author={(tab?.viewer ?? '') || 'You'} /><textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder={codeCommentPlaceholder(tab)} /></div>;
   return null;
 }
 export function bindThreads(): void {
@@ -155,7 +155,7 @@ export function bindThreads(): void {
         if (localText && localText.textContent !== root.body) localText.textContent = root.body;
         const status = toElement(
           <div className="local-comment-header">
-            <strong>{root.author}</strong>
+            <CommentAuthor author={root.author} />
             <span className="local-comment-status" title={root.destination === 'local' ? 'Only in rev' : root.error ?? 'Waiting to sync'}>
               {root.destination === 'local' ? 'Local' : root.status === 'synced' ? '' : '☁'}
             </span>
@@ -235,49 +235,6 @@ export function bindThreads(): void {
     else if ((element as HTMLElement).dataset.commentAction === 'retry')
       void mutate({ op: 'retry-agent', key: tab.key, id: message.id });
     else void mutate({ op: 'delete-comment', key: tab.key, id: message.id });
-  });
-  void delegate(document.body, 'click', '.pr-message[data-editable="true"]', (event, element) => {
-    if (
-      (event.target as Element).closest('button, a, textarea, input, summary') ||
-      window.getSelection()?.isCollapsed === false
-    )
-      return;
-    const item = element as HTMLElement;
-    const tab = activeTab();
-    const message = tab?.comments.find((m) => m.id === item.dataset.message);
-    if (!tab || !message || item.querySelector('textarea')) return;
-    const body = item.querySelector('.pr-message-body');
-    if (!body) return;
-    const textarea = asTextarea(toElement(<textarea className="pr-message-editor">{message.body}</textarea>));
-    body.replaceWith(textarea);
-    textarea.focus();
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        textarea.replaceWith(body);
-      }
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-        e.preventDefault();
-        if (!textarea.value.trim() || textarea.disabled) return;
-        textarea.disabled = true;
-        void mutate({
-          op: 'edit-comment',
-          key: tab.key,
-          id: message.id,
-          body: textarea.value,
-        }).then((ok) => {
-          if (!ok) {
-            textarea.disabled = false;
-            return;
-          }
-          textarea.blur();
-          textarea.replaceWith(body);
-          previous = '';
-          render();
-        });
-      }
-    });
   });
   void delegate(document.body, 'keydown', '.pr-reply-input', (event, element) => {
     const e = event as KeyboardEvent;

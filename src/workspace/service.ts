@@ -37,11 +37,11 @@ import {
   repoApi,
 } from './github.js';
 import { closingTabs, waitForCheckouts, withCheckoutLock } from './lifecycle.js';
-import { notify } from './notifications.js';
+import { hasCodeFocus, notify } from './notifications.js';
 import { startWorkspaceCleanup } from './retention.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
-type SyncMode = 'initial' | 'refresh' | 'background';
+type SyncMode = 'initial' | 'refresh' | 'background' | 'auto';
 const syncing = new Map<string, { mode: SyncMode; promise: Promise<void> }>();
 const BACKGROUND_REFRESH_MS = 5 * 60 * 1000;
 let flushing = false;
@@ -101,12 +101,16 @@ export function syncTab(tab: PullTab, mode: SyncMode = 'initial'): Promise<void>
     }
     return existing.promise;
   }
-  const promise = performSync(tab, mode).finally(() => { syncing.delete(tab.key); });
+  const promise = (mode === 'auto' ? applySourceRefresh(tab) : performSync(tab, mode)).finally(() => {
+    syncing.delete(tab.key);
+    if (mode === 'background') void flushSourceRefreshes();
+  });
   syncing.set(tab.key, { mode, promise });
   return promise;
 }
-async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
+async function performSync(tab: PullTab, mode: Exclude<SyncMode, 'auto'>): Promise<void> {
   const background = mode === 'background';
+  const refreshRequest = tab.sourceRefreshRequested;
   if (!background) tab.loading = true;
   // Migrate legacy activity before updating the metadata timestamp in the background.
   tab.lastUsedAt ||= tab.updatedAt;
@@ -145,10 +149,12 @@ async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
       syncComments(tab),
       (async () => {
         if (
-          !background && (tab.reviewId === null || tab.checkoutEvicted ||
+          mode !== 'background' && (tab.reviewId === null || tab.checkoutEvicted ||
           ((mode === 'refresh' || tab.importLocalComments) &&
             (tab.reviewedHead !== info.headRefOid || tab.reviewedBase !== info.baseRefOid)))
         ) await importPull(tab);
+        if (refreshRequest === tab.sourceRefreshRequested && tab.reviewedHead === info.headRefOid)
+          delete tab.sourceRefreshRequested;
         saveWorkspace();
       })(),
     ]);
@@ -169,6 +175,31 @@ async function performSync(tab: PullTab, mode: SyncMode): Promise<void> {
     }
     saveWorkspace();
   }
+}
+/** Reuse the fresh metadata; deferring source does not require another GitHub refresh. */
+async function applySourceRefresh(tab: PullTab): Promise<void> {
+  const request = tab.sourceRefreshRequested;
+  try {
+    await importPull(tab, () => !hasCodeFocus(tab.key) && !tab.checkoutEvicted);
+    if (request === tab.sourceRefreshRequested && tab.reviewedHead === tab.info?.headRefOid)
+      delete tab.sourceRefreshRequested;
+    tab.error = undefined;
+  } catch (error) {
+    tab.error = error instanceof Error ? error.message : 'Could not refresh source';
+  } finally {
+    saveWorkspace();
+  }
+}
+/** Agent answers check for pushed commits without replacing a focused source snapshot. */
+export async function refreshAfterReply(tab: PullTab): Promise<void> {
+  await syncing.get(tab.key)?.promise;
+  if (tab.sourceRefreshRequested !== undefined) await syncTab(tab, 'background');
+}
+export async function flushSourceRefreshes(): Promise<void> {
+  await Promise.all(workspaceData().tabs.filter(tab => tab.sourceRefreshRequested !== undefined
+    && tab.info !== null && tab.reviewId !== null && tab.reviewedHead !== tab.info.headRefOid
+    && !tab.checkoutEvicted && (tab.error === undefined || tab.error === '') && !closingTabs.has(tab) && !syncing.has(tab.key)
+    && !hasCodeFocus(tab.key)).map(tab => syncTab(tab, 'auto')));
 }
 async function syncComments(tab: PullTab): Promise<void> {
   // Keep comments being published while this remote snapshot is in flight.
@@ -371,7 +402,7 @@ export function queueAnnotationChange(
   const tab = tabForReview(reviewId);
   const message = tab?.comments.find((m) => m.annotationId === id);
   if (!tab || !message) return;
-  if (!message.editable) throw new Error('Only your comments can be edited');
+  if (!message.editable) throw new Error('Only your comments can be changed');
   if (operation === 'delete') message.deleted = true;
   else reviseComment(message, content ?? message.body);
   enqueue(tab, message, Boolean(message.remoteId) || operation === 'delete' ? operation : 'create');
@@ -644,15 +675,15 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     tab.comments.push(message);
     enqueue(tab, message, 'create');
   }
-  if (input.op === 'edit-comment' || input.op === 'delete-comment') {
+  if (input.op === 'edit-comment') throw new Error('Posted comments cannot be edited. Add a reply instead.');
+  if (input.op === 'delete-comment') {
     const message = tab.comments.find((m) => m.id === input.id);
-    if (message?.editable !== true) throw new Error('Only your comments can be edited');
-    if (input.op === 'edit-comment') reviseComment(message, input.body);
-    else message.deleted = true;
+    if (message?.editable !== true) throw new Error('Only your comments can be deleted');
+    message.deleted = true;
     enqueue(
       tab,
       message,
-      input.op === 'delete-comment' ? 'delete' : message.remoteId !== undefined ? 'edit' : 'create',
+      'delete',
     );
   }
   saveWorkspace();

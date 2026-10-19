@@ -56,6 +56,7 @@ export function ReviewShell({ reviewId, review, files, annotationCounts, staleCo
         <div className="sidebar-resize" id="sidebar-resize"></div>
         <main className="main-content">
           <div className="outline-bar workspace-topbar" id="outline-bar">
+            <span id="source-refresh-slot"></span>
             <div className="outline-context"></div>
             <button className="btn btn-xs topbar-settings" data-workspace="settings" title="Settings" aria-label="Settings"><IconGear /></button>
           </div>

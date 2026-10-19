@@ -51,8 +51,8 @@ async function remoteMergeBase(tab: PullTab): Promise<string> {
   return result.merge_base_commit.sha;
 }
 /** Import into a dedicated checkout; never switch the user's existing working tree. */
-export async function importPull(tab: PullTab): Promise<void> {
-  return withCheckoutLock(tab.key, async () => { if (!closingTabs.has(tab)) await prepareCheckout(tab, false); });
+export async function importPull(tab: PullTab, canApply: () => boolean = () => true): Promise<void> {
+  return withCheckoutLock(tab.key, async () => { if (!closingTabs.has(tab) && canApply()) await prepareCheckout(tab, false, canApply); });
 }
 
 const restoring = new Map<string, Promise<void>>();
@@ -80,7 +80,7 @@ export async function ensureCheckout(tab: PullTab): Promise<void> {
   finally { if (restoring.get(tab.key) === pending) restoring.delete(tab.key); }
 }
 
-async function prepareCheckout(tab: PullTab, restore: boolean): Promise<void> {
+async function prepareCheckout(tab: PullTab, restore: boolean, canApply: () => boolean = () => true): Promise<void> {
   const info = tab.info;
   if (!info) throw new Error('PR details are unavailable');
   const head = restore ? tab.reviewedHead : info.headRefOid;
@@ -143,8 +143,8 @@ async function prepareCheckout(tab: PullTab, restore: boolean): Promise<void> {
   }
   const dirty = await gitAsync(['status', '--porcelain'], root);
   if (dirty.trim()) throw new Error('The managed checkout has local changes; they were preserved.');
-  await gitAsync(['checkout', '--detach', head], root);
   if (restore) {
+    await gitAsync(['checkout', '--detach', head], root);
     tab.repoRoot = root;
     tab.checkoutEvicted = false;
     return;
@@ -160,6 +160,8 @@ async function prepareCheckout(tab: PullTab, restore: boolean): Promise<void> {
     }
   }
   const diff = await gitAsync(['diff', '--no-ext-diff', '--find-renames', base, info.headRefOid, '--'], root);
+  if (closingTabs.has(tab) || !canApply()) return;
+  await gitAsync(['checkout', '--detach', head], root);
   if (tab.reviewId === null) {
     const review = await createReview(
       root,

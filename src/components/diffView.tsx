@@ -533,7 +533,7 @@ function AnnotationItem({ annotation: a }: { annotation: Annotation }) {
     <div className={`annotation-item${a.is_stale ? ' annotation-stale' : ''}`}
       data-key={a.id} data-annotation-id={a.id} data-is-stale={a.is_stale ? 'true' : undefined}
       data-category={a.category} data-reply-to-note-id={a.reply_to_note_id ?? undefined}
-         tabIndex={0} aria-label="Edit comment" data-region-data={a.region_data ?? undefined}>
+         aria-label="Comment" data-region-data={a.region_data ?? undefined}>
       {a.reply_to_note_id !== null ? <span className="annotation-reply-tag" title="Reply to an AI review note"><IconCornerDownRight /> reply</span> : null}
       <span className="annotation-text">{a.content}</span>
       {ReviewNoteRegionThumb({ regionData: a.region_data })}

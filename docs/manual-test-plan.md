@@ -244,3 +244,13 @@ Both items came from GitHub #59.
 - API/subprocess integration, safe HTML rendering, aggregation, empty/error states, refresh timing and closed-tab cancellation have automated coverage. Native appearance and hover remain manual because browser/screen automation is disabled for this fork's local workflow.
 
 - In Settings → My company → Deployments, save a local command and organization list, close/reopen the dialog and verify the values remain. Switch to endpoint mode, save an endpoint, then disable tracking; old datacenter results disappear. Other settings tabs should open without waiting for company settings. Provider values must remain local.
+
+
+## rev comment and source-refresh experience
+
+- Open an own-PR code composer: avatar precedes the name, no line label, placeholder “Leave a comment, agent will respond...”. On another PR the placeholder is “Post a comment on GitHub...”. Post and click the text: it remains selectable and never becomes an editor. Replies and delete controls still work.
+- While viewing code, let the original agent push a change and post a reply. The code stays in place and an orange outlined Refresh button appears before Top level. Click it, or use Cmd/Ctrl+R, to load the changed code.
+- Repeat, then switch to another app, another PR, or Main view: the pending change loads without a manual refresh. Return to code to see the update. An unfinished code-comment draft keeps its contents and defers the update until submitted or canceled.
+- A reply without a new commit does not replace the source or show Refresh. Multiple rev windows protect the PR while any focused window reads its code.
+
+Automated coverage: ownership-aware placeholders/avatar markup, immutable workspace/API mutations, pending/read-only replies, duplicate delivery, multi-tab/window focus, deferred import after focus returns, explicit refresh, expired checkouts, failed import retry and concurrent reply requests have unit/API coverage. Native focus appearance remains a manual check.

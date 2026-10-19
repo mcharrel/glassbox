@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { apiCall } from './_runner.js';
 
-export const VisibilitySchema = z.object({ id: z.string().min(1).max(100), visible: z.boolean() });
+export const VisibilitySchema = z.object({ id: z.string().min(1).max(100), visible: z.boolean(), codeTab: z.string().nullable().optional(), draftTab: z.string().nullable().optional() });
 export const reportVisibility = (body: z.infer<typeof VisibilitySchema>) =>
   apiCall(z.object({ ok: z.boolean() }), '/workspace/visibility', { method: 'POST', body, reviewId: null });
 
@@ -138,6 +138,7 @@ export const PullTabSchema = z.object({
   reviewedBase: z.string().default(''),
   importLocalComments: z.boolean().default(false),
   codexThreadId: z.uuid().optional(),
+  sourceRefreshRequested: z.uuid().optional(),
   deployment: DeploymentSnapshotSchema.optional(),
 });
 export type PullTab = z.infer<typeof PullTabSchema>;

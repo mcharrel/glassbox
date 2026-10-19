@@ -1,14 +1,9 @@
 import { delegate, morph } from 'kerfjs';
 
-import { deleteAnnotation, keepAnnotation, updateAnnotation } from '../../api/index.js';
-import { asEl, asElement, asElOrNull, asTextarea, cssEscape, toElement } from '../dom.js';
-import { asCategory } from '../narrow.js';
+import { deleteAnnotation, keepAnnotation } from '../../api/index.js';
+import { asEl, asElOrNull } from '../dom.js';
 import type { Annotation } from '../state.js';
-import {
-  editFormSignal,
-  reviewStore,
-  setEditForm,
-} from '../stores/index.js';
+import { reviewStore } from '../stores/index.js';
 import { bindAttachmentEvents } from './attachments.js';
 import { buildAnnotationItemHtml } from './render.js';
 
@@ -29,55 +24,11 @@ export function bindAnnotationEvents(diffContainer: HTMLElement): void {
     void handleDelete(item);
   });
 
-  void delegate(diffContainer, 'click', '.annotation-item', (e, item) => {
-    // Keep buttons, links, attachments and text selection independently usable.
-    if (asElement(e.target).closest('button, a, input, textarea, select, .attachment-chip, .ai-note-reply-region')) return;
-    if (window.getSelection()?.isCollapsed === false) return;
-    e.stopPropagation();
-    startEdit(asEl(item));
-  });
-
-  void delegate(diffContainer, 'keydown', '.annotation-item', (e, item) => {
-    if (e.target !== item || (e as KeyboardEvent).key !== 'Enter') return;
-    e.preventDefault();
-    startEdit(asEl(item));
-  });
-
   void delegate(diffContainer, 'click', '.annotation-item [data-action="keep"]', (e, btn) => {
     e.stopPropagation();
     const item = asEl(btn).closest<HTMLElement>('.annotation-item');
     if (item === null) return;
     void handleKeep(item);
-  });
-
-  // Edit-form delegates. Scoped to `[data-edit-for]` so the equivalent
-  // create-form delegates in `form.tsx` (which target `[data-form-key]`)
-  // don't double-fire — both forms reuse the `.annotation-form` shell.
-  void delegate(diffContainer, 'click', '.annotation-form-container[data-edit-for] .cancel-edit', (e) => {
-    e.stopPropagation();
-    cancelEdit();
-  });
-
-  void delegate(diffContainer, 'click', '.annotation-form-container[data-edit-for] .save-edit', (e) => {
-    e.stopPropagation();
-    void saveEdit();
-  });
-
-  void delegate(diffContainer, 'input', '.annotation-form-container[data-edit-for] textarea', (_e, textarea) => {
-    const cur = editFormSignal.value;
-    if (cur === null) return;
-    setEditForm({ ...cur, content: asTextarea(textarea).value });
-  });
-
-  void delegate(diffContainer, 'keydown', '.annotation-form-container[data-edit-for] textarea', (e) => {
-    const ke = e as KeyboardEvent;
-    if (ke.key === 'Enter' && !ke.shiftKey && !ke.isComposing) {
-      ke.preventDefault();
-      void saveEdit();
-    } else if (ke.key === 'Escape') {
-      ke.preventDefault();
-      cancelEdit();
-    }
   });
 }
 
@@ -126,99 +77,3 @@ async function handleKeep(item: HTMLElement): Promise<void> {
   const stale = reviewStore.state.value.staleCounts[fileId] ?? 1;
   reviewStore.actions.setStaleCount(fileId, Math.max(0, stale - 1));
 }
-
-function startEdit(item: HTMLElement): void {
-  const annotation = readAnnotation(item);
-  if (annotation === null) return;
-  const annotationRow = item.closest<HTMLElement>('.annotation-row');
-  if (annotationRow === null) return;
-
-  if (editFormSignal.value !== null) return;
-
-  // Seed the edit-form signal so any concurrent re-render reads the same
-  // content/category we're about to put in the textarea.
-  setEditForm({
-    annotationId: annotation.id,
-    formKey: null,
-    content: annotation.content,
-    category: annotation.category,
-  });
-
-  const formContainer = toElement(
-    <div className="annotation-form-container" data-edit-for={annotation.id}>
-      <div className="annotation-form">
-        <textarea>{annotation.content}</textarea>
-        <div className="annotation-form-actions">
-          <button className="btn btn-sm cancel-edit">Cancel</button>
-          <button className="btn btn-sm save-edit">Save</button>
-        </div>
-      </div>
-    </div>
-  );
-
-  item.style.display = 'none';
-  annotationRow.parentNode?.insertBefore(formContainer, annotationRow.nextSibling);
-
-  const textarea = formContainer.querySelector<HTMLTextAreaElement>('textarea');
-  if (textarea !== null) {
-    textarea.focus();
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-  }
-}
-
-function cancelEdit(): void {
-  closeEditForm();
-}
-
-let saving = false;
-async function saveEdit(): Promise<void> {
-  if (saving) return;
-  const state = editFormSignal.value;
-  if (state === null || state.annotationId === null) return;
-  const content = state.content.trim();
-  if (content === '') return;
-
-  saving = true;
-  try {
-    await updateAnnotation({
-      id: state.annotationId,
-      content,
-      category: asCategory(state.category),
-    });
-
-    const item = findAnnotationItem(state.annotationId);
-    if (item !== null) {
-      const updated: Annotation = {
-        ...readAnnotation(item),
-        id: state.annotationId,
-        category: state.category,
-        content,
-        is_stale: item.dataset.isStale === 'true',
-      };
-      morph(item, buildAnnotationItemHtml(updated));
-      item.style.display = '';
-    }
-    closeEditForm();
-    document.dispatchEvent(new Event('glassbox-comment-saved'));
-    void import('../workspace/state.js').then(m => m.refreshWorkspace());
-  } finally { saving = false; }
-}
-
-function closeEditForm(): void {
-  const state = editFormSignal.value;
-  const id = state?.annotationId ?? null;
-  setEditForm(null);
-  if (id !== null) {
-    document.querySelectorAll<HTMLElement>(`.annotation-form-container[data-edit-for="${cssEscape(id)}"]`).forEach(el => { el.remove(); });
-    const item = findAnnotationItem(id);
-    if (item !== null) item.style.display = '';
-  }
-}
-
-function findAnnotationItem(id: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`.annotation-item[data-annotation-id="${cssEscape(id)}"]`);
-}
-
-// Expose `closeEditForm` so the diff view's outside-click handler (if any)
-// can dismiss the picker without reaching into module internals.
-export { closeEditForm };

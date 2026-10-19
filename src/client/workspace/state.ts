@@ -43,7 +43,7 @@ export async function refreshWorkspace(): Promise<void> {
   // Keep editors intact while background synchronization continues on the server.
   if (
     document.querySelector(
-      '.pr-tab.dragging, .pr-title-input, .pr-message-editor, .request-changes-form, .pr-description-editor',
+      '.pr-tab.dragging, .pr-title-input, .request-changes-form, .pr-description-editor',
     ) !== null ||
     [...document.querySelectorAll('textarea')].some((input) => input.value.length > 0 && !input.disabled)
   )

@@ -1,12 +1,11 @@
 import { delegate, effect, morph, mount } from 'kerfjs';
 
-import { commentDestination, type PullTab, reportVisibility, reviewerStates } from '../../api/workspace.js';
+import { commentDestination, type PullTab, reviewerStates } from '../../api/workspace.js';
 import { parseDiffData } from '../../git/parseDiffData.js';
 import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
-import { invalidateDiffCache, restoreDiffScroll, saveDiffScroll } from '../diff/index.js';
+import { restoreDiffScroll, saveDiffScroll } from '../diff/index.js';
 import { asEl, asInput, asTextarea, toElement } from '../dom.js';
-import { loadFiles } from '../sidebar/fileTree.js';
 import { filePriority } from '../sidebar/readingOrder.js';
 import { reviewStore } from '../stores/index.js';
 import { openExternalUrl } from '../tauri.js';
@@ -16,6 +15,7 @@ import { createCommentNavigator } from './commentNavigation.js';
 import { startFreshReview } from './freshReview.js';
 import { pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
+import { initSourceRefresh, refreshActivePull } from './sourceRefresh.js';
 import { activeReviewReady, activeTab, addingPull, mutate, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads, threadHtml } from './threads.js';
 
@@ -107,14 +107,7 @@ async function copyPullLink(tab: PullTab): Promise<void> {
   }
 }
 export function initWorkspace(): void {
-  const clientId = crypto.randomUUID();
-  const visibility = () => { void reportVisibility({ id: clientId,
-    visible: document.visibilityState === 'visible' && document.hasFocus() }).catch(() => {}); };
-  document.addEventListener('visibilitychange', visibility);
-  window.addEventListener('focus', visibility);
-  window.addEventListener('blur', visibility);
-  setInterval(visibility, 10000);
-  visibility();
+  initSourceRefresh();
   const body = document.querySelector('.review-body');
   const sidebar = document.querySelector<HTMLElement>('.sidebar');
   const main = document.querySelector('.main-content');
@@ -390,6 +383,7 @@ export function initWorkspace(): void {
       reviewRetry.value++;
       if (tab.reviewId === null) void mutate({ op: 'refresh', key: tab.key });
     }
+    else if (action === 'refresh') void refreshActivePull().catch((error: unknown) => { showToast(String(error)); });
     else if (action === 'settings') void import('../settings/dialog.js').then((m) => { m.showSettingsDialog(); });
     else if (action === 'share' && tab && !addingPull.value) void copyPullLink(tab);
     else if (action === 'title' && tab) editTitle(tab);
@@ -554,23 +548,7 @@ function bindWorkspaceKeys(): void {
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'r') {
       event.preventDefault();
-      if (!tab || tab.loading || event.repeat) return;
-      tab.loading = true;
-      workspace.value = { ...workspace.value };
-      void mutate({ op: 'refresh', key: tab.key })
-        .then(async ok => {
-          if (!ok) {
-            tab.loading = false;
-            workspace.value = { ...workspace.value };
-            return;
-          }
-          if (activeTab()?.key !== tab.key) return;
-          if (activeReviewReady()) await loadFiles();
-          if (activeTab()?.key === tab.key) {
-            reviewRetry.value++;
-            if (activeReviewReady()) invalidateDiffCache();
-          }
-        }).catch((error: unknown) => { showToast(String(error)); });
+      if (!event.repeat) void refreshActivePull().catch((error: unknown) => { showToast(String(error)); });
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {

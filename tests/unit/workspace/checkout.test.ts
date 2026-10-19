@@ -32,6 +32,11 @@ it('fetches missing objects through a shared checkout, protects them from GC, an
     const tab = PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: source,
       info: { id: 'PR1', number: 1, url: '', title: 'Example', body: '', author: { login: 'test' }, state: 'OPEN', isDraft: false,
         baseRefName: 'main', headRefName: 'topic', baseRefOid: base, headRefOid: head, mergeable: 'MERGEABLE', mergedAt: null } });
+    // Focus returns during the fetch: keep the old source snapshot until later.
+    const canApply = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
+    mocks.file.mockClear();
+    await importPull(tab, canApply);
+    expect(tab.reviewId).toBeNull(); expect(mocks.file).not.toHaveBeenCalled();
     await importPull(tab);
     expect(tab.reviewId).toBe('review');
     expect(readFileSync(join(source, 'file.ts'), 'utf8')).toBe('user work\n');

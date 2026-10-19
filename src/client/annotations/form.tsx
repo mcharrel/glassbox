@@ -2,6 +2,7 @@ import { delegate } from 'kerfjs';
 
 import type { AnnotationSide } from '../../api/index.js';
 import { createAnnotation } from '../../api/index.js';
+import { codeCommentPlaceholder,CommentAuthor } from '../../components/commentAuthor.js';
 import { IconCornerDownRight } from '../../icons.js';
 import { clearPendingArtifactRegions, takePendingArtifactRegions } from '../diff/noteArtifactRegions.js';
 import { asTextarea, toElement } from '../dom.js';
@@ -65,11 +66,9 @@ export function showAnnotationForm(afterEl: HTMLElement, lineNumber: number, sid
   const container = toElement(
     <div className="annotation-form-container" data-form-key={formKey} data-line={String(lineNumber)} data-side={side}>
       <div className={`annotation-form${replyToNoteId !== undefined ? ' annotation-form-reply' : ''}`}>
-        <strong className="annotation-form-author">{activeTab()?.viewer ?? 'You'}</strong>
-        {replyToNoteId !== undefined
-          ? <span className="annotation-reply-tag"><IconCornerDownRight /> replying to AI note</span>
-          : <span className="annotation-form-anchor">Line {String(lineNumber)}</span>}
-        <textarea placeholder={replyToNoteId !== undefined ? 'Reply to this note…' : 'Leave a comment…'} aria-label="Comment" autoFocus></textarea>
+        <CommentAuthor author={(activeTab()?.viewer ?? '') || 'You'} />
+        {replyToNoteId !== undefined && <span className="annotation-reply-tag"><IconCornerDownRight /> replying to AI note</span>}
+        <textarea placeholder={codeCommentPlaceholder(activeTab())} aria-label="Comment" autoFocus></textarea>
         <div className="annotation-form-actions">
           <span className="annotation-form-hint">Enter to save · Shift+Enter for a new line · Esc to cancel</span>
           <button className="btn btn-sm cancel-btn">Cancel</button>

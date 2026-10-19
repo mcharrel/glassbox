@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   agent: vi.fn(),
   notify: vi.fn(),
+  focused: vi.fn(),
   discard: vi.fn(),
 }));
 vi.mock('../../../src/workspace/storage.js', () => ({
@@ -19,7 +20,7 @@ vi.mock('../../../src/workspace/checkout.js', () => ({ importPull: vi.fn(), ensu
 vi.mock('../../../src/workspace/deployments.js', () => ({ refreshDeployment: vi.fn().mockResolvedValue(undefined), cancelDeployment: vi.fn(), stopDeployments: vi.fn() }));
 vi.mock('../../../src/workspace/discard.js', () => ({ discardTabData: mocks.discard }));
 vi.mock('../../../src/workspace/retention.js', () => ({ startWorkspaceCleanup: vi.fn(() => () => {}) }));
-vi.mock('../../../src/workspace/notifications.js', () => ({ notify: mocks.notify }));
+vi.mock('../../../src/workspace/notifications.js', () => ({ notify: mocks.notify, hasCodeFocus: mocks.focused }));
 vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/workspace/github.js')>()),
   github: mocks.github,
@@ -27,7 +28,7 @@ vi.mock('../../../src/workspace/github.js', async (importOriginal) => ({
   loadComments: vi.fn().mockResolvedValue([]),
 }));
 import { cancelDeployment, refreshDeployment, stopDeployments } from '../../../src/workspace/deployments.js';
-import { flushOutbox, insertTab, mutateWorkspace, queueAnnotation, startWorkspace, syncTab } from '../../../src/workspace/service.js';
+import { flushOutbox, flushSourceRefreshes, refreshAfterReply, insertTab, mutateWorkspace, queueAnnotation, startWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
 import { ensureCheckout, importPull } from '../../../src/workspace/checkout.js';
 
@@ -55,6 +56,7 @@ beforeEach(() => {
   mocks.github.mockReset();
   mocks.discard.mockReset().mockResolvedValue(undefined);
   mocks.notify.mockReset();
+  mocks.focused.mockReset().mockReturnValue(false);
   mocks.agent.mockReset().mockImplementation((tab, message) => {
     if (tab.codexThreadId && !message.codex && !message.deleted)
       message.codex = { threadId: tab.codexThreadId, mode: 'queue', status: 'queued' };
@@ -116,7 +118,7 @@ describe('durable comment outbox', () => {
         { op: 'edit-comment', key: 'example/project#1', id: 'other', body: 'replacement' },
         'review',
       ),
-    ).rejects.toThrow('Only your comments');
+    ).rejects.toThrow('cannot be edited');
     expect(mocks.github).not.toHaveBeenCalled();
   });
 });
@@ -452,21 +454,21 @@ describe('comment scope and ownership routing', () => {
     expect(t.comments[0].codex).toBeUndefined(); expect(mocks.agent).not.toHaveBeenCalled();
     if (author === 'alice') expect(t.codexThreadId).toBe(chat);
   });
-  it('publishes edits and deletes of own Main comments and receives remote edits', async () => {
+  it('rejects editing posted Main comments but still receives remote edits and publishes deletes', async () => {
     const t = own(); mocks.github.mockResolvedValue(remote(121));
     await mutateWorkspace({ op: 'comment', key: t.key, body: 'Status update' }, 'review');
     await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
     const original = t.comments[0];
     original.bodyHTML = '<p>Status update</p>';
-    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Updated status' }, 'review');
-    expect(original.bodyHTML).toBeUndefined();
-    await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
-    expect(mocks.github.mock.calls[1].slice(1, 3)).toEqual(['repos/example/project/issues/comments/121', 'PATCH']);
+    await expect(mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Updated status' }, 'review')).rejects.toThrow('cannot be edited');
+    expect(original.body).toBe('Status update');
+    expect(original.bodyHTML).toBe('<p>Status update</p>');
+    expect(mocks.github).toHaveBeenCalledTimes(1);
     vi.mocked(loadComments).mockResolvedValue([{ ...original, body: 'Edited on GitHub' }]);
     await syncTab(t); expect(t.comments[0].body).toBe('Edited on GitHub');
     await mutateWorkspace({ op: 'delete-comment', key: t.key, id: original.id }, 'review');
     await vi.waitFor(() => expect(mocks.data.outbox).toHaveLength(0));
-    expect(mocks.github.mock.calls[2].slice(1, 3)).toEqual(['repos/example/project/issues/comments/121', 'DELETE']);
+    expect(mocks.github.mock.calls[1].slice(1, 3)).toEqual(['repos/example/project/issues/comments/121', 'DELETE']);
     expect(mocks.agent).not.toHaveBeenCalled();
   });
   it('holds Main comments for authentication, then retries offline publication on own PRs', async () => {
@@ -489,12 +491,12 @@ describe('comment scope and ownership routing', () => {
       codexRequested: true, codex: { threadId: chat, mode: 'queue', status: 'queued' } };
     t.comments.push(legacy);
     await flushOutbox(); await syncTab(t);
-    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: legacy.id, body: 'Still private' }, 'review');
-    expect(t.comments[0]).toMatchObject({ destination: 'local', body: 'Still private' });
+    await expect(mutateWorkspace({ op: 'edit-comment', key: t.key, id: legacy.id, body: 'Still private' }, 'review')).rejects.toThrow('cannot be edited');
+    expect(t.comments[0]).toMatchObject({ destination: 'local', body: 'Private history' });
     expect(t.comments[0].codex).toBeUndefined(); expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
     await expect(mutateWorkspace({ op: 'comment', key: t.key, body: 'Reply', parentKey: legacy.id }, 'review')).rejects.toThrow('Main view composer');
   });
-  it('keeps own PR code comments, replies, edits and deletes local through refresh', async () => {
+  it('keeps own PR code conversations immutable and private through refresh', async () => {
     const t = own();
     await codeComment(t, 'Please change this');
     const first = t.comments[0];
@@ -502,14 +504,14 @@ describe('comment scope and ownership routing', () => {
     await mutateWorkspace({ op: 'comment', key: t.key, body: 'And keep the API', parentKey: first.id }, 'review');
     const reply = t.comments[1];
     expect(reply).toMatchObject({ destination: 'local', kind: 'review', path: 'file.ts', parentKey: first.id });
-    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: first.id, body: 'Clarified request' }, 'review');
+    await expect(mutateWorkspace({ op: 'edit-comment', key: t.key, id: first.id, body: 'Clarified request' }, 'review')).rejects.toThrow('cannot be edited');
     await mutateWorkspace({ op: 'delete-comment', key: t.key, id: reply.id }, 'review');
     await syncTab(t);
     expect(t.comments).toEqual([first, reply]);
-    expect(first.body).toBe('Clarified request'); expect(reply.deleted).toBe(true);
+    expect(first.body).toBe('Please change this'); expect(reply.deleted).toBe(true);
     expect(mocks.data.outbox).toHaveLength(0); expect(mocks.github).not.toHaveBeenCalled();
-    expect(first).toMatchObject({ revision: 2, agentStatus: 'pending' });
-    expect(mocks.agent).toHaveBeenCalledTimes(3);
+    expect(first.revision ?? 1).toBe(1);
+    expect(mocks.agent).toHaveBeenCalledTimes(2);
   });
   it.each(['alice', 'bob'])('waits for ownership and then routes to author %s exactly once', async author => {
     const t = mocks.data.tabs[0]; t.info = null; t.codexThreadId = chat;
@@ -553,16 +555,16 @@ describe('comment scope and ownership routing', () => {
     const t = own();
     await codeComment(t, 'Private');
     const message = t.comments[0]; t.viewer = 'another-account';
-    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: message.id, body: 'Still private' }, 'review');
+    await expect(mutateWorkspace({ op: 'edit-comment', key: t.key, id: message.id, body: 'Still private' }, 'review')).rejects.toThrow('cannot be edited');
     await mutateWorkspace({ op: 'delete-comment', key: t.key, id: message.id }, 'review');
     expect(message.destination).toBe('local'); expect(message.codex).toBeUndefined();
     expect(mocks.data.outbox).toHaveLength(0); expect(mocks.github).not.toHaveBeenCalled();
   });
-  it('keeps edits of already-public comments local on own PRs without losing them on refresh', async () => {
+  it('rejects edits of already-public comments on own PRs and keeps deletion local', async () => {
     const t = own(); const original = { id: 'existing', remoteId: 106, body: 'Published earlier', kind: 'review', path: 'file.ts', author: 'alice', date: '', url: 'https://github.com/example/project/pull/1', status: 'synced', editable: true };
     t.comments.push(original); vi.mocked(loadComments).mockResolvedValue([{ ...original } as any]);
-    await mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Local correction' }, 'review');
-    await syncTab(t); expect(t.comments[0].body).toBe('Local correction');
+    await expect(mutateWorkspace({ op: 'edit-comment', key: t.key, id: original.id, body: 'Local correction' }, 'review')).rejects.toThrow('cannot be edited');
+    await syncTab(t); expect(t.comments[0].body).toBe('Published earlier');
     await mutateWorkspace({ op: 'delete-comment', key: t.key, id: original.id }, 'review');
     await syncTab(t); expect(t.comments[0].deleted).toBe(true);
     expect(mocks.github).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
@@ -679,5 +681,81 @@ describe('deployment refresh lifecycle', () => {
       expect(refreshDeployment).toHaveBeenCalledTimes(2);
     } finally { stop(); vi.useRealTimers(); }
     expect(stopDeployments).toHaveBeenCalled();
+  });
+});
+
+describe('source refresh after an agent answer', () => {
+  const request = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  beforeEach(() => {
+    const t = mocks.data.tabs[0];
+    t.info = pullInfo(); t.viewer = 'alice'; t.reviewedHead = t.info.headRefOid;
+    t.reviewedBase = t.info.baseRefOid; t.sourceRefreshRequested = request;
+    vi.mocked(loadPull).mockReset().mockResolvedValue({ ...t.info, headRefOid: 'new-head' });
+    vi.mocked(loadComments).mockReset().mockResolvedValue([]);
+    vi.mocked(importPull).mockReset().mockImplementation(async (tab, canApply = () => true) => {
+      if (canApply()) { tab.reviewedHead = tab.info!.headRefOid; tab.reviewedBase = tab.info!.baseRefOid; }
+    });
+  });
+  it('keeps a focused diff stable, then imports once when focus leaves', async () => {
+    const t = mocks.data.tabs[0], oldHead = t.reviewedHead;
+    mocks.focused.mockReturnValue(true);
+    await refreshAfterReply(t);
+    expect(t.info.headRefOid).toBe('new-head'); expect(t.reviewedHead).toBe(oldHead);
+    expect(t.sourceRefreshRequested).toBe(request); expect(importPull).not.toHaveBeenCalled();
+    mocks.focused.mockReturnValue(false);
+    await Promise.all([flushSourceRefreshes(), flushSourceRefreshes()]);
+    expect(t.reviewedHead).toBe('new-head'); expect(t.sourceRefreshRequested).toBeUndefined();
+    expect(importPull).toHaveBeenCalledTimes(1);
+    expect(loadPull).toHaveBeenCalledTimes(1);
+  });
+  it('checks read-only replies without reloading source or leaving a refresh prompt', async () => {
+    const t = mocks.data.tabs[0]; vi.mocked(loadPull).mockResolvedValue(t.info);
+    await refreshAfterReply(t); await flushSourceRefreshes();
+    expect(importPull).not.toHaveBeenCalled(); expect(t.sourceRefreshRequested).toBeUndefined();
+  });
+  it.each([0, 1, 4])('refreshes %i pending tabs independently, skipping code open in any window', async count => {
+    mocks.data.tabs = Array.from({ length: count }, (_, i) => ({ ...mocks.data.tabs[0], key: `example/project#${i + 1}` }));
+    mocks.focused.mockImplementation(key => key === 'example/project#1');
+    for (const t of mocks.data.tabs) t.info = { ...t.info, headRefOid: 'new-head' };
+    await flushSourceRefreshes();
+    expect(importPull).toHaveBeenCalledTimes(Math.max(0, count - 1));
+    for (const t of mocks.data.tabs.slice(1)) expect(t.reviewedHead).toBe('new-head');
+  });
+  it('rechecks focus before applying a slow import and retries after leaving again', async () => {
+    const t = mocks.data.tabs[0]; t.info.headRefOid = 'new-head';
+    vi.mocked(importPull).mockImplementationOnce(async (target, canApply) => {
+      mocks.focused.mockReturnValue(true);
+      expect(canApply?.()).toBe(false);
+    });
+    await flushSourceRefreshes();
+    expect(t.reviewedHead).not.toBe('new-head'); expect(t.sourceRefreshRequested).toBe(request);
+    mocks.focused.mockReturnValue(false); await flushSourceRefreshes();
+    expect(t.reviewedHead).toBe('new-head'); expect(t.sourceRefreshRequested).toBeUndefined();
+  });
+  it('allows explicit refresh while reading and clears the pending refresh', async () => {
+    const t = mocks.data.tabs[0]; mocks.focused.mockReturnValue(true);
+    await mutateWorkspace({ op: 'refresh', key: t.key }, 'review');
+    expect(t.reviewedHead).toBe('new-head'); expect(t.sourceRefreshRequested).toBeUndefined();
+  });
+  it('does not restore expired source or retry a failed import on every heartbeat', async () => {
+    const t = mocks.data.tabs[0]; t.info.headRefOid = 'new-head'; t.checkoutEvicted = true;
+    await flushSourceRefreshes(); expect(importPull).not.toHaveBeenCalled();
+    t.checkoutEvicted = false;
+    vi.mocked(importPull).mockRejectedValueOnce(new Error('managed checkout has local changes'));
+    await flushSourceRefreshes(); await flushSourceRefreshes();
+    expect(importPull).toHaveBeenCalledTimes(1);
+    expect(t.error).toContain('local changes'); expect(t.sourceRefreshRequested).toBe(request);
+    await mutateWorkspace({ op: 'refresh', key: t.key }, 'review');
+    expect(t.sourceRefreshRequested).toBeUndefined();
+  });
+  it('preserves a newer refresh request arriving during an older metadata response', async () => {
+    const t = mocks.data.tabs[0]; mocks.focused.mockReturnValue(true);
+    let finish!: (info: typeof t.info) => void;
+    vi.mocked(loadPull).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = refreshAfterReply(t);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    t.sourceRefreshRequested = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    finish(t.info); await pending;
+    expect(t.sourceRefreshRequested).toBe('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   });
 });

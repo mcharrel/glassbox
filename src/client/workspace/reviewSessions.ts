@@ -93,7 +93,6 @@ export function initReviewSessions(): () => void {
     const existing = sessions.get(key);
     if (existing) return existing;
     const reviewId = tab.reviewId ?? '';
-    if (reviewId !== '' && [...sessions.values()].some(value => value.review.reviewId === reviewId)) invalidateDiffCache(reviewId);
     if (!tab.checkoutEvicted && reviewId !== '' && reviewId === initial?.review.reviewId && !usedInitial) {
       usedInitial = true;
       const captured = initial; initial = null;
@@ -174,7 +173,10 @@ export function initReviewSessions(): () => void {
       const ids = new Set(tabs.map(tab => tab.reviewId));
       for (const [key, session] of sessions) if (!keys.has(key)) {
         requests.get(key)?.abort(); requests.delete(key); sessions.delete(key);
-        if (!ids.has(session.review.reviewId)) {
+        if (ids.has(session.review.reviewId)) {
+          // The same PR now has a different source snapshot, including automatic refreshes.
+          invalidateDiffCache(session.review.reviewId);
+        } else {
           forgetReviewDiff(session.review.reviewId);
           analysisVersions.delete(session.review.reviewId);
         }

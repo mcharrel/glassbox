@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { invalidateDiffCache } from '../../../src/client/diff/index.js';
 import { PullTabSchema } from '../../../src/api/workspace.js';
 
 const api = vi.hoisted(() => vi.fn());
@@ -17,6 +18,7 @@ const tab = (id: string) => PullTabSchema.parse({ key: id, reviewId: id, reviewe
 let dispose: (() => void) | undefined;
 let scroll: { scrollTop: number; value: string };
 beforeEach(() => {
+  vi.mocked(invalidateDiffCache).mockClear();
   reviewLoadState.value = { key: '', status: 'loading', error: null };
   scroll = { scrollTop: 0, value: '' };
   const events = new EventTarget();
@@ -163,9 +165,14 @@ describe('in-memory PR sessions', () => {
     dispose = initReviewSessions(); await tick();
     workspace.value = { ...workspace.value }; await tick();
     expect(api).toHaveBeenCalledTimes(3);
+    expect(invalidateDiffCache).not.toHaveBeenCalled();
     workspace.value = { ...workspace.value, tabs: workspace.value.tabs.map(t => t.key === 'b' ? { ...t, reviewedHead: 'new-head' } : t) };
     await tick();
     expect(api).toHaveBeenCalledTimes(6);
+    expect(invalidateDiffCache).toHaveBeenCalledExactlyOnceWith('b');
+    workspace.value = { ...workspace.value, active: 'b' }; await tick();
+    expect(activeReviewReady()).toBe(true);
+    expect(reviewLoadState.value.key).toContain('new-head');
   });
 
   it('does not replace a typed draft while the first load completes', async () => {

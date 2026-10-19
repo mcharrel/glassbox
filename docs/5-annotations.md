@@ -59,8 +59,8 @@ The system shall support seven annotation categories, each with specific semanti
 - **Immediate persistence** — All annotations shall be persisted to the database immediately on creation or modification.
 - **Survive restarts** — Annotations shall survive application restarts.
 
-Personal fork: code comments use a purple accent background and click-to-edit (Enter when focused). Delete and Keep remain available; category, drag, attachment and edit controls are omitted. New comments are notes; edits preserve existing categories, note replies, regions and attachments.
+Personal fork: posted code comments use neutral bordered cards, author avatars and read-only text. Delete and Keep remain available; category, drag, attachment and edit controls are omitted. New comments are notes. Composers omit the redundant line label and explain whether the comment goes to the original agent or GitHub.
 
-In the personal workspace, Enter saves and Shift+Enter inserts a newline. Comments synchronize through a persistent GitHub outbox with five-minute retry/reconciliation, and start an isolated local agent using the configured guidance model. GitHub replies and agent results appear in threads. See [MY_GLASSBOX.md](../MY_GLASSBOX.md).
+In the personal workspace, Enter saves and Shift+Enter inserts a newline. Own-PR code conversations remain local and route to the originating Codex chat; other PR code comments and all Main-view comments publish through the GitHub outbox with five-minute retries. No isolated comment agent is started. New agent replies check for pushed commits: refresh automatically away from code, otherwise show the orange topbar Refresh button. Unsaved drafts also defer automatic refresh. See [MY_GLASSBOX.md](../MY_GLASSBOX.md).
 
 Personal GitHub workspace: remote inline threads require a current line anchor. Missing/outdated anchors are omitted rather than prepended to the file. Unified rows retain both original and new coordinates for old-side comment placement.

@@ -56,7 +56,10 @@ export function postCodexReply(input: CommentInput & { body: string }): string {
     path: original.path, line: original.line, side: original.side, annotationId: original.annotationId,
     replyToRevision: original.revision ?? 1,
   };
-  if (!existing) tab.comments.push(reply);
+  if (!existing) {
+    tab.comments.push(reply);
+    tab.sourceRefreshRequested = randomUUID();
+  }
   original.agentStatus = 'answered';
   delivery.status = 'sent';
   delete delivery.error;
