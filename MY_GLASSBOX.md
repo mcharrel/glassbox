@@ -166,3 +166,7 @@ With shared-server mode enabled locally, rev connects directly to Codex’s Unix
 
 - Resolved GitHub code threads remain at their current source line, folded into a compact Resolved row. Expand it to read the original comment and replies. Expansion is remembered during in-memory file/tab switches and metadata refresh; reopening the thread on GitHub unfolds it. Unanchored historical threads remain hidden. Search can find folded content and expands its thread when navigating to a match.
 - Hover a deletable comment or reply and press `d` to use its existing Delete action. The shortcut respects permissions, local/GitHub routing and offline retries, and ignores text inputs, dialogs, modifiers and held-key repeats. A folded summary is not a deletion target.
+
+## First-install Codex guidance
+
+- README and installer output explicitly distinguish PR review, chat linking, manual feedback handling and automatic delivery. The public installer does not install a Codex shared-server adapter. It prints a setup prompt and points to the README for compatibility, restart and manual fallback instructions. A successful PR link is not proof that push works.

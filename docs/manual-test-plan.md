@@ -262,3 +262,7 @@ Automated coverage: ownership-aware placeholders/avatar markup, immutable worksp
 - Hover your comment or reply and press `d`: the same deletion as its button occurs. Hover someone else's non-deletable comment, a folded summary or empty code: nothing happens. Typing `d` into a composer/search, holding a modifier, or keeping the key held must not delete anything. Verify local own-PR comments remain local and public comments use the GitHub retry queue.
 
 Automated coverage: thread/pagination/null-node mapping, private-content resolution sync, collapsed/expanded/reopened markup, nested navigation, fresh pointer hit-testing, permissions and keyboard guards. Native interaction remains manual under the no-browser-automation preference.
+
+## First-install feedback guidance
+
+- Installer completion should state that GitHub review works without Codex, while automatic replies require separate connection setup. Its example command and setup prompt use the actual command/checkout destinations, including spaces. It must not claim push is ready or change Codex configuration. The existing isolated installer tests exercise completion for successful installs and reruns.
