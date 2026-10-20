@@ -62,7 +62,7 @@ describe('build-sidecar.sh ⇄ tsup.config.ts consistency (GB-887)', () => {
   const externalPrefixes = (() => {
     const m = /\(\?!([^)]+)\)/.exec(tsupConfig);
     if (m === null) throw new Error('could not find the noExternal negative-lookahead in tsup.config.ts');
-    return m[1].split('|').map(p => p.trim()).filter(Boolean);
+    return m[1].split('|').map(p => p.trim().replaceAll('\\/', '/')).filter(Boolean);
   })();
 
   it.each(externalPrefixes)('copies a package matching external prefix "%s"', (prefix) => {

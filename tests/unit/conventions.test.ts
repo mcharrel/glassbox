@@ -60,7 +60,7 @@ describe('external dependency allow-list (the three-places rule)', () => {
     const cfg = read('tsup.config.ts');
     const m = cfg.match(/noExternal:\s*\[\/\^\(\?!([^)]*)\)/);
     expect(m, 'could not find the noExternal negative-lookahead in tsup.config.ts').toBeTruthy();
-    return m![1].split('|').map((s) => s.trim());
+    return m![1].split('|').map((s) => s.trim().replaceAll('\\/', '/'));
   }
 
   /** Packages copied into the sidecar by build-sidecar.sh. */

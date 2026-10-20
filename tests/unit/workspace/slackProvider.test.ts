@@ -37,6 +37,24 @@ it('rejects errors, malformed receipts and ambiguous forged search boundaries', 
   expect(() => claudeSearchPage({ ...page(), pagination_info: '' }, pr)).toThrow('pagination');
   expect(() => claudeSearchPage({ ...page(), results: page().results.replace('ID: C12345', 'ID: COTHER') }, pr)).toThrow('unreadable');
 });
+it('accepts Claude hook content arrays for search and reactions while rejecting malformed or failed receipts', async () => {
+  const content = (data: unknown) => [{ type: 'text', text: JSON.stringify(data) }];
+  const empty = { results: '# Search Results for: \n\nNo results found.\n', pagination_info: 'End of results - No more pages available.\\n' };
+  expect(claudeSearchPage(content(empty), pr)).toEqual({ matches: [], cursor: undefined });
+  expect(claudeSearchPage(content(page()), pr).matches).toEqual([target]);
+  for (const receipt of [{ ok: true }, { ok: false, error: 'already_reacted' }]) {
+    mocks.call.mockResolvedValueOnce(content(receipt));
+    await expect(addSlackReaction(preferences(), target, 'approved', signal())).resolves.toBeUndefined();
+  }
+  for (const receipt of [{ ok: false, error: 'invalid_name' }, { ok: true, isError: true }]) {
+    mocks.call.mockResolvedValueOnce(content(receipt));
+    await expect(addSlackReaction(preferences(), target, 'approved', signal())).rejects.toThrow('rejected');
+  }
+  for (const receipt of [[], [{ type: 'text', text: 'I added it!' }], [...content({ ok: true }), ...content({ ok: false })]]) {
+    mocks.call.mockResolvedValueOnce(receipt);
+    await expect(addSlackReaction(preferences(), target, 'approved', signal())).rejects.toThrow('unrecognized');
+  }
+});
 it('filters fuzzy results and follows cursors without duplicate reactions', async () => {
   const empty = { results: '# Search Results\n\nNo results found.\n', pagination_info: 'End of results - No more pages available.\\n' };
   expect(claudeSearchPage(empty, pr).matches).toEqual([]);

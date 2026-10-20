@@ -9,14 +9,15 @@ type Target = { channel: string; timestamp: string };
 const record = z.record(z.string(), z.unknown());
 /** Only tool receipts count; model-generated descriptions are never accepted. */
 export function slackToolResult(value: unknown): Record<string, unknown> {
-  let data = record.parse(value);
+  // Claude's PostToolUse hook returns MCP content blocks without their envelope.
+  let data: Record<string, unknown> = Array.isArray(value) ? { content: value } : record.parse(value);
   if (data.isError === true) throw new Error('Slack rejected this request. Check your connection and emoji in Settings → Slack.');
   if (Array.isArray(data.content)) {
     const blocks = z.array(z.object({ type: z.string(), text: z.string().optional() })).parse(data.content);
     const text = blocks.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n');
     try { data = record.parse(JSON.parse(text)); } catch { throw new Error('Slack returned an unrecognized response. Check your Claude Slack plugin version.'); }
   }
-  if (data.ok === false && data.error !== 'already_reacted') throw new Error('Slack rejected this request. Check your connection, message access and emoji in Settings → Slack.');
+  if (data.isError === true || (data.ok === false && data.error !== 'already_reacted')) throw new Error('Slack rejected this request. Check your connection, message access and emoji in Settings → Slack.');
   return data;
 }
 export function claudeSearchPage(value: unknown, prUrl: string): { matches: Target[]; cursor?: string } {
