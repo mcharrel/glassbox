@@ -4,12 +4,12 @@ import { z } from 'zod';
 
 const EnvelopeSchema = z.object({ ok: z.boolean(), error: z.string().optional() });
 const errors: Record<string, string> = {
-  invalid_auth: 'Reconnect Slack in Settings → Profile.',
-  token_revoked: 'Reconnect Slack in Settings → Profile.',
+  invalid_auth: 'Reconnect Slack in Settings → Slack.',
+  token_revoked: 'Reconnect Slack in Settings → Slack.',
   account_inactive: 'Reconnect Slack with an active account.',
   missing_scope: 'The Slack connection needs search:read and reactions:write user permissions.',
   not_allowed_token_type: 'Connect a Slack user token with search:read and reactions:write permissions.',
-  invalid_name: 'This emoji does not exist in your Slack workspace. Change it in Settings → Profile.',
+  invalid_name: 'This emoji does not exist in your Slack workspace. Change it in Settings → Slack.',
   no_permission: 'Slack did not allow a reaction on this message.',
   is_archived: 'Slack cannot add a reaction in an archived channel.',
   message_not_found: 'A matching Slack message is no longer available.',

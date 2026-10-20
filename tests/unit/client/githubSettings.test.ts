@@ -6,27 +6,27 @@ vi.mock('../../../src/client/settings/slackReactions.js', () => ({ resetSlackRea
 vi.mock('../../../src/client/tauri.js', () => ({ getTauriInvoke: () => mocks.invoke }));
 vi.mock('../../../src/client/workspace/state.js', () => ({ refreshWorkspace: mocks.refresh }));
 vi.mock('../../../src/client/dom.js', () => ({ asInput: (el: any) => el, asSelect: (el: any) => el }));
-import { bindProfileTab, loadProfileTab, profileTab, resetProfileTab } from '../../../src/client/settings/profileTab.js';
+import { bindGitHubTab, loadGitHubTab, githubTab, resetGitHubTab } from '../../../src/client/settings/githubTab.js';
 import { generalTab } from '../../../src/client/settings/generalTab.js';
 const data = () => ({ settings: { defaultUser: 'personal', organizations: { example: 'work_user' } }, users: ['personal', 'work_user'] });
-const html = () => String(profileTab.render({} as any));
+const html = () => String(githubTab.render({} as any));
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 beforeEach(() => {
-  resetProfileTab(); mocks.handlers.clear();
+  resetGitHubTab(); mocks.handlers.clear();
   mocks.get.mockReset().mockResolvedValue(data());
   mocks.save.mockReset().mockImplementation(async settings => ({ ...data(), settings }));
   mocks.invoke.mockReset().mockResolvedValue({ supported: true, enabled: true, registered: false, browser: 'Example Browser' });
   mocks.refresh.mockReset().mockResolvedValue(undefined);
-  bindProfileTab({} as any);
+  bindGitHubTab({} as any);
 });
-afterEach(resetProfileTab);
+afterEach(resetGitHubTab);
 it('keeps General limited to theme and sharing', () => {
   const result = String(generalTab.render({ activeThemeId: 'dark', themesData: { themes: [{ id: 'dark', name: 'Dark', builtIn: true }] } } as any));
   expect(result).toContain('Theme'); expect(result).toContain('Share rev');
   for (const removed of ['App Name', 'difftool', 'Database backups', 'Preserved unreadable data']) expect(result).not.toContain(removed);
 });
 it('shows local account routing and a default-on link preference with honest pending activation', async () => {
-  loadProfileTab(); await tick();
+  loadGitHubTab(); await tick();
   expect(html()).toContain('value="personal" selected');
   expect(html()).toContain('value="work_user" selected');
   expect(html()).toContain('Open PR links in rev');
@@ -34,14 +34,14 @@ it('shows local account routing and a default-on link preference with honest pen
   expect(html()).toContain('Example Browser'); expect(html()).not.toContain('experience level');
 });
 it('saves a default account change and refreshes displayed ownership', async () => {
-  loadProfileTab(); await tick();
+  loadGitHubTab(); await tick();
   mocks.handlers.get('change:#github-default-user')!({}, { value: 'work_user' });
   await tick();
   expect(mocks.save).toHaveBeenCalledWith({ defaultUser: 'work_user', organizations: { example: 'work_user' } });
   expect(mocks.refresh).toHaveBeenCalledOnce();
 });
 it('requests macOS approval only on setup and persists disabling through the native bridge', async () => {
-  loadProfileTab(); await tick();
+  loadGitHubTab(); await tick();
   expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith('get_pr_link_routing');
   mocks.handlers.get('click:#pr-link-setup')!(); await tick();
   expect(mocks.invoke).toHaveBeenLastCalledWith('set_pr_link_routing', { enabled: true });
@@ -51,7 +51,7 @@ it('requests macOS approval only on setup and persists disabling through the nat
 it('does not apply a late account response to a newly opened settings dialog', async () => {
   let finish!: Function;
   mocks.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-  loadProfileTab(); resetProfileTab(); loadProfileTab(); await tick();
+  loadGitHubTab(); resetGitHubTab(); loadGitHubTab(); await tick();
   finish({ ...data(), settings: { defaultUser: 'stale', organizations: { stale: 'stale' } } }); await tick();
   expect(html()).not.toContain('stale'); expect(html()).toContain('value="personal" selected');
 });

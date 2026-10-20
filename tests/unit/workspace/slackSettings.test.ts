@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ config: {} as Record<string, any>, failConfig: false, secret: null as string | null, available: true, write: vi.fn(), auth: vi.fn() }));
+const mocks = vi.hoisted(() => ({ config: {} as Record<string, any>, failConfig: false, secret: null as string | null, available: true, write: vi.fn(), auth: vi.fn(), claude: vi.fn() }));
 vi.mock('../../../src/global-config.js', () => ({ readGlobalConfig: () => mocks.config, updateGlobalConfig: (update: Function) => { if (mocks.failConfig) throw new Error('disk unavailable'); update(mocks.config); } }));
 vi.mock('../../../src/ai/keychain.js', () => ({
   getSecretFromKeychain: () => mocks.secret, isKeychainAvailable: () => mocks.available,
@@ -7,10 +7,12 @@ vi.mock('../../../src/ai/keychain.js', () => ({
   deleteSecretFromKeychain: () => { mocks.secret = null; },
 }));
 vi.mock('../../../src/workspace/slack-api.js', () => ({ validateSlackToken: mocks.auth }));
+vi.mock('../../../src/workspace/slack-claude.js', () => ({ checkClaudeSlack: mocks.claude }));
 import { SlackPreferencesSchema, SaveSlackSettingsSchema } from '../../../src/api/slack-reactions.js';
 import { disconnectSlack, saveSlackSettings, slackPreferences, slackSettings } from '../../../src/workspace/slack-settings.js';
 const preferences = () => SlackPreferencesSchema.parse({});
 beforeEach(() => {
+  mocks.claude.mockReset().mockResolvedValue(false);
   mocks.config = { unrelated: { preserved: true } }; mocks.failConfig = false; mocks.secret = null; mocks.available = true;
   mocks.write.mockReset().mockImplementation((_account, token) => { mocks.secret = token; });
   mocks.auth.mockReset().mockResolvedValue({ workspace: 'Example', user: 'alice' });
@@ -29,13 +31,13 @@ it('stores credentials only in the keychain and never returns them to the client
   expect(JSON.stringify(result)).not.toContain(token);
   expect(JSON.stringify(mocks.config)).not.toContain(token);
   expect(mocks.config.unrelated).toEqual({ preserved: true });
-  expect(disconnectSlack()).toMatchObject({ connected: false, settings: { enabled: false } });
+  expect(await disconnectSlack()).toMatchObject({ connected: false, settings: { enabled: false } });
 });
 it('refuses enablement without a connection and leaves prior preferences intact on authentication failure', async () => {
   await expect(saveSlackSettings({ settings: { ...preferences(), enabled: true } })).rejects.toThrow('Connect Slack');
   mocks.auth.mockRejectedValue(new Error('Missing permissions'));
   await expect(saveSlackSettings({ settings: { ...preferences(), enabled: true }, token: 'fixture' })).rejects.toThrow('Missing permissions');
-  expect(slackSettings().settings.enabled).toBe(false); expect(mocks.write).not.toHaveBeenCalled();
+  expect((await slackSettings()).settings.enabled).toBe(false); expect(mocks.write).not.toHaveBeenCalled();
 });
 it('does not fall back to plaintext storage or reveal keychain errors', async () => {
   mocks.available = false;
@@ -50,7 +52,7 @@ it('serializes connection changes while validation is in flight', async () => {
   mocks.auth.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
   const first = saveSlackSettings({ settings: preferences(), token: 'fixture' });
   await expect(saveSlackSettings({ settings: preferences() })).rejects.toThrow('already being saved');
-  expect(() => disconnectSlack()).toThrow('already being saved');
+  await expect(disconnectSlack()).rejects.toThrow('already being saved');
   finish({ workspace: 'Example', user: 'alice' }); await first;
 });
 
@@ -59,4 +61,14 @@ it('restores the previous credential if saving preferences fails during replacem
   mocks.failConfig = true;
   await expect(saveSlackSettings({ settings: preferences(), token: 'new-fixture' })).rejects.toThrow('configuration is writable');
   expect(mocks.secret).toBe('previous-fixture'); expect(mocks.config.slackReactions.enabled).toBe(true);
+});
+it('supports Claude without a Slack token and preserves both providers independently', async () => {
+  const settings = { ...preferences(), provider: 'claude' as const, enabled: true };
+  await expect(saveSlackSettings({ settings })).rejects.toThrow('Connect the official Slack plugin');
+  mocks.claude.mockResolvedValue(true);
+  expect(await saveSlackSettings({ settings })).toMatchObject({ connected: true, settings });
+  expect(mocks.write).not.toHaveBeenCalled(); expect(mocks.auth).not.toHaveBeenCalled();
+  await expect(saveSlackSettings({ settings, token: 'fixture' })).rejects.toThrow('only be saved');
+  expect((await saveSlackSettings({ settings: { ...settings, enabled: false } })).settings.enabled).toBe(false);
+  expect(mocks.config.unrelated).toEqual({ preserved: true });
 });

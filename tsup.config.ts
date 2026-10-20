@@ -22,7 +22,7 @@ export default defineConfig([
     // external: it locates its bundled native helper (`bin/apple-fm-helper`)
     // relative to its own package directory, so it has to live in the sidecar's
     // node_modules rather than being inlined into cli.js.
-    noExternal: [/^(?!@electric-sql|hono|@hono|@modelcontextprotocol|kerfjs|@preact|apple-fm)/],
+    noExternal: [/^(?!@anthropic-ai\/claude-agent-sdk|@electric-sql|hono|@hono|@modelcontextprotocol|kerfjs|@preact|apple-fm)/],
     define: {
       'process.env.BUILD_TIMESTAMP': JSON.stringify(new Date().toISOString()),
     },

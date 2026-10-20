@@ -3,7 +3,7 @@ import { PullTabSchema } from '../../../src/api/workspace.js';
 import { pullInfo } from './fixtures.js';
 const mocks = vi.hoisted(() => ({ enabled: false, token: vi.fn(), react: vi.fn(), save: vi.fn(), data: { tabs: [] as any[] } }));
 vi.mock('../../../src/workspace/slack-settings.js', () => ({ slackPreferences: () => ({ enabled: mocks.enabled, approvedEmoji: 'stamp-approved', changesEmoji: 'request-changes' }), slackToken: mocks.token }));
-vi.mock('../../../src/workspace/slack-api.js', () => ({ reactToPullLinks: mocks.react }));
+vi.mock('../../../src/workspace/slack-provider.js', () => ({ reactWithSlackProvider: mocks.react }));
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => mocks.data, saveWorkspace: mocks.save }));
 import { cancelSlackReaction, cancelSlackReactions, queueSlackReaction, recoverSlackReactions, retrySlackReaction, stopSlackReactions } from '../../../src/workspace/slack-reactions.js';
 import { closingTabs } from '../../../src/workspace/lifecycle.js';

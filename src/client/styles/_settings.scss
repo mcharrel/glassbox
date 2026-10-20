@@ -1006,3 +1006,10 @@
 .slack-reaction-settings { border: 0; padding: 0; margin: 0; min-width: 0; }
 .slack-reaction-settings .settings-input { width: 100%; }
 .slack-reaction-settings #slack-disconnect { margin-left: 8px; }
+.slack-connection-options { display: grid; gap: 10px; margin-bottom: 16px; }
+.slack-reaction-test { margin-top: 24px; }
+.slack-test-row { display: flex; gap: 8px; align-items: center; }
+.slack-test-row .settings-input { min-width: 0; margin: 0; flex: 1; }
+.slack-test-row .btn { flex-shrink: 0; }
+.slack-test-success { display: flex; align-items: center; gap: 8px; color: var(--success-color, #3fb950); }
+.slack-test-success svg { width: 16px; height: 16px; flex-shrink: 0; }

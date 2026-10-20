@@ -1,7 +1,7 @@
 import { type PullTab, viewerReviewState } from '../api/workspace.js';
 import { closingTabs } from './lifecycle.js';
-import { reactToPullLinks } from './slack-api.js';
-import { slackPreferences, slackToken } from './slack-settings.js';
+import { reactWithSlackProvider } from './slack-provider.js';
+import { slackPreferences } from './slack-settings.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 const jobs = new Map<PullTab, AbortController>();
@@ -27,7 +27,7 @@ export function recoverSlackReactions(): void {
 export function retrySlackReaction(tab: PullTab): void {
   const previous = tab.slackReaction;
   if (previous?.status !== 'error') throw new Error('No failed Slack reaction to retry.');
-  if (!slackPreferences().enabled) throw new Error('Enable Slack reactions in Settings → Profile first.');
+  if (!slackPreferences().enabled) throw new Error('Enable Slack reactions in Settings → Slack first.');
   if (tab.viewer.toLowerCase() !== previous.reviewer.toLowerCase() || viewerReviewState(tab) !== previous.review)
     throw new Error('Your review or GitHub account has changed. Submit the intended review before reacting in Slack.');
   queueSlackReaction(tab, { reviewer: previous.reviewer, state: previous.review });
@@ -48,10 +48,8 @@ export function queueSlackReaction(tab: PullTab, receipt: { reviewer: string; st
   setImmediate(() => {
     void (async () => {
       if (!current()) return;
-      const token = slackToken();
-      if (token === null || token === '') throw new Error('Reconnect Slack in Settings → Profile.');
       const emoji = job.review === 'APPROVED' ? settings.approvedEmoji : settings.changesEmoji;
-      await reactToPullLinks(token, tab.ref.url, emoji, controller.signal, count => {
+      await reactWithSlackProvider(settings, tab.ref.url, emoji, controller.signal, count => {
         if (current()) job.count = count;
       });
       if (current()) tab.slackReaction = { ...job, status: 'done', message: job.count ? `Reacted to ${job.count} Slack message${job.count === 1 ? '' : 's'}.` : 'No matching Slack messages found.' };

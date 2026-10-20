@@ -32,11 +32,12 @@ import { bindCodexSettings, resetCodexSettings, showCodexSettings } from './code
 import { bindCompanyTab, companyTab, loadCompanyTab, resetCompanyTab } from './companyTab.js';
 import { experimentalTab } from './experimentalTab.js';
 import { generalTab } from './generalTab.js';
-import { bindProfileTab, loadProfileTab, profileTab, resetProfileTab } from './profileTab.js';
+import { bindGitHubTab, githubTab, loadGitHubTab, resetGitHubTab } from './githubTab.js';
+import { bindSlackReactions, loadSlackReactions, resetSlackReactions, slackTab } from './slackReactions.js';
 import type { ChannelState, ConfigResponse, KeyStatusResponse, ModelsResponse, Tab, TabContext, ThemesResponse } from './tabContext.js';
 import { showThemeManager } from './themeManager.js';
 
-const TABS: Tab[] = [generalTab, profileTab, experimentalTab, companyTab];
+const TABS: Tab[] = [generalTab, githubTab, slackTab, experimentalTab, companyTab];
 
 interface SettingsUIState {
   activeTab: string;
@@ -100,7 +101,8 @@ const switchTheme = withInvalidate(rawSwitchTheme);
 
 export function showSettingsDialog(onClose?: () => void): void {
   resetCompanyTab();
-  resetProfileTab();
+  resetGitHubTab();
+  resetSlackReactions();
   resetCodexSettings();
 
   // The whole modal — `.modal-overlay` backdrop, the `.modal` content mount,
@@ -138,7 +140,8 @@ export function showSettingsDialog(onClose?: () => void): void {
   const teardowns: Array<() => void> = [];
   void handle.result.then(() => {
     resetCompanyTab();
-    resetProfileTab();
+    resetGitHubTab();
+    resetSlackReactions();
     resetCodexSettings();
     while (teardowns.length > 0) teardowns.pop()?.();
     if (onClose !== undefined) onClose();
@@ -521,7 +524,8 @@ function setupDelegates(args: {
 }): void {
   const { overlay, setUi, forceRerender, actions, modelsData, themesData, channelState, closeDialog } = args;
   bindCompanyTab(overlay);
-  bindProfileTab(overlay);
+  bindGitHubTab(overlay);
+  bindSlackReactions(overlay);
   bindCodexSettings(overlay);
 
   void delegate(overlay, 'click', '#settings-close', closeDialog);
@@ -530,7 +534,8 @@ function setupDelegates(args: {
     if (t === undefined) return;
     setUi({ activeTab: t });
     showCodexSettings(t === 'experimental');
-    if (t === 'profile') loadProfileTab();
+    if (t === 'github') loadGitHubTab();
+    if (t === 'slack') loadSlackReactions();
     if (t === 'company') loadCompanyTab();
   });
 

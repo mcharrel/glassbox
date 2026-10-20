@@ -241,7 +241,7 @@ npm run tauri:build    # Build sidecar + package native desktop app
 
 The build produces:
 
-- `dist/cli.js` — Server ESM bundle with Node shebang. External deps (`@electric-sql/pglite`, `hono`, `@hono/node-server`, `@modelcontextprotocol/sdk`, `kerfjs`, `apple-fm`) are kept external.
+- `dist/cli.js` — Server ESM bundle with Node shebang. External deps (`@electric-sql/pglite`, `hono`, `@hono/node-server`, `@modelcontextprotocol/sdk`, `@anthropic-ai/claude-agent-sdk`, `kerfjs`, `apple-fm`) are kept external.
 - `dist/client/app.global.js` — Client JS bundle (IIFE, minified, es2020 target)
 - `dist/client/styles.css` — Compiled and compressed CSS from SCSS
 - `dist/plugins/<id>/` — First-party content plugins (doc 29), self-contained esbuild bundles (`index.js` + `manifest.json`). Built by `build:plugins` (folded into `build`, `dev`, `tauri:dev`, and `prepublishOnly`), copied into the sidecar by `build-sidecar.sh`, and auto-installed into `~/.glassbox/plugins/` at startup. So a provided plugin (e.g. `graphviz`) "just works" in dev, npm installs, and the desktop app with no manual step.
@@ -256,7 +256,7 @@ The build produces:
 
 In dev mode (`npm run dev` or `tauri:dev`), external packages resolve from the project's `node_modules/` automatically. In production Tauri builds, the sidecar runs from `src-tauri/server/` with only the explicitly copied packages available. Forgetting step 2 causes "module not found" errors that only appear in production.
 
-Current external deps: `@electric-sql/pglite`, `hono`, `@hono/node-server`, `@modelcontextprotocol/sdk`, `kerfjs` (pulls in `@preact/signals-core`), `apple-fm` (carries the on-device helper binary it resolves relative to its own package, so it must stay external)
+Current external deps: `@electric-sql/pglite`, `hono`, `@hono/node-server`, `@modelcontextprotocol/sdk`, `@anthropic-ai/claude-agent-sdk` (uses the separately installed Claude Code executable for Slack; no bundled CLI is needed), `kerfjs` (pulls in `@preact/signals-core`), `apple-fm` (carries the on-device helper binary it resolves relative to its own package, so it must stay external)
 
 Note: the ground-truth perceptual-diff deps (`pixelmatch`, `pngjs`, `jpeg-js`, doc 26 P2) are pure JS and are **bundled** by tsup (they are not in the `noExternal` exclusion), so they need none of the three-place external-dep handling above — adding them to the external list would be wrong. The same applies to `pglite-migrate` (doc 9 §9.1a): zero runtime deps, pure ESM, ~212 KB, fully bundled — verified by grepping `dist/cli.js` for a residual bare `from "pglite-migrate"` (there is none). Its one dynamic `import(specifier)` survives bundling by design: that is how it loads the on-demand-downloaded old PGlite engine from an absolute `file://` path outside the bundle.
 

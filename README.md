@@ -38,9 +38,9 @@ The native bundle includes Node and uses local ad-hoc signing, so no release sig
 
 ### GitHub accounts
 
-Sign in to each account with `gh auth login`, then open **Settings → Profile**. Choose your default GitHub account and add organization → account exceptions. rev selects credentials separately for each PR, including Git fetches, without switching the terminal’s active account. Settings stay in your private `~/.glassbox/config.json`; tokens remain managed by `gh`. Queued comments keep their original publishing identity and are held if you switch accounts.
+Sign in to each account with `gh auth login`, then open **Settings → GitHub**. Choose your default GitHub account and add organization → account exceptions. rev selects credentials separately for each PR, including Git fetches, without switching the terminal’s active account. Settings stay in your private `~/.glassbox/config.json`; tokens remain managed by `gh`. Queued comments keep their original publishing identity and are held if you switch accounts.
 
-Existing local organization mappings migrate from `~/.glassbox/workspace-config.json` when you save Profile. For faster imports, that local file can still map repositories to existing checkouts:
+Existing local organization mappings migrate from `~/.glassbox/workspace-config.json` when you save GitHub settings. For faster imports, that local file can still map repositories to existing checkouts:
 
 ```json
 {
@@ -50,25 +50,17 @@ Existing local organization mappings migrate from `~/.glassbox/workspace-config.
 }
 ```
 
-**PR links on macOS:** Profile also contains **Open PR links in rev**, enabled by default. On first desktop launch, approve macOS’s request to use **rev Links** as the default browser. It is a small URL router: direct GitHub PR links from Slack or other apps go to rev; other web links go to your previous browser. Links opened explicitly from inside rev still go to the browser. Disabling the setting restores your previous browser. If you dismiss the macOS prompt, use **Enable in macOS** in Profile to finish setup. Browser-internal navigation and redirect/tracking links remain in the browser. Requires macOS 12 or later and the desktop build.
+**PR links on macOS:** GitHub also contains **Open PR links in rev**, enabled by default. On first desktop launch, approve macOS’s request to use **rev Links** as the default browser. It is a small URL router: direct GitHub PR links from Slack or other apps go to rev; other web links go to your previous browser. Links opened explicitly from inside rev still go to the browser. Disabling the setting restores your previous browser. If you dismiss the macOS prompt, use **Enable in macOS** in GitHub to finish setup. Browser-internal navigation and redirect/tracking links remain in the browser. Requires macOS 12 or later and the desktop build.
 
-General contains Theme and Share rev. Profile contains GitHub accounts, PR links and optional Slack review reactions. Experimental and My company remain available; Plugins and Updates tabs are hidden. Claude Channel is a separate Claude Code MCP integration, not the Codex chat connection described below.
+General contains Theme and Share rev. GitHub contains account and PR-link routing; Slack contains optional review reactions. Experimental and My company remain available; Plugins and Updates tabs are hidden. Claude Channel is a separate Claude Code MCP integration, not the Codex chat connection described below.
 
 Existing local checkouts can speed up first imports. Every open PR tab refreshes GitHub status, reviewers, CI checks, description and comments in the background every five minutes. **Cmd/Ctrl+R** refreshes immediately and loads new source revisions; background refresh keeps the code snapshot stable while you read. Main-view comments publish to GitHub on every PR. Code comments on your own PRs stay local; code comments on other people’s PRs publish to GitHub. Offline writes retry every five minutes. Disposable managed checkouts expire after two weeks without use or updates, with unpublished work preserved.
 
 ### Slack review reactions
 
-In **Settings → Profile → Slack reactions**, optionally enable **React to PR reviews in Slack**. It is off by default. After GitHub accepts an approval, rev searches accessible Slack messages containing that PR’s link and adds `:stamp-approved:`. Both **Request code change** and **Make explanations more human** add `:request-changes:`. Change either name to an emoji available in your workspace.
+In **Settings → Slack**, choose **Slack app (user OAuth token)** or **Claude Code (Slack plugin)**. Enable **React to PR reviews in Slack**, customize the approval/change-request emoji and test a reaction on a pasted Slack message link. Reactions are disabled by default; testing adds a real reaction and shows a confirmation only after Slack accepts it.
 
-Connect once with a Slack **user OAuth token**:
-
-1. Create or select your app in [Slack app settings](https://api.slack.com/apps).
-2. Under **OAuth & Permissions → User Token Scopes**, add [`search:read`](https://docs.slack.dev/reference/methods/search.messages/) and [`reactions:write`](https://docs.slack.dev/reference/methods/reactions.add/), then install/reinstall the app into your workspace. Your workspace may require approval.
-3. Copy the **User OAuth Token** (`xoxp-…`) into rev’s password field, choose the emoji, enable the option and save. Use a user token so reactions appear as you; bot tokens do not support this search workflow.
-
-Credentials stay in your system keychain, not config files, exports or Git. Preferences and the connected workspace/user labels stay in local global settings. Linux requires a working Secret Service keyring and `secret-tool`; no plaintext credential fallback is used. **Disconnect Slack** disables the feature and removes the token.
-
-Reactions run in the background without delaying GitHub reviews. rev checks exact links, follows Slack’s search pages, avoids duplicate reactions and respects rate limits. Only messages returned by Slack search can receive reactions; workspace access and Slack indexing/search limits still apply. No new Slack messages are posted and existing reactions are not removed. This feature does not poll Slack or backfill old reviews when enabled. A failed job offers **Retry Slack** under the PR status, without resubmitting your GitHub review. Closing the tab, changing accounts or saving Slack settings cancels unfinished reactions; reactions already sent remain in Slack.
+See [SLACK.md](SLACK.md) for both setup paths, permissions, privacy and troubleshooting. GitHub reviews stay successful even if a Slack reaction fails; **Retry Slack** retries only Slack.
 
 ### Deployment status
 

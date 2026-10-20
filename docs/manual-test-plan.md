@@ -277,12 +277,12 @@ Automated coverage: ownership rejection before GitHub writes, raw Markdown edits
 
 ## GitHub accounts and macOS PR links
 
-- General shows only Theme and Share rev; Profile contains account/organization rows and PR links. Plugins and Updates are absent; Experimental/company controls remain. Change the default and organization override, close/reopen Settings, and verify persistence. Invalid/missing logins must show an error. The terminal’s active `gh` account stays unchanged.
+- General shows only Theme and Share rev; GitHub contains account/organization rows and PR links. Plugins and Updates are absent; Experimental/company controls remain. Change the default and organization override, close/reopen Settings, and verify persistence. Invalid/missing logins must show an error. The terminal’s active `gh` account stays unchanged.
 - Queue a public comment offline, change its account mapping, and reconnect: it must remain queued under the original identity, never publish as the new user. Existing private comments stay local. Switch back to release the queued comment. Verify viewer permissions refresh after mapping changes without unloading code.
-- On macOS approve rev Links as default browser. Click a direct PR link in another app: it opens/selects that PR in rev. Non-PR links and explicit browser links from rev use the previous browser. Decline approval: Profile reports pending and offers Enable in macOS. Disable: restore the old browser; if the OS refuses restoration, links still forward to that browser while the preference is off.
+- On macOS approve rev Links as default browser. Click a direct PR link in another app: it opens/selects that PR in rev. Non-PR links and explicit browser links from rev use the previous browser. Decline approval: GitHub reports pending and offers Enable in macOS. Disable: restore the old browser; if the OS refuses restoration, links still forward to that browser while the preference is off.
 - Quit rev and open a PR link: the existing workspace and comments return, and the selected PR opens. The click must not attach an unrelated Codex chat. Test a URL with /files, query and fragment, and reject lookalike domains, user-info URLs and invalid PR numbers. Browser-internal navigation and redirects remain in the browser.
 
-Automated coverage includes account selection/migration/validation, simultaneous credentials, stale requests, queued publishing identity, Profile controls and async lifecycle, native compilation and synthetic URL matching. OS consent and external-app clicks remain manual under the no-UI-automation preference.
+Automated coverage includes account selection/migration/validation, simultaneous credentials, stale requests, queued publishing identity, GitHub controls and async lifecycle, native compilation and synthetic URL matching. OS consent and external-app clicks remain manual under the no-UI-automation preference.
 
 ## Codex connection checkbox
 
@@ -302,7 +302,7 @@ Automated coverage includes accepted/failed review transitions, metadata races a
 
 ## Optional Slack review reactions
 
-- Profile defaults off with `stamp-approved` / `request-changes`; opening Settings or refreshing PRs never searches Slack. Connect a test workspace user token, customize both names and save. The token must not appear in API responses, global config or exports. Disconnect removes it from the system keychain and disables reactions.
+- Slack defaults off with `stamp-approved` / `request-changes`; opening Settings or refreshing PRs never searches Slack. Connect a test workspace user token, customize both names and save. The token must not appear in API responses, global config or exports. Disconnect removes it from the system keychain and disables reactions.
 - In a disposable Slack workspace, link a test PR in several messages (including a thread and a `/files` URL); include a different PR whose number shares the prefix. Approve: only the correct messages receive the approval emoji. Both change-request actions use the other emoji. GitHub success remains immediate even when Slack is unavailable or an emoji is missing. Retry Slack adds missing reactions without a second GitHub review.
 - Close the tab, change accounts or disable the setting while work is pending: no further reactions. Already-sent reactions stay. Restart during a job: show a retryable interruption, do not resend automatically.
 
@@ -316,3 +316,11 @@ Automated coverage uses synthetic data for exact/misleading links, zero/filtered
 Automated coverage checks source mapping for repeated text, links/definitions/images, hidden HTML, entities, code, tables, nested blocks, UTF-16 offsets, empty input and bounded fallback; synthetic geometry checks caret/scroll placement and late-layout guards. Pixel-level UI verification remains manual under the no-browser-automation preference.
 
 - Click outside an unchanged description editor: return to the rendered description with no save controls. Change text and click outside: render that draft, retaining Save/Cancel without publishing. Reopen at a clicked word, switch PRs and return, and verify the draft survives. Save publishes; Cancel discards. Clicking inside the textarea or on Save/Cancel must not interfere.
+
+## Slack connections and test control
+
+- Open GitHub and Slack independently; account routing stays under GitHub. Slack's radio choices are exclusive, hide the token for Claude and link to `SLACK.md`. Select each provider, save, close and reopen. Existing token preferences migrate without enabling reactions.
+- Enable reactions, paste a Slack message permalink and test. Verify one configured approval reaction on that message and a check with confirmation below the input. Test an unavailable emoji, malformed link, inaccessible message and disconnected Claude; none may show success. Change the URL/provider/emoji and verify the old success disappears. Repeated clicks while pending must not create concurrent tests; late responses after dialog closure must not update a reopened dialog.
+- Claude: authenticate the official plugin using normal OAuth, verify model-service access, then test. Confirm no conversation resumes or file/shell tools run. A timeout must be visible and leave GitHub review state unchanged.
+
+Automated coverage exercises synthetic API receipts, invalid URLs, exact-target guards, provider switching, settings isolation, pagination, failure and stale UI sequences. Real reaction writes require an explicitly chosen test message; browser automation remains excluded by user preference.

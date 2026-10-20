@@ -133,7 +133,7 @@ fi
 # required by the channel server (dist/channel.js); @preact/signals-core is a
 # transitive dep of kerfjs; apple-fm carries the on-device helper binary that its
 # library resolves relative to its own package, so it must stay external.
-for pkg in @electric-sql/pglite hono @hono/node-server @modelcontextprotocol/sdk kerfjs @preact/signals-core apple-fm; do
+for pkg in @anthropic-ai/claude-agent-sdk @electric-sql/pglite hono @hono/node-server @modelcontextprotocol/sdk kerfjs @preact/signals-core apple-fm; do
   dest="$SERVER_DIR/node_modules/$pkg"
   mkdir -p "$(dirname "$dest")"
   cp -R "node_modules/$pkg" "$dest"
