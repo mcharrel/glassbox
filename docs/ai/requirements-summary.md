@@ -1383,3 +1383,5 @@ Description edit mode retains centered width and body typography, starts at the 
 Slack setup is documented in `SLACK.md`, linked from its own settings tab. Select exactly one provider (keychain token or official Claude Code Slack plugin). The enabled-only permalink test saves current settings and sends one actual reaction; success uses verified tool/API receipts, appears below the input, and clears on edits. Claude sessions retain their own authentication and policies, allow only the intended Slack operations, use no file/shell tools or existing chats, and time out visibly.
 
 Accept structured Slack results from Claude's bare MCP content arrays as well as wrapped receipts, including the hosted tool's exact success result for the requested emoji; reject empty, malformed and failed responses without showing success.
+
+Settings tabs align their icon boxes and labels consistently; GitHub and Slack display their brand marks while preserving inactive/selected colors, focus indicators and narrow-window scrolling.

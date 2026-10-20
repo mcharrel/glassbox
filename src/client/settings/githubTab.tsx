@@ -2,7 +2,7 @@ import { delegate, signal } from 'kerfjs';
 import { z } from 'zod';
 
 import { getGitHubAccounts, type GitHubAccountSettings, saveGitHubAccounts } from '../../api/github-accounts.js';
-import { IconUser } from '../../icons.js';
+import { IconGitHub } from '../../icons.js';
 import { asInput, asSelect } from '../dom.js';
 import { getTauriInvoke } from '../tauri.js';
 import { refreshWorkspace } from '../workspace/state.js';
@@ -92,7 +92,7 @@ export function bindGitHubTab(root: HTMLElement): void {
   void delegate(root, 'click', '#pr-link-setup', () => { setLinks(true); });
 }
 export const githubTab: Tab = {
-  id: 'github', label: 'GitHub', icon: <IconUser />,
+  id: 'github', label: 'GitHub', icon: <IconGitHub />,
   render: () => {
     const { accounts, rows, links, saving, linking, error } = state.value;
     const users = (selected: string) => <>

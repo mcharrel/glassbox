@@ -319,6 +319,7 @@ Automated coverage checks source mapping for repeated text, links/definitions/im
 
 ## Slack connections and test control
 
+- Settings tabs share one label baseline and equal icon sizes, including at app zoom levels and in narrow windows. GitHub and Slack show recognizable brand marks, inherit selected/inactive tab colors and retain keyboard focus rings.
 - Open GitHub and Slack independently; account routing stays under GitHub. Slack's radio choices are exclusive, hide the token for Claude and link to `SLACK.md`. Select each provider, save, close and reopen. Existing token preferences migrate without enabling reactions.
 - Enable reactions, paste a Slack message permalink and test. Verify one configured approval reaction on that message and a check with confirmation below the input. Test an unavailable emoji, malformed link, inaccessible message and disconnected Claude; none may show success. Change the URL/provider/emoji and verify the old success disappears. Repeated clicks while pending must not create concurrent tests; late responses after dialog closure must not update a reopened dialog.
 - Claude: authenticate the official plugin using normal OAuth, verify model-service access, then test. Confirm no conversation resumes or file/shell tools run. A timeout must be visible and leave GitHub review state unchanged.

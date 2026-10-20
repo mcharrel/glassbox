@@ -1,7 +1,7 @@
 import { attr, delegate, signal } from 'kerfjs';
 
 import { disconnectSlack, getSlackSettings, saveSlackSettings, type SlackPreferences, type SlackSettings,testSlackReaction } from '../../api/slack-reactions.js';
-import { IconCheck, IconMessageSquareText } from '../../icons.js';
+import { IconCheck, IconSlack } from '../../icons.js';
 import { asInput } from '../dom.js';
 import { showToast } from '../toast.js';
 import type { Tab } from './tabContext.js';
@@ -26,7 +26,7 @@ export function loadSlackReactions(): void {
     if (version === generation) state.value = { ...state.value, error: 'Couldn’t load Slack settings.' };
   }).finally(() => { if (version === generation) loading = false; });
 }
-export const slackTab: Tab = { id: 'slack', label: 'Slack', icon: <IconMessageSquareText />, render: renderSlackReactions };
+export const slackTab: Tab = { id: 'slack', label: 'Slack', icon: <IconSlack />, render: renderSlackReactions };
 export function renderSlackReactions() {
   const { data, token, saving, testing, error, messageUrl, testMessage } = state.value;
   return <>
