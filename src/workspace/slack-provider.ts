@@ -54,7 +54,10 @@ export async function addSlackReaction(settings: SlackPreferences, target: Targe
     return;
   }
   const data = slackToolResult(await claudeSlackCall('slack_add_reaction', { channel_id: target.channel, timestamp: target.timestamp, reaction: emoji }, signal));
-  if (data.ok !== true && data.error !== 'already_reacted') throw new Error('Slack did not confirm the reaction. Check the message before retrying.');
+  // Slack's hosted MCP tool confirms the requested emoji in its result field.
+  const confirmed = data.error === 'already_reacted' || (data.error === undefined &&
+    (data.ok === true || (data.ok === undefined && data.result === `Successfully added :${emoji}: reaction to the message.`)));
+  if (!confirmed) throw new Error('Slack did not confirm the reaction. Check the message before retrying.');
 }
 export async function reactWithSlackProvider(settings: SlackPreferences, prUrl: string, emoji: string, signal: AbortSignal, onProgress: (count: number) => void): Promise<number> {
   if (settings.provider !== 'claude') return reactToPullLinks(token(), prUrl, emoji, signal, onProgress);
