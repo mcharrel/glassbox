@@ -82,10 +82,15 @@ interface DiffViewState {
   hideIdentical: boolean;
 }
 
+function savedWrapLines(): boolean {
+  try { return localStorage.getItem('glassbox.wrapLines') === 'true'; }
+  catch { return false; }
+}
+
 export const diffViewStore = defineStore({
   initial: (): DiffViewState => ({
     diffMode: 'unified',
-    wrapLines: false,
+    wrapLines: savedWrapLines(),
     ignoreWhitespace: false,
     lastImageMode: 'side-by-side',
     sxsOrientation: 'left-right',
@@ -98,6 +103,10 @@ export const diffViewStore = defineStore({
   }),
   actions: (set, get) => ({
     update: (partial: Partial<DiffViewState>) => { set({ ...get(), ...partial }); },
+    setWrapLines: (wrapLines: boolean) => {
+      set({ ...get(), wrapLines });
+      try { localStorage.setItem('glassbox.wrapLines', String(wrapLines)); } catch { /* optional persistence */ }
+    },
     addCollapsedFolder: (path: string) => {
       set({ ...get(), collapsedFolders: new Set([...get().collapsedFolders, path]) });
     },

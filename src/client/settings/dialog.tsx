@@ -23,7 +23,7 @@ import { invalidateGuidedAnalysis } from '../guided.js';
 import { asKeyStorage, asPlatform } from '../narrow.js';
 import { triggerShare } from '../share.js';
 import { invalidateAnalysisCache } from '../sidebar/sortMode.js';
-import { aiStore } from '../stores/index.js';
+import { aiStore, diffViewStore } from '../stores/index.js';
 import { getTauriGlobal } from '../tauri.js';
 import { switchTheme as rawSwitchTheme } from '../themes.js';
 import { CHANNEL_STATUS_POLL_MS, SETTINGS_CONFIG_DEBOUNCE_MS, TOAST_DURATION_MS } from '../timing.js';
@@ -495,6 +495,7 @@ function buildContext(args: {
     guidedEnabled: cur.guidedEnabled,
     guidedTopics: cur.guidedTopics,
     activeThemeId: cur.activeThemeId,
+    wrapLines: diffViewStore.state.value.wrapLines,
     saveConfig: args.actions.saveConfig,
     saveKey: args.actions.saveKey,
     removeKey: args.actions.removeKey,
@@ -540,6 +541,9 @@ function setupDelegates(args: {
   });
 
   // General tab
+  void delegate(overlay, 'change', '#settings-code-lines', (_e, sel) => {
+    diffViewStore.actions.setWrapLines(asSelect(sel).value === 'wrap');
+  });
   void delegate(overlay, 'change', '#settings-theme', (_e, sel) => {
     const id = asSelect(sel).value;
     setUi({ activeThemeId: id });

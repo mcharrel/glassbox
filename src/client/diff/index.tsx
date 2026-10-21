@@ -446,10 +446,21 @@ function setupImageModeEffect(): void {
 // --- Reactive wrap-lines class ---
 
 function setupWrapClassEffect(container: HTMLElement): void {
+  let previous: boolean | undefined;
   effect(() => {
     const wrapLines = diffViewStore.state.value.wrapLines;
+    if (wrapLines === previous) return;
+    previous = wrapLines;
     container.classList.toggle('wrap-lines', wrapLines);
+    container.scrollLeft = 0;
+    container.querySelectorAll<HTMLElement>('.code').forEach(code => { code.scrollLeft = 0; });
+    syncSplitColumnHeights();
   });
+  // Sidebar resizing changes wrapped row heights even without a window resize.
+  const resize = new ResizeObserver(() => {
+    if (diffViewStore.state.peek().wrapLines) syncSplitColumnHeights();
+  });
+  resize.observe(container);
 }
 
 // --- Delegated event handlers (on the diff container root) ---

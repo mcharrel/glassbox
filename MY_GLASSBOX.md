@@ -173,7 +173,7 @@ With shared-server mode enabled locally, rev connects directly to Codex’s Unix
 
 ## Simplified settings and PR link routing
 
-- General keeps Theme and Share rev. Profile replaces experience/language controls with a default GitHub account, organization overrides and PR-link routing. Experimental keeps its controls; My company is unchanged. Plugins and Updates tabs are removed. Existing hidden preferences are retained.
+- General keeps Theme, Long code lines and Share rev. Profile replaces experience/language controls with a default GitHub account, organization overrides and PR-link routing. Experimental keeps its controls; My company is unchanged. Plugins and Updates tabs are removed. Existing hidden preferences are retained.
 - Account mappings stay in local global settings, never project files or exports. Each request and Git fetch selects its own `gh` account without `gh auth switch`. Saving accounts refreshes viewer permissions while retaining tabs and private comments. Queued public comments keep their publishing identity across account changes.
 - On macOS, Open PR links in rev defaults on. The rev Links helper asks macOS to become the default browser once; setup is shown as pending until approved. Direct GitHub PR URLs open in rev, other URLs retain the previous browser, and disabling restores that browser. Explicit browser links inside rev bypass the router. Browser clicks never inherit a Codex chat ID, and cold starts preserve the last review workspace.
 
@@ -192,3 +192,5 @@ With shared-server mode enabled locally, rev connects directly to Codex’s Unix
 - **Paired Slack reactions:** Each review reaction and Settings test adds the configured emoji plus `rev`, deduplicating identical choices. Missing workspace emoji are skipped independently and silently on both connections; other failures retain retry/status behavior. Counts track messages with at least one confirmed reaction, including partial success; no reactions means no completion notification or false test confirmation.
 
 - **PR refresh feedback:** Cmd/Ctrl+R shows a small spinning indicator immediately left of Share for the refresh request and file-list reload. Progress belongs to the PR, survives metadata polling and clears on completion or failure. Share shows “Link copied!” directly below its button for two seconds; preserve it during same-PR header updates and remove it when switching PRs.
+
+- **Long code lines:** General settings lets me choose Scroll horizontally (default) or Wrap lines. The choice applies immediately and persists across PRs and app restarts. Horizontal scrolling moves the unified code pane together; wrapping fits long lines and tokens inside the pane without horizontal code scrolling, preserving indentation and source line numbers.

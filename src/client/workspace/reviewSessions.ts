@@ -71,7 +71,8 @@ export function initReviewSessions(): () => void {
     batch(() => {
       reviewStore.actions.update(session.review);
       aiStore.actions.update(session.ai);
-      diffViewStore.actions.update(session.diff);
+      // Line layout is an app preference, not part of a PR's saved reading state.
+      diffViewStore.actions.update({ ...session.diff, wrapLines: diffViewStore.state.value.wrapLines });
       editFormSignal.value = session.edit;
       reviewLoadState.value = { key: current, status: session.status, error: session.error };
     });

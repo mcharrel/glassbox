@@ -828,11 +828,18 @@
       "tests": [
         "tests/unit/utils/lineTruncate.test.ts",
         "tests/unit/client/highlight-line-length.test.ts",
+        "tests/unit/client/lineWrapping.test.ts",
+        "tests/unit/client/reviewSessions.test.ts",
         "tests/unit/components/diffView.test.ts",
         "tests/e2e/large-file-perf.test.ts",
         "tests/e2e/diff-viewing.test.ts"
       ],
-      "note": "large-line truncation; syntax highlighting applied; wrap+language buttons exist (toggle behavior is a sub-gap)."
+      "transitions": [
+        "scroll -> wrap -> restart -> wrap -> scroll -> restart -> scroll",
+        "change layout -> cached PR -> new PR -> original PR keeps current preference",
+        "unavailable preference storage -> setting still works in memory"
+      ],
+      "note": "Large-line truncation and highlighting; persisted line layout and PR transitions. Visual wrap/scroll behavior is covered by the doc 4.4 manual test plan."
     },
     "4.5": {
       "tests": [

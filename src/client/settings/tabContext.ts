@@ -53,6 +53,7 @@ export interface TabContext {
   guidedEnabled: boolean;
   guidedTopics: Set<string>;
   activeThemeId: string;
+  wrapLines: boolean;
 
   // Cross-tab actions kept for the small number of tabs whose render fn
   // emits inline event handlers (e.g. updates-tab status text). Most tab

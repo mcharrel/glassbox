@@ -29,6 +29,14 @@ function renderGeneralTab(ctx: TabContext): SafeHtml {
         <p className="settings-hint">"(AA)" marks themes that meet the WCAG AA contrast standard everywhere. Other built-in themes replicate a specific palette and may have lower-contrast text.</p>
       </div>
       <div className="settings-section">
+        <label className="settings-label" htmlFor="settings-code-lines">Long code lines</label>
+        <select className="settings-select" id="settings-code-lines">
+          <option value="scroll" selected={!ctx.wrapLines}>Scroll horizontally</option>
+          <option value="wrap" selected={ctx.wrapLines}>Wrap lines</option>
+        </select>
+        <p className="settings-hint">Applies to all files and PRs. Wrapped lines fit the code pane without horizontal scrolling.</p>
+      </div>
+      <div className="settings-section">
         <a className="settings-share-link" id="settings-share-link" href="#">Know someone who'd love this? <strong>Share rev</strong></a>
       </div>
     </>

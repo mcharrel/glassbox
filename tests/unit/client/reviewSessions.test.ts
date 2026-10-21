@@ -8,7 +8,7 @@ vi.mock('../../../src/client/analysisEngine.js', () => ({ stopPolling: vi.fn(), 
 vi.mock('../../../src/client/diff/index.js', () => ({ invalidateDiffCache: vi.fn(), forgetReviewDiff: vi.fn() }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
 vi.stubGlobal('document', { body: { dataset: { reviewId: 'a' } } });
-const { reviewStore, aiStore, editFormSignal } = await import('../../../src/client/stores/index.js');
+const { reviewStore, aiStore, diffViewStore, editFormSignal } = await import('../../../src/client/stores/index.js');
 const { workspace, reviewLoadState, reviewRetry, activeReviewReady } = await import('../../../src/client/workspace/state.js');
 const { initReviewSessions } = await import('../../../src/client/workspace/reviewSessions.js');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -26,6 +26,7 @@ beforeEach(() => {
     addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) });
   vi.stubGlobal('window', { history: { replaceState: vi.fn() } });
   vi.stubGlobal('localStorage', { getItem: vi.fn(() => null) });
+  diffViewStore.actions.update({ wrapLines: false });
   reviewStore.actions.update({ reviewId: 'a', files: [file('a1'), file('a2')], currentFileId: 'a1', hiddenFileIds: new Set() });
   aiStore.actions.update({ fileNotes: { a1: { overview: '', lines: [{ line: 3, content: 'Guide A' }] } }, guidedNotes: {}, narrativeOrder: null });
   editFormSignal.value = null;
@@ -37,6 +38,20 @@ beforeEach(() => {
 afterEach(() => { dispose?.(); vi.unstubAllGlobals(); });
 
 describe('in-memory PR sessions', () => {
+  it('keeps the current line layout when restoring cached or newly loaded PRs', async () => {
+    dispose = initReviewSessions(); await tick();
+    diffViewStore.actions.setWrapLines(true);
+    workspace.value = { ...workspace.value, active: 'b' }; await tick();
+    expect(diffViewStore.state.value.wrapLines).toBe(true);
+    diffViewStore.actions.setWrapLines(false);
+    workspace.value = { ...workspace.value, active: 'a' }; await tick();
+    expect(diffViewStore.state.value.wrapLines).toBe(false);
+    diffViewStore.actions.setWrapLines(true);
+    workspace.value = { tabs: [...workspace.value.tabs, tab('c')], active: 'c' }; await tick();
+    expect(diffViewStore.state.value.wrapLines).toBe(true);
+    workspace.value = { ...workspace.value, active: 'a' }; await tick();
+    expect(diffViewStore.state.value.wrapLines).toBe(true);
+  });
   it('discards a background PR’s cached notes when its fresh review starts', async () => {
     dispose = initReviewSessions(); await tick();
     document.dispatchEvent(new CustomEvent('glassbox-analysis-reset', { detail: { reviewId: 'b', types: ['narrative', 'guided'] } }));

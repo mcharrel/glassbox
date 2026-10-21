@@ -59,7 +59,7 @@ The user's Code/Rendered choice is remembered across file selections.
 
 ### 4.4 Line Wrapping and Display
 
-- **Wrap toggle** — The system shall provide a toggle to enable/disable line wrapping for long lines.
+- **Long code lines** — Settings → General offers Scroll horizontally (default) and Wrap lines. The choice applies immediately to every PR/file and persists across app restarts. Horizontal mode scrolls the unified code pane rather than individual lines. Wrapped mode preserves whitespace and source line numbers, breaks long tokens to fit the available width, and needs no horizontal code scrolling; split columns remain aligned when wrapping or panel width changes. The legacy toolbar toggle shares this preference.
 - **Ignore whitespace toggle** — The system shall provide a toggle to hide whitespace-only changes. When enabled, the diff is regenerated from git with `-w` flag. The setting is persisted across sessions via user preferences.
 - **Syntax highlighting** — Syntax highlighting shall be applied based on auto-detected file language.
 - **Manual language selection** — Users shall be able to manually select a language for syntax highlighting.

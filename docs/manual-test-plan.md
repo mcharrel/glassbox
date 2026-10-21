@@ -332,3 +332,8 @@ Automated coverage exercises synthetic API receipts, invalid URLs, exact-target 
 - Click Share: “Link copied!” appears directly below that button, stays through same-PR metadata updates, then disappears after two seconds. Check narrow sidebar widths and app zoom. Switching PRs removes it, including if the clipboard write finishes late. Clipboard errors remain visible.
 
 Automated coverage: header order, per-PR request lifecycle, polling, duplicate shortcuts, concurrent tab refreshes, failure/retry and clipboard completion races. Native placement and animation remain manual; this workflow does not use browser automation or screenshots.
+
+## Code line layout (doc 4.4)
+
+- General → Long code lines: choose Wrap lines while viewing a file with long statements, indentation, tabs and an unbroken token. All code fits the pane; new visual lines retain the original source line number and change color. Resize the mid panel and confirm split-mode rows stay aligned.
+- Switch to Scroll horizontally: a horizontal gesture/scrollbar moves the unified diff together without individual line scrollers. Comments remain constrained to the pane width. Switch files/PRs, reopen Settings and restart the app; the choice persists. Search and comment navigation still target the correct source lines. Persistence and cached-PR transitions have unit coverage; visual layout remains a manual check.

@@ -40,15 +40,8 @@ export function bindToolbar(): void {
     toolbar.querySelectorAll('[data-diff-mode]').forEach(b => b.classList.toggle('active', b === btn));
   });
 
-  void delegate(toolbar, 'click', '#wrap-toggle', (_e, btn) => {
-    const wrapLines = !diffViewStore.state.value.wrapLines;
-    diffViewStore.actions.update({ wrapLines });
-    asEl(btn).classList.toggle('active', wrapLines);
-    if (!wrapLines) {
-      document.getElementById('diff-container')?.querySelectorAll('.split-row .code, .split-columns .code').forEach(el => {
-        asEl(el).scrollLeft = 0;
-      });
-    }
+  void delegate(toolbar, 'click', '#wrap-toggle', () => {
+    diffViewStore.actions.setWrapLines(!diffViewStore.state.value.wrapLines);
   });
 
   void delegate(toolbar, 'click', '#whitespace-toggle', (_e, btn) => {

@@ -20,9 +20,13 @@ beforeEach(() => {
   bindGitHubTab({} as any);
 });
 afterEach(resetGitHubTab);
-it('keeps General limited to theme and sharing', () => {
-  const result = String(generalTab.render({ activeThemeId: 'dark', themesData: { themes: [{ id: 'dark', name: 'Dark', builtIn: true }] } } as any));
+it('keeps General focused on theme, line layout and sharing', () => {
+  const context = { activeThemeId: 'dark', wrapLines: false, themesData: { themes: [{ id: 'dark', name: 'Dark', builtIn: true }] } };
+  const result = String(generalTab.render(context as any));
   expect(result).toContain('Theme'); expect(result).toContain('Share rev');
+  expect(result).toContain('Long code lines');
+  expect(result).toContain('value="scroll" selected');
+  expect(String(generalTab.render({ ...context, wrapLines: true } as any))).toContain('value="wrap" selected');
   for (const removed of ['App Name', 'difftool', 'Database backups', 'Preserved unreadable data']) expect(result).not.toContain(removed);
 });
 it('shows local account routing and a default-on link preference with honest pending activation', async () => {

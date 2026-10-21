@@ -332,6 +332,7 @@
   .code {
     position: relative;
     flex: 1;
+    min-width: 0;
     padding: 0 12px;
     white-space: pre;
     overflow-x: auto;
@@ -440,10 +441,18 @@
 
 // --- Wrap Mode ---
 
-.wrap-lines .code {
-  white-space: pre-wrap !important;
-  word-break: break-all;
-  overflow-x: visible !important;
+.diff-container:not(.wrap-lines) .diff-table-unified .diff-line {
+  // Let the pane own horizontal scrolling; comments keep the viewport width.
+  width: max-content;
+  min-width: 100%;
+
+  .code { overflow: visible; }
+}
+
+.wrap-lines .diff-line .code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
 }
 
 // --- Find Bar ---

@@ -1370,7 +1370,7 @@ Fresh-install Codex setup: the bundled adapter is installed by Settings → Expe
 
 Only the PR author can edit its description, and only clicking rendered text opens it; whitespace, selections and interactive content are excluded. Verify ownership on the server too. A text file’s first visible visit starts at its first change with up to five preceding lines. Preloading hidden files must not record zero as a visited position; returning to a visited file restores its position, including zero. Explicit search/navigation targets take precedence.
 
-Personal settings keep General theme/sharing, split Profile into GitHub account routing and Slack connections, retain Experimental/company controls and hide Plugins/Updates. Select credentials per PR without changing the terminal account; queued comments must not silently change identity or reveal private history. macOS direct PR links route into rev through a default-on, consent-based URL handler, with honest pending status, previous-browser fallback/restoration and no inherited Codex chat binding.
+Personal settings keep General theme/line layout/sharing, split Profile into GitHub account routing and Slack connections, retain Experimental/company controls and hide Plugins/Updates. Select credentials per PR without changing the terminal account; queued comments must not silently change identity or reveal private history. macOS direct PR links route into rev through a default-on, consent-based URL handler, with honest pending status, previous-browser fallback/restoration and no inherited Codex chat binding.
 
 Disabling the Codex connection pauses forwarding immediately while preserving queued feedback and active chats. Restore only rev-owned startup overrides. Refuse incompatible or conflicting configurations, roll back failed installation, and keep helpers usable if the rev checkout moves. Recheck PR ownership and binding after asynchronous chat lookup.
 
@@ -1387,3 +1387,5 @@ Accept structured Slack results from Claude's bare MCP content arrays as well as
 Settings tabs align their icon boxes and labels consistently; GitHub and Slack display their brand marks while preserving inactive/selected colors, focus indicators and narrow-window scrolling.
 
 Explicit PR refreshes show a per-PR spinner immediately left of Share throughout the request/file-list reload; background snapshots cannot clear it and failures always release it. The Share confirmation (“Link copied!”) appears directly below its button, survives same-PR header updates and disappears after two seconds or switching tabs.
+
+General → Long code lines selects persistent horizontal scrolling (default) or wrapping across every PR, including cached tabs. Unified code scrolls as one pane; wrapped code fits the available width while retaining source line numbers and whitespace. Split row heights resynchronize on layout changes.
