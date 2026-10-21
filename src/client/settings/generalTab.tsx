@@ -31,8 +31,8 @@ function renderGeneralTab(ctx: TabContext): SafeHtml {
       <div className="settings-section">
         <label className="settings-label" htmlFor="settings-code-lines">Long code lines</label>
         <select className="settings-select" id="settings-code-lines">
-          <option value="scroll" selected={!ctx.wrapLines}>Scroll horizontally</option>
           <option value="wrap" selected={ctx.wrapLines}>Wrap lines</option>
+          <option value="scroll" selected={!ctx.wrapLines}>Scroll horizontally</option>
         </select>
         <p className="settings-hint">Applies to all files and PRs. Wrapped lines fit the code pane without horizontal scrolling.</p>
       </div>

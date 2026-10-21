@@ -13,9 +13,9 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('code line layout preference', () => {
-  it('defaults to scrolling, and restores either choice after restarting', async () => {
+  it('defaults to wrapping, and restores either choice after restarting', async () => {
     let { diffViewStore } = await import('../../../src/client/stores/index.js');
-    expect(diffViewStore.state.value.wrapLines).toBe(false);
+    expect(diffViewStore.state.value.wrapLines).toBe(true);
     for (const wrap of [true, false]) {
       diffViewStore.actions.setWrapLines(wrap);
       expect(saved.get('glassbox.wrapLines')).toBe(String(wrap));
@@ -31,14 +31,14 @@ describe('code line layout preference', () => {
       setItem: () => { throw new Error('Unavailable'); },
     });
     const { diffViewStore } = await import('../../../src/client/stores/index.js');
-    expect(diffViewStore.state.value.wrapLines).toBe(false);
-    diffViewStore.actions.setWrapLines(true);
     expect(diffViewStore.state.value.wrapLines).toBe(true);
+    diffViewStore.actions.setWrapLines(false);
+    expect(diffViewStore.state.value.wrapLines).toBe(false);
   });
 
   it('ignores an invalid stored choice', async () => {
     saved.set('glassbox.wrapLines', 'invalid');
     const { diffViewStore } = await import('../../../src/client/stores/index.js');
-    expect(diffViewStore.state.value.wrapLines).toBe(false);
+    expect(diffViewStore.state.value.wrapLines).toBe(true);
   });
 });

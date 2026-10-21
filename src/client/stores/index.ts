@@ -83,8 +83,8 @@ interface DiffViewState {
 }
 
 function savedWrapLines(): boolean {
-  try { return localStorage.getItem('glassbox.wrapLines') === 'true'; }
-  catch { return false; }
+  try { return localStorage.getItem('glassbox.wrapLines') !== 'false'; }
+  catch { return true; }
 }
 
 export const diffViewStore = defineStore({

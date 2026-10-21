@@ -1388,4 +1388,4 @@ Settings tabs align their icon boxes and labels consistently; GitHub and Slack d
 
 Explicit PR refreshes show a per-PR spinner immediately left of Share throughout the request/file-list reload; background snapshots cannot clear it and failures always release it. The Share confirmation (“Link copied!”) appears directly below its button, survives same-PR header updates and disappears after two seconds or switching tabs.
 
-General → Long code lines selects persistent horizontal scrolling (default) or wrapping across every PR, including cached tabs. Unified code scrolls as one pane; wrapped code fits the available width while retaining source line numbers and whitespace. Split row heights resynchronize on layout changes.
+General → Long code lines selects persistent wrapping (default) or horizontal scrolling across every PR, including cached tabs. Unified code scrolls as one pane; wrapped code fits the available width while retaining source line numbers and whitespace. Split row heights resynchronize on layout changes.

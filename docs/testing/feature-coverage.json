@@ -835,7 +835,7 @@
         "tests/e2e/diff-viewing.test.ts"
       ],
       "transitions": [
-        "scroll -> wrap -> restart -> wrap -> scroll -> restart -> scroll",
+        "default wrap -> restart -> wrap -> scroll -> restart -> scroll",
         "change layout -> cached PR -> new PR -> original PR keeps current preference",
         "unavailable preference storage -> setting still works in memory"
       ],
