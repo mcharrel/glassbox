@@ -5,7 +5,7 @@ vi.mock('../../../src/api/workspace.js', async original => ({ ...await original<
 import { pullInfo } from '../workspace/fixtures.js';
 vi.mock('../../../src/client/diff/index.js', () => ({ invalidateDiffCache: vi.fn() }));
 vi.mock('../../../src/client/sidebar/fileTree.js', () => ({ loadFiles: vi.fn() }));
-vi.mock('../../../src/client/workspace/state.js', () => ({ activeTab: () => mocks.tab, addingPull: { value: false } }));
+vi.mock('../../../src/client/workspace/state.js', () => ({ activeTab: () => mocks.tab, addingPull: { value: false }, refreshingPulls: { value: new Set() } }));
 import { codeFocusTab, initSourceRefresh, sourceRefreshButton } from '../../../src/client/workspace/sourceRefresh.js';
 const tab = () => PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' },
   reviewId: 'review', repoRoot: '/checkout', info: pullInfo(), view: 'file', reviewedHead: 'previous',

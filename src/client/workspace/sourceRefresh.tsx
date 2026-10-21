@@ -3,7 +3,7 @@ import { delegate, effect, mount } from 'kerfjs';
 import { type PullTab, reportVisibility } from '../../api/workspace.js';
 import { invalidateDiffCache } from '../diff/index.js';
 import { loadFiles } from '../sidebar/fileTree.js';
-import { activeReviewReady, activeTab, addingPull, mutate, reviewRetry, workspace } from './state.js';
+import { activeReviewReady, activeTab, addingPull, mutate, refreshingPulls, reviewRetry } from './state.js';
 
 export function codeFocusTab(tab: PullTab | undefined, visible: boolean, adding: boolean): string | null {
   return visible && !adding && tab?.view === 'file' ? tab.key : null;
@@ -11,7 +11,7 @@ export function codeFocusTab(tab: PullTab | undefined, visible: boolean, adding:
 export function sourceRefreshButton(tab?: PullTab) {
   return tab?.view === 'file' && tab.sourceRefreshRequested !== undefined && tab.info !== null
     && tab.reviewedHead !== tab.info.headRefOid
-    ? <button className="source-refresh" data-workspace="refresh" disabled={tab.loading}>Refresh</button> : null;
+    ? <button className="source-refresh" data-workspace="refresh" disabled={tab.loading || refreshingPulls.value.has(tab.key)}>Refresh</button> : null;
 }
 
 export function initSourceRefresh(): void {
@@ -41,19 +41,18 @@ export function initSourceRefresh(): void {
 /** The button and Cmd/Ctrl+R share the same explicit refresh path. */
 export async function refreshActivePull(): Promise<void> {
   const tab = activeTab();
-  if (!tab || tab.loading) return;
-  tab.loading = true;
-  workspace.value = { ...workspace.value };
-  const ok = await mutate({ op: 'refresh', key: tab.key });
-  if (!ok) {
-    tab.loading = false;
-    workspace.value = { ...workspace.value };
-    return;
-  }
-  if (activeTab()?.key !== tab.key) return;
-  if (activeReviewReady()) await loadFiles();
-  if (activeTab()?.key === tab.key) {
-    reviewRetry.value++;
-    if (activeReviewReady()) invalidateDiffCache();
+  if (!tab || tab.loading || refreshingPulls.value.has(tab.key)) return;
+  // Keep local progress independent of snapshots received while the request is pending.
+  refreshingPulls.value = new Set([...refreshingPulls.value, tab.key]);
+  try {
+    const ok = await mutate({ op: 'refresh', key: tab.key });
+    if (!ok || activeTab()?.key !== tab.key) return;
+    if (activeReviewReady()) await loadFiles();
+    if (activeTab()?.key === tab.key) {
+      reviewRetry.value++;
+      if (activeReviewReady()) invalidateDiffCache();
+    }
+  } finally {
+    refreshingPulls.value = new Set([...refreshingPulls.value].filter(key => key !== tab.key));
   }
 }

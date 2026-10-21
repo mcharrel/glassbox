@@ -17,10 +17,10 @@ import { conversation as conversationHtml } from './conversation.js';
 import { clickedDescriptionText } from './description.js';
 import { descriptionEditOffset, focusDescriptionEditor, previewDescriptionEditor, resizeDescriptionEditor } from './descriptionEditor.js';
 import { startFreshReview } from './freshReview.js';
-import { pullHeader } from './header.js';
+import { copyPullLink, pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
 import { initSourceRefresh, refreshActivePull } from './sourceRefresh.js';
-import { activeReviewReady, activeTab, addingPull, mutate, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
+import { activeReviewReady, activeTab, addingPull, mutate, refreshingPulls, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads } from './threads.js';
 
 function lifecycle(tab: PullTab): string {
@@ -101,14 +101,6 @@ function switchTo(tab: PullTab): void {
   addingPull.value = false;
   workspace.value = { ...workspace.value, active: tab.key };
   void mutate({ op: 'select', key: tab.key });
-}
-async function copyPullLink(tab: PullTab): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(tab.ref.url);
-    showToast('Link copied to clipboard');
-  } catch {
-    showToast('Couldn’t copy the PR link. Please try again.');
-  }
 }
 export function initWorkspace(): void {
   initSourceRefresh();
@@ -231,7 +223,7 @@ export function initWorkspace(): void {
       mountedHeader = true;
       mount(oldHeader, () => {
         const current = activeTab();
-        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null) : null}</div>;
+        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null, refreshingPulls.value.has(current.key)) : null}</div>;
       });
     }
 
@@ -411,7 +403,7 @@ export function initWorkspace(): void {
     }
     else if (action === 'refresh') void refreshActivePull().catch((error: unknown) => { showToast(String(error)); });
     else if (action === 'settings') void import('../settings/dialog.js').then((m) => { m.showSettingsDialog(); });
-    else if (action === 'share' && tab && !addingPull.value) void copyPullLink(tab);
+    else if (action === 'share' && tab && !addingPull.value) void copyPullLink(tab, element);
     else if (action === 'title' && tab) editTitle(tab);
     else if (action === 'close' && tab) void mutate({ op: 'close', key: tab.key });
     else if (action === 'retry-slack' && tab) void mutate({ op: 'retry-slack', key: tab.key });

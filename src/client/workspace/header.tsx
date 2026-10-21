@@ -1,8 +1,19 @@
 import { isPullAuthor, type PullTab, viewerReviewState } from '../../api/workspace.js';
 import { IconShareApple, IconX } from '../../icons.js';
+import { showToast } from '../toast.js';
+
+export async function copyPullLink(tab: PullTab, button: Element): Promise<void> {
+  const feedback = button.closest('.pr-share')?.querySelector<HTMLElement>('.pr-share-feedback');
+  try {
+    await navigator.clipboard.writeText(tab.ref.url);
+    if (feedback?.isConnected === true) showToast('Link copied!', { container: feedback, className: 'pr-share-toast' });
+  } catch {
+    showToast('Couldn’t copy the PR link. Please try again.');
+  }
+}
 
 /** Shared Main/File header; unavailable totals stay pending instead of looking empty. */
-export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null) {
+export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null, refreshing = false) {
   const info = tab.info;
   const own = isPullAuthor(tab);
   const selected = own && info ? (info.state === 'CLOSED' ? 'close' : info.isDraft ? 'draft' : 'ready') : '';
@@ -17,7 +28,11 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
       <h2 data-workspace={own ? 'title' : undefined} title={own ? 'Click to edit PR title' : undefined}>
         {info?.title ?? `${tab.ref.owner}/${tab.ref.repo} #${tab.ref.number}`}
       </h2>
-      <button className="btn btn-xs" data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link"><IconShareApple /></button>
+      {(refreshing || tab.loading) && <span className="analysis-spinner analysis-spinner-sm pr-refresh-indicator" role="status" aria-label="Refreshing PR" title="Refreshing PR"></span>}
+      <div className="pr-share" data-key={`share:${tab.key}`}>
+        <button className="btn btn-xs" data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link"><IconShareApple /></button>
+        <div className="pr-share-feedback" data-morph-skip-children="" aria-live="polite" aria-atomic="true"></div>
+      </div>
       <button className="btn btn-xs" data-workspace="close" title="Remove PR tab"><IconX /></button>
     </div>
     <div className="pr-counts">

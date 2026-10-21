@@ -325,3 +325,10 @@ Automated coverage checks source mapping for repeated text, links/definitions/im
 - Claude: authenticate the official plugin using normal OAuth, verify model-service access, then test. Confirm no conversation resumes or file/shell tools run. A timeout must be visible and leave GitHub review state unchanged.
 
 Automated coverage exercises synthetic API receipts, invalid URLs, exact-target guards, provider switching, settings isolation, pagination, failure and stale UI sequences. Real reaction writes require an explicitly chosen test message; browser automation remains excluded by user preference.
+
+## PR title refresh and Share feedback
+
+- In Main and File views, press Cmd/Ctrl+R: a small spinner appears immediately left of Share and lasts through refresh/file-list reload. Repeating the shortcut does not start a second request. Switch tabs during a refresh: only the refreshing PR shows progress, and failure releases it for retry.
+- Click Share: “Link copied!” appears directly below that button, stays through same-PR metadata updates, then disappears after two seconds. Check narrow sidebar widths and app zoom. Switching PRs removes it, including if the clipboard write finishes late. Clipboard errors remain visible.
+
+Automated coverage: header order, per-PR request lifecycle, polling, duplicate shortcuts, concurrent tab refreshes, failure/retry and clipboard completion races. Native placement and animation remain manual; this workflow does not use browser automation or screenshots.

@@ -138,6 +138,23 @@
 .pr-heading .btn {
   flex-shrink: 0;
 }
+.pr-refresh-indicator { margin: 4px; }
+.pr-share { position: relative; display: flex; flex-shrink: 0; }
+.pr-share-toast {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 13px;
+  z-index: 10;
+  pointer-events: none;
+  animation: toast-fade 2s ease-out forwards;
+}
 .pr-title-input {
   flex: 1;
   width: 0;

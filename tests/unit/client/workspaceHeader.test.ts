@@ -1,6 +1,9 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { PullTabSchema } from '../../../src/api/workspace.js';
-import { pullHeader } from '../../../src/client/workspace/header.js';
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('../../../src/client/toast.js', () => ({ showToast: toast }));
+import { copyPullLink, pullHeader } from '../../../src/client/workspace/header.js';
+afterEach(() => { vi.unstubAllGlobals(); toast.mockClear(); });
 
 function tab(base = 'main', author = 'me', state = 'OPEN', draft = true) {
   return PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' },
@@ -55,4 +58,31 @@ it('separates Slack failure and retry from the accepted GitHub review', () => {
   const html = String(pullHeader(t, null));
   expect(html).toContain('selected disabled>Approved');
   expect(html).toContain('Slack unavailable'); expect(html).toContain('data-workspace="retry-slack"');
+});
+
+it('places refresh progress before Share, with Close still immediately after Share', () => {
+  for (const refreshing of [false, true]) {
+    const t = tab(); t.loading = !refreshing;
+    const html = String(pullHeader(t, null, refreshing));
+    expect(html.indexOf('aria-label="Refreshing PR"')).toBeLessThan(html.indexOf('data-workspace="share"'));
+    expect(html.indexOf('data-workspace="share"')).toBeLessThan(html.indexOf('data-workspace="close"'));
+  }
+  expect(String(pullHeader(tab(), null))).not.toContain('aria-label="Refreshing PR"');
+});
+it('anchors the copy confirmation to the clicked PR and does not show it after switching away', async () => {
+  const feedback = { isConnected: true };
+  const button = { closest: () => ({ querySelector: () => feedback }) } as unknown as Element;
+  let finish!: () => void;
+  const copy = vi.fn().mockResolvedValueOnce(undefined).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
+  const t = tab(); t.ref.url = 'https://github.com/example/project/pull/1';
+  await copyPullLink(t, button);
+  expect(copy).toHaveBeenCalledWith(t.ref.url);
+  expect(toast).toHaveBeenCalledExactlyOnceWith('Link copied!', { container: feedback, className: 'pr-share-toast' });
+  const pending = copyPullLink(t, button);
+  feedback.isConnected = false; finish(); await pending;
+  expect(toast).toHaveBeenCalledOnce();
+  const html = String(pullHeader(t, null));
+  expect(html).toContain('data-key="share:example/project#1"');
+  expect(html).toContain('data-morph-skip-children=""');
 });

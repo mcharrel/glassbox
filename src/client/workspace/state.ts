@@ -12,6 +12,7 @@ import { showToast } from '../toast.js';
 export const workspace = signal<Workspace>({ tabs: [], active: null });
 export const addingPull = signal(false);
 export const workspaceLoaded = signal(false);
+export const refreshingPulls = signal<ReadonlySet<string>>(new Set());
 export const reviewRetry = signal(0);
 export const reviewSessionKey = (tab: PullTab): string => `${tab.key}:${tab.reviewId ?? ''}:${tab.reviewedBase}:${tab.reviewedHead}${tab.checkoutEvicted ? ':expired' : ''}`;
 export const reviewLoadState = signal<{ key: string; status: 'loading' | 'ready' | 'error'; error: string | null }>({
