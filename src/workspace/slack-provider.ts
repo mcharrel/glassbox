@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { slackMessageTarget, type SlackPreferences } from '../api/slack-reactions.js';
-import { containsPullLink, reactToPullLinks, slackCall } from './slack-api.js';
+import { addReactionPair, containsPullLink, isMissingSlackEmojiFailure, MissingSlackEmojiError, reactToPullLinks, slackCall } from './slack-api.js';
 import { claudeSlackCall } from './slack-claude.js';
 import { slackToken } from './slack-settings.js';
 
@@ -11,13 +11,18 @@ const record = z.record(z.string(), z.unknown());
 export function slackToolResult(value: unknown): Record<string, unknown> {
   // Claude's PostToolUse hook returns MCP content blocks without their envelope.
   let data: Record<string, unknown> = Array.isArray(value) ? { content: value } : record.parse(value);
-  if (data.isError === true) throw new Error('Slack rejected this request. Check your connection and emoji in Settings → Slack.');
+  const isError = data.isError === true;
   if (Array.isArray(data.content)) {
     const blocks = z.array(z.object({ type: z.string(), text: z.string().optional() })).parse(data.content);
     const text = blocks.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n');
-    try { data = record.parse(JSON.parse(text)); } catch { throw new Error('Slack returned an unrecognized response. Check your Claude Slack plugin version.'); }
+    try { data = record.parse(JSON.parse(text)); }
+    catch {
+      if (isMissingSlackEmojiFailure(text)) throw new MissingSlackEmojiError();
+      throw new Error('Slack returned an unrecognized response. Check your Claude Slack plugin version.');
+    }
   }
-  if (data.isError === true || (data.ok === false && data.error !== 'already_reacted')) throw new Error('Slack rejected this request. Check your connection, message access and emoji in Settings → Slack.');
+  if (data.error === 'invalid_name' && data.ok !== true && data.result === undefined) throw new MissingSlackEmojiError();
+  if (isError || data.isError === true || (data.ok === false && data.error !== 'already_reacted')) throw new Error('Slack rejected this request. Check your connection, message access and emoji in Settings → Slack.');
   return data;
 }
 export function claudeSearchPage(value: unknown, prUrl: string): { matches: Target[]; cursor?: string } {
@@ -59,6 +64,9 @@ export async function addSlackReaction(settings: SlackPreferences, target: Targe
     (data.ok === true || (data.ok === undefined && data.result === `Successfully added :${emoji}: reaction to the message.`)));
   if (!confirmed) throw new Error('Slack did not confirm the reaction. Check the message before retrying.');
 }
+export function addSlackReactions(settings: SlackPreferences, target: Target, emoji: string, signal: AbortSignal, onReacted?: () => void): Promise<string[]> {
+  return addReactionPair(emoji, signal, name => addSlackReaction(settings, target, name, signal), onReacted);
+}
 export async function reactWithSlackProvider(settings: SlackPreferences, prUrl: string, emoji: string, signal: AbortSignal, onProgress: (count: number) => void): Promise<number> {
   if (settings.provider !== 'claude') return reactToPullLinks(token(), prUrl, emoji, signal, onProgress);
   const seen = new Set<string>();
@@ -74,8 +82,8 @@ export async function reactWithSlackProvider(settings: SlackPreferences, prUrl: 
     for (const match of result.matches) {
       const key = `${match.channel}:${match.timestamp}`;
       if (seen.has(key)) continue;
-      await addSlackReaction(settings, match, emoji, signal);
-      seen.add(key); onProgress(++count);
+      seen.add(key);
+      await addSlackReactions(settings, match, emoji, signal, () => { onProgress(++count); });
     }
     if (result.cursor === undefined) return count;
     if (cursors.has(result.cursor)) throw new Error('Slack repeated a search page. Retry the remaining reactions later.');

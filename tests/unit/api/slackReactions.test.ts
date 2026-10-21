@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ get: vi.fn(), save: vi.fn(), disconnect: vi.fn(), cancel: vi.fn(), react: vi.fn() }));
 vi.mock('../../../src/workspace/slack-settings.js', () => ({ slackSettings: mocks.get, saveSlackSettings: mocks.save, disconnectSlack: mocks.disconnect }));
 vi.mock('../../../src/workspace/slack-reactions.js', () => ({ cancelSlackReactions: mocks.cancel }));
-vi.mock('../../../src/workspace/slack-provider.js', () => ({ addSlackReaction: mocks.react }));
+vi.mock('../../../src/workspace/slack-provider.js', () => ({ addSlackReactions: mocks.react }));
 import { slackReactionsRoutes } from '../../../src/routes/api/slack-reactions.js';
 const app = new Hono().route('/', slackReactionsRoutes);
 const settings = { provider: 'token', enabled: false, approvedEmoji: 'stamp-approved', changesEmoji: 'request-changes' };
@@ -48,7 +48,7 @@ it('confirms an actual reaction on the permalink target and serializes concurren
   await vi.waitFor(() => expect(mocks.react).toHaveBeenCalledOnce());
   expect((await testRequest(testBody())).status).toBe(409);
   expect(mocks.react.mock.calls[0][1]).toEqual({ channel: 'C123', timestamp: '1790000000.123456' });
-  finish(); const response = await first;
+  finish(['stamp-approved', 'rev']); const response = await first;
   expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toBe('no-store');
   expect(await response.json()).toMatchObject({ message: expect.stringContaining('Connection working') });
 });
@@ -61,4 +61,16 @@ it('shows failures instead of successful tests and cancels when settings change'
   const signal = mocks.react.mock.calls[1][3];
   await app.request('/slack/reactions', { method: 'DELETE' });
   expect(signal.aborted).toBe(true); finish(); expect((await pending).status).toBe(400);
+});
+
+it('silently completes a test without a false confirmation when neither emoji exists', async () => {
+  mocks.react.mockResolvedValueOnce([]);
+  const response = await testRequest(testBody());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ message: '' });
+});
+it('confirms only the emoji actually added', async () => {
+  mocks.react.mockResolvedValueOnce(['rev']);
+  const response = await testRequest(testBody());
+  expect(await response.json()).toMatchObject({ message: 'Connection working — :rev: is on the Slack message.' });
 });

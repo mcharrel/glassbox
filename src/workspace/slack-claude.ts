@@ -6,6 +6,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { type HookCallback, type Options, query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
+import { isMissingSlackEmojiFailure } from './slack-api.js';
+
 const SERVER = 'plugin:slack:slack';
 const PREFIX = 'mcp__plugin_slack_slack__';
 const HELP = 'Check the Slack plugin in Claude Code, then retry in Settings → Slack. See Slack setup instructions.';
@@ -98,6 +100,10 @@ export async function claudeSlackCall(tool: string, args: Record<string, unknown
   };
   const after: HookCallback = input => {
     if (input.hook_event_name === 'PostToolUse' && exactSlackCall(input.tool_name, input.tool_input, tool, args)) { response = input.tool_response; received = true; }
+    if (input.hook_event_name === 'PostToolUseFailure' && invoked && input.is_interrupt !== true && tool === 'slack_add_reaction' &&
+      exactSlackCall(input.tool_name, input.tool_input, tool, args) && isMissingSlackEmojiFailure(input.error)) {
+      response = { ok: false, error: 'invalid_name' }; received = true;
+    }
     return Promise.resolve({});
   };
   try {
@@ -107,7 +113,7 @@ export async function claudeSlackCall(tool: string, args: Record<string, unknown
       for await (const message of client) { if (received || message.type === 'result') break; }
       if (!received) throw new Error(HELP);
       return response;
-    }, { PreToolUse: [{ hooks: [before] }], PostToolUse: [{ hooks: [after] }] }, ['ToolSearch', `${PREFIX}${tool}`]);
+    }, { PreToolUse: [{ hooks: [before] }], PostToolUse: [{ hooks: [after] }], PostToolUseFailure: [{ hooks: [after] }] }, ['ToolSearch', `${PREFIX}${tool}`]);
   } catch {
     signal.throwIfAborted();
     throw new Error(bounded.aborted ? 'Claude did not finish the Slack request in time. Check Claude Code, then retry.' : HELP);

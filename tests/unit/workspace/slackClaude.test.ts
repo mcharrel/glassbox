@@ -1,11 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ query: vi.fn(), status: vi.fn(), close: vi.fn(), mode: 'success', name: 'slack_add_reaction', input: { channel_id: 'C12345', timestamp: '1790000000.123456', reaction: 'approved' } as Record<string, unknown> }));
+const mocks = vi.hoisted(() => ({ query: vi.fn(), status: vi.fn(), close: vi.fn(), mode: 'success', failure: 'invalid_name', interrupted: false, wrongTarget: false, name: 'slack_add_reaction', input: { channel_id: 'C12345', timestamp: '1790000000.123456', reaction: 'approved' } as Record<string, unknown> }));
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: mocks.query }));
 vi.mock('node:fs', async original => ({ ...await original<any>(), accessSync: vi.fn() }));
 import { checkClaudeSlack, claudeSlackCall, exactSlackCall } from '../../../src/workspace/slack-claude.js';
 const prefix = 'mcp__plugin_slack_slack__';
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.mode = 'success';
+  vi.clearAllMocks(); mocks.mode = 'success'; mocks.failure = 'invalid_name'; mocks.interrupted = false; mocks.wrongTarget = false;
   mocks.status.mockResolvedValue([{ name: 'plugin:slack:slack', status: 'connected', tools: [{ name: 'slack_add_reaction' }, { name: 'slack_search_public_and_private' }] }]);
   mocks.query.mockImplementation(({ options, prompt }) => ({
     mcpServerStatus: mocks.status, close: mocks.close,
@@ -21,6 +21,7 @@ beforeEach(() => {
         expect((await hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo nope' } })).hookSpecificOutput.permissionDecision).toBe('deny');
         expect((await hook({ hook_event_name: 'PreToolUse', tool_name: name, tool_input: mocks.input })).hookSpecificOutput.permissionDecision).toBe('deny');
         if (mocks.mode === 'success') await options.hooks.PostToolUse[0].hooks[0]({ hook_event_name: 'PostToolUse', tool_name: name, tool_input: mocks.input, tool_response: { ok: true } });
+        if (mocks.mode === 'failure') await options.hooks.PostToolUseFailure[0].hooks[0]({ hook_event_name: 'PostToolUseFailure', tool_name: name, tool_input: mocks.wrongTarget ? { ...mocks.input, channel_id: 'COTHER' } : mocks.input, error: mocks.failure, is_interrupt: mocks.interrupted });
         yield { type: 'result', result: 'I added the reaction' }; break;
       }
     },
@@ -53,4 +54,17 @@ it('does not start a canceled request or leak subprocess error details', async (
   mocks.status.mockRejectedValue(new Error('private connection details'));
   await expect(claudeSlackCall(mocks.name, mocks.input, new AbortController().signal)).rejects.toThrow('Check the Slack plugin');
   expect(mocks.close).toHaveBeenCalledOnce();
+});
+
+it('passes confirmed missing-emoji failures from the exact tool through as a structured receipt', async () => {
+  mocks.mode = 'failure'; mocks.failure = 'Error adding reaction: invalid_name';
+  await expect(claudeSlackCall(mocks.name, mocks.input, new AbortController().signal)).resolves.toEqual({ ok: false, error: 'invalid_name' });
+  expect(mocks.close).toHaveBeenCalledOnce();
+});
+it.each(['wrong target', 'interruption', 'permission', 'untrusted prose'])('does not mistake %s for a missing emoji', async scenario => {
+  mocks.mode = 'failure';
+  mocks.wrongTarget = scenario === 'wrong target'; mocks.interrupted = scenario === 'interruption';
+  if (scenario === 'permission') mocks.failure = 'missing_scope';
+  if (scenario === 'untrusted prose') mocks.failure = 'Could not react with invalid_name due to missing_scope';
+  await expect(claudeSlackCall(mocks.name, mocks.input, new AbortController().signal)).rejects.toThrow('Check the Slack plugin');
 });

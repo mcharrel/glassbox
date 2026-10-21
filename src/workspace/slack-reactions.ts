@@ -52,7 +52,10 @@ export function queueSlackReaction(tab: PullTab, receipt: { reviewer: string; st
       await reactWithSlackProvider(settings, tab.ref.url, emoji, controller.signal, count => {
         if (current()) job.count = count;
       });
-      if (current()) tab.slackReaction = { ...job, status: 'done', message: job.count ? `Reacted to ${job.count} Slack message${job.count === 1 ? '' : 's'}.` : 'No matching Slack messages found.' };
+      if (current()) {
+        if (job.count) tab.slackReaction = { ...job, status: 'done', message: `Reacted to ${job.count} Slack message${job.count === 1 ? '' : 's'}.` };
+        else delete tab.slackReaction;
+      }
     })().catch((error: unknown) => {
       if (current()) tab.slackReaction = { ...job, status: 'error', message: `${job.count ? `${job.count} message(s) already reacted to. ` : ''}${error instanceof Error ? error.message : 'Could not add Slack reactions.'}` };
     }).finally(() => {

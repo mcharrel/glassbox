@@ -9,12 +9,35 @@ const errors: Record<string, string> = {
   account_inactive: 'Reconnect Slack with an active account.',
   missing_scope: 'The Slack connection needs search:read and reactions:write user permissions.',
   not_allowed_token_type: 'Connect a Slack user token with search:read and reactions:write permissions.',
-  invalid_name: 'This emoji does not exist in your Slack workspace. Change it in Settings → Slack.',
   no_permission: 'Slack did not allow a reaction on this message.',
   is_archived: 'Slack cannot add a reaction in an archived channel.',
   message_not_found: 'A matching Slack message is no longer available.',
   channel_not_found: 'A matching Slack channel is no longer available.',
 };
+
+export class MissingSlackEmojiError extends Error {
+  constructor() { super('Slack rejected this emoji.'); }
+}
+
+/** Accept an explicit tool error, never prose that merely mentions an emoji name. */
+export function isMissingSlackEmojiFailure(error: string): boolean {
+  try {
+    return z.object({ error: z.literal('invalid_name'), ok: z.literal(false).optional(), result: z.undefined().optional() }).safeParse(JSON.parse(error)).success;
+  } catch { return /^(?:Error[^:\n]*:\s*)*invalid_name[.!]?$/.test(error.trim()); }
+}
+
+/** Missing workspace emoji must not prevent the other reaction from being added. */
+export async function addReactionPair(emoji: string, signal: AbortSignal, add: (name: string) => Promise<void>, onReacted?: () => void): Promise<string[]> {
+  const added: string[] = [];
+  for (const name of new Set([emoji, 'rev'])) {
+    signal.throwIfAborted();
+    try { await add(name); }
+    catch (error) { if (error instanceof MissingSlackEmojiError) continue; throw error; }
+    added.push(name);
+    if (added.length === 1) onReacted?.();
+  }
+  return added;
+}
 
 /** Never expose response bodies or request errors: they may contain a credential. */
 export async function slackCall(token: string, method: 'auth.test' | 'search.messages' | 'reactions.add', fields: Record<string, string>, signal: AbortSignal): Promise<{ data: unknown; scopes: string | null }> {
@@ -46,6 +69,8 @@ export async function slackCall(token: string, method: 'auth.test' | 'search.mes
     }
     if (response.ok && result.success && (result.data.ok || (method === 'reactions.add' && result.data.error === 'already_reacted')))
       return { data, scopes: response.headers.get('x-oauth-scopes') };
+    if (response.ok && result.success && !result.data.ok && method === 'reactions.add' && result.data.error === 'invalid_name')
+      throw new MissingSlackEmojiError();
     throw new Error(errors[result.success ? result.data.error ?? '' : ''] ?? 'Slack could not complete this request. Retry the Slack reaction later.');
   }
 }
@@ -94,8 +119,9 @@ export async function reactToPullLinks(token: string, prUrl: string, emoji: stri
       const key = `${match.channel.id}:${match.ts}`;
       if (seen.has(key) || !containsPullLink(match.text, prUrl)) continue;
       seen.add(key);
-      await slackCall(token, 'reactions.add', { channel: match.channel.id, timestamp: match.ts, name: emoji }, signal);
-      onProgress(++count);
+      await addReactionPair(emoji, signal, async name => {
+        await slackCall(token, 'reactions.add', { channel: match.channel.id, timestamp: match.ts, name }, signal);
+      }, () => { onProgress(++count); });
     }
     const pages = pagination?.page_count ?? paging?.pages;
     if (pages === undefined) throw new Error('Slack did not report search pagination. Retry the Slack reaction later.');

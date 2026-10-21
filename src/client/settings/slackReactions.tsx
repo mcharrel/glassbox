@@ -46,7 +46,7 @@ export function renderSlackReactions() {
       </> : <p className="settings-hint">Uses the Slack plugin authenticated in your local Claude Code installation. Claude keeps its credentials. Each operation uses your Claude account and can take a few seconds.</p>}
       <div className="settings-divider"></div>
       <label className="settings-checkbox"><input id="slack-reactions-enabled" type="checkbox" checked={data.settings.enabled} /> React to PR reviews in Slack</label>
-      <p className="settings-hint">After you approve or request changes, search public and private conversations you can access and add your reaction to messages linking to that PR. No messages are posted.</p>
+      <p className="settings-hint">After you approve or request changes, search public and private conversations you can access and add your reaction plus :rev: to messages linking to that PR. Missing emoji are silently skipped. No messages are posted.</p>
       <label className="settings-label" htmlFor="slack-approved-emoji">Approval emoji</label>
       <input className="settings-input" id="slack-approved-emoji" value={data.settings.approvedEmoji} placeholder="stamp-approved" spellCheck="false" />
       <label className="settings-label" htmlFor="slack-changes-emoji">Changes requested emoji</label>
@@ -56,7 +56,7 @@ export function renderSlackReactions() {
       {data.settings.provider === 'token' && data.connected && <button className="btn btn-sm" id="slack-disconnect">Disconnect Slack</button>}
       {data.settings.enabled && <div className="slack-reaction-test">
         <label className="settings-label" htmlFor="slack-test-url">Test your connection</label>
-        <p className="settings-hint">Paste a Slack message link. Testing saves these settings and adds :{data.settings.approvedEmoji.replace(/^:|:$/g, '')}: to that message.</p>
+        <p className="settings-hint">Paste a Slack message link. Testing saves these settings and adds your approval emoji plus :rev: to that message, when available.</p>
         <div className="slack-test-row"><input className="settings-input" id="slack-test-url" type="url" value={messageUrl} placeholder="https://workspace.slack.com/archives/…" spellCheck="false" /><button className="btn btn-sm" id="slack-test-reaction" disabled={!messageUrl.trim()}>{testing ? 'Testing…' : 'Test reaction'}</button></div>
         {testMessage && <p className="slack-test-success" role="status"><IconCheck />{testMessage}</p>}
       </div>}

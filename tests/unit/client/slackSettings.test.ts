@@ -76,3 +76,12 @@ it('never shows success for a failed or stale test', async () => {
   finish({ settings: defaults(), message: 'old success' }); await tick();
   expect(html()).not.toContain('old success');
 });
+it('finishes a silently skipped test without an error, toast or success check', async () => {
+  loadSlackReactions(); await tick(); trigger('change:#slack-reactions-enabled', { checked: true });
+  mocks.test.mockResolvedValueOnce({ settings: { ...defaults(), settings: { ...defaults().settings, enabled: true } }, message: '' });
+  trigger('click:#slack-test-reaction'); await tick();
+  expect(html()).not.toContain('slack-test-success');
+  expect(html()).not.toContain('role="alert"');
+  expect(html()).not.toContain('Testing…');
+  expect(mocks.toast).not.toHaveBeenCalled();
+});

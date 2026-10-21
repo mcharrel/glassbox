@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ call: vi.fn(), rest: vi.fn(), search: vi.fn() 
 vi.mock('../../../src/workspace/slack-claude.js', () => ({ claudeSlackCall: mocks.call }));
 vi.mock('../../../src/workspace/slack-settings.js', () => ({ slackToken: () => 'fixture' }));
 vi.mock('../../../src/workspace/slack-api.js', async original => ({ ...await original<any>(), slackCall: mocks.rest, reactToPullLinks: mocks.search }));
-import { addSlackReaction, claudeSearchPage, reactWithSlackProvider, slackToolResult } from '../../../src/workspace/slack-provider.js';
+import { addSlackReactions, addSlackReaction, claudeSearchPage, reactWithSlackProvider, slackToolResult } from '../../../src/workspace/slack-provider.js';
 const pr = 'https://github.com/example/project/pull/42';
 const target = { channel: 'C12345', timestamp: '1790000000.123456' };
 const link = 'https://example.slack.com/archives/C12345/p1790000000123456';
@@ -62,7 +62,7 @@ it('accepts Claude hook content arrays for search and reactions while rejecting 
     mocks.call.mockResolvedValueOnce(content(receipt));
     await expect(addSlackReaction(preferences(), target, 'approved', signal())).resolves.toBeUndefined();
   }
-  for (const receipt of [{ ok: false, error: 'invalid_name' }, { ok: true, isError: true }]) {
+  for (const receipt of [{ ok: false, error: 'missing_scope' }, { ok: true, isError: true }]) {
     mocks.call.mockResolvedValueOnce(content(receipt));
     await expect(addSlackReaction(preferences(), target, 'approved', signal())).rejects.toThrow('rejected');
   }
@@ -76,17 +76,44 @@ it('filters fuzzy results and follows cursors without duplicate reactions', asyn
   expect(claudeSearchPage(empty, pr).matches).toEqual([]);
   expect(claudeSearchPage(page(`${pr}0`), pr).matches).toEqual([]);
   expect(claudeSearchPage({ content: [{ type: 'text', text: JSON.stringify(page()) }] }, pr).matches).toEqual([target]);
-  mocks.call.mockResolvedValueOnce(page(pr, 'second')).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(page());
+  mocks.call.mockResolvedValueOnce(page(pr, 'second')).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(page());
   const progress = vi.fn();
   expect(await reactWithSlackProvider(preferences(), pr, 'approved', signal(), progress)).toBe(1);
-  expect(mocks.call.mock.calls[2][1].cursor).toBe('second');
+  expect(mocks.call.mock.calls[3][1].cursor).toBe('second');
   expect(progress).toHaveBeenCalledExactlyOnceWith(1);
   mocks.call.mockReset().mockResolvedValue(empty);
   expect(await reactWithSlackProvider(preferences(), pr, 'approved', signal(), progress)).toBe(0);
 });
 it('fails visibly on a repeated cursor and preserves partial progress', async () => {
-  mocks.call.mockResolvedValueOnce(page(pr, 'loop')).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(page(pr, 'loop'));
+  mocks.call.mockResolvedValueOnce(page(pr, 'loop')).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce(page(pr, 'loop'));
   const progress = vi.fn();
   await expect(reactWithSlackProvider(preferences(), pr, 'approved', signal(), progress)).rejects.toThrow('repeated');
+  expect(progress).toHaveBeenCalledExactlyOnceWith(1);
+});
+
+it.each([
+  { ok: false, error: 'invalid_name' },
+  { error: 'invalid_name' },
+  { isError: true, content: [{ type: 'text', text: '{"ok":false,"error":"invalid_name"}' }] },
+  [{ type: 'text', text: 'Error adding reaction: invalid_name' }],
+])('skips confirmed missing Claude emoji and still adds rev: %j', async receipt => {
+  mocks.call.mockResolvedValueOnce(receipt);
+  expect(await addSlackReactions(preferences(), target, 'approved', signal())).toEqual(['rev']);
+  expect(mocks.call.mock.calls.map(call => call[1].reaction)).toEqual(['approved', 'rev']);
+});
+it('does not count a Claude message when both emoji are missing or retry duplicates', async () => {
+  mocks.call.mockResolvedValueOnce(page(pr, 'next'))
+    .mockResolvedValueOnce({ ok: false, error: 'invalid_name' })
+    .mockResolvedValueOnce({ ok: false, error: 'invalid_name' })
+    .mockResolvedValueOnce(page());
+  const progress = vi.fn();
+  expect(await reactWithSlackProvider(preferences(), pr, 'approved', signal(), progress)).toBe(0);
+  expect(progress).not.toHaveBeenCalled();
+  expect(mocks.call).toHaveBeenCalledTimes(4);
+});
+it('keeps Claude partial success visible when the companion fails for a genuine reason', async () => {
+  mocks.call.mockResolvedValueOnce(page()).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, error: 'missing_scope' });
+  const progress = vi.fn();
+  await expect(reactWithSlackProvider(preferences(), pr, 'approved', signal(), progress)).rejects.toThrow('rejected');
   expect(progress).toHaveBeenCalledExactlyOnceWith(1);
 });

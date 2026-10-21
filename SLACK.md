@@ -2,7 +2,7 @@
 
 Open **Settings → Slack**, choose **one connection**, and enable **React to PR reviews in Slack** when you are ready. It is disabled by default.
 
-rev searches public and private conversations your account can access for the exact PR link after GitHub accepts your review. Approval uses `stamp-approved`; both change-request actions use `request-changes`. You can change both to emoji names available in your workspace, without the surrounding colons.
+rev searches public and private conversations your account can access for the exact PR link after GitHub accepts your review. Approval uses `stamp-approved`; both change-request actions use `request-changes`. You can change both to emoji names available in your workspace, without the surrounding colons. Each matching message also gets `:rev:`. If either emoji does not exist in the workspace, rev silently skips it and still attempts the other; choosing `rev` as the review emoji adds it only once.
 
 ## Option 1: Slack app
 
@@ -51,9 +51,9 @@ Switching to the Slack app option or disabling reactions in rev does not sign yo
 3. In Slack, copy the link to a message where you want to try the reaction.
 4. Paste it under **Test your connection** and click **Test reaction**.
 
-This saves the selected settings and **adds a real approval reaction to that one message**. It does not post a new message or submit a GitHub review. Success appears below the field with a check and “Connection working — your reaction is on the Slack message.” An existing reaction by you also counts as success. Changing the link, connection or emoji clears the previous confirmation.
+This saves the selected settings and **adds your approval emoji and `:rev:` to that one message, when available**. It does not post a new message or submit a GitHub review. Success appears below the field with a check and a confirmation naming only the emoji Slack confirmed. An existing reaction by you also counts as success. Missing emoji are silently skipped; if neither exists, the test finishes without an error or a success check. Changing the link, connection or emoji clears the previous confirmation.
 
-A failed test shows an error rather than a success check. Check the emoji, message access and your selected connection. After a timeout, check Slack before retrying: Slack may have accepted a reaction before its reply was lost. Adding the same reaction again is idempotent.
+A failed test shows an error rather than a success check. Check message access and your selected connection. Missing emoji do not cause a failed test. After a timeout, check Slack before retrying: Slack may have accepted a reaction before its reply was lost. Adding the same reaction again is idempotent.
 
 ## Review reactions and privacy
 

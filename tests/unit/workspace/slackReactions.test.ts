@@ -31,10 +31,10 @@ it.each(['APPROVED', 'CHANGES_REQUESTED'])('queues %s without blocking the accep
   expect(mocks.react.mock.calls[0][2]).toBe(state === 'APPROVED' ? 'stamp-approved' : 'request-changes');
   expect(tab().slackReaction).toMatchObject({ status: 'done', count: 2 });
 });
-it('reports no matches honestly and isolates failures from GitHub state', async () => {
+it('silently completes when nothing was added and isolates failures from GitHub state', async () => {
   mocks.enabled = true; mocks.react.mockResolvedValueOnce(0);
   queueSlackReaction(tab(), receipt); await tick(); await tick();
-  expect(tab().slackReaction.message).toBe('No matching Slack messages found.');
+  expect(tab().slackReaction).toBeUndefined();
   tab().info.reviews.push({ author: { login: 'alice' }, state: 'APPROVED', submittedAt: '2026-01-01' });
   mocks.react.mockRejectedValueOnce(new Error('Emoji unavailable'));
   queueSlackReaction(tab(), receipt); await tick(); await tick();
