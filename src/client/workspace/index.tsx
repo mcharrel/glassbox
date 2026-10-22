@@ -20,7 +20,7 @@ import { startFreshReview } from './freshReview.js';
 import { copyPullLink, pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
 import { initSourceRefresh, refreshActivePull } from './sourceRefresh.js';
-import { activeReviewReady, activeTab, addingPull, mutate, refreshingPulls, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
+import { activeReviewReady, activeTab, addingPull, closingPulls, mutate, refreshingPulls, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads } from './threads.js';
 
 function lifecycle(tab: PullTab): string {
@@ -223,7 +223,7 @@ export function initWorkspace(): void {
       mountedHeader = true;
       mount(oldHeader, () => {
         const current = activeTab();
-        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null, refreshingPulls.value.has(current.key)) : null}</div>;
+        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null, refreshingPulls.value.has(current.key), closingPulls.value.has(current.key)) : null}</div>;
       });
     }
 

@@ -69,6 +69,13 @@ it('places refresh progress before Share, with Close still immediately after Sha
   }
   expect(String(pullHeader(tab(), null))).not.toContain('aria-label="Refreshing PR"');
 });
+it('shows closing progress inside the disabled close button without disabling Share', () => {
+  const html = String(pullHeader(tab(), null, false, true));
+  expect(html).toContain('data-workspace="close" title="Closing PR tab…" disabled');
+  expect(html).toContain('aria-label="Closing PR tab"');
+  expect(html).toContain('data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link">');
+  expect(String(pullHeader(tab(), null))).not.toContain('aria-label="Closing PR tab"');
+});
 it('anchors the copy confirmation to the clicked PR and does not show it after switching away', async () => {
   const feedback = { isConnected: true };
   const button = { closest: () => ({ querySelector: () => feedback }) } as unknown as Element;

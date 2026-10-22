@@ -765,9 +765,19 @@
     },
     "8.9": {
       "tests": [
-        "tests/e2e/themes.test.ts"
+        "tests/e2e/themes.test.ts",
+        "tests/unit/client/workspaceHeader.test.ts",
+        "tests/unit/client/workspaceState.test.ts",
+        "tests/unit/workspace/service.test.ts",
+        "tests/integration/workspace/closeWhileReacting.test.ts"
       ],
-      "note": "light/dark scheme via theme system. (800x500 min-window is CSS-only sub-gap)."
+      "note": "light/dark scheme via theme system. (800x500 min-window is CSS-only sub-gap). PR-tab closing progress and safe asynchronous deletion; visual spinner checks are manual.",
+      "stateful": true,
+      "transitions": [
+        "approve -> pending Slack -> switch tab -> close without waiting for remote reads",
+        "close -> cleanup error -> progress cleared -> retry",
+        "close -> reopen -> old response -> new refresh remains tracked"
+      ]
     },
     "4.1": {
       "tests": [

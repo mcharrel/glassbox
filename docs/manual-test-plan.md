@@ -337,3 +337,9 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 
 - General → Long code lines: choose Wrap lines while viewing a file with long statements, indentation, tabs and an unbroken token. All code fits the pane; new visual lines retain the original source line number and change color. Resize the mid panel and confirm split-mode rows stay aligned.
 - Switch to Scroll horizontally: a horizontal gesture/scrollbar moves the unified diff together without individual line scrollers. Comments remain constrained to the pane width. Switch files/PRs, reopen Settings and restart the app; the choice persists. Search and comment navigation still target the correct source lines. Persistence and cached-PR transitions have unit coverage; visual layout remains a manual check.
+
+## Closing tabs during background work
+
+- Start a Slack review reaction, select another PR and close it. Close immediately shows a spinner; other tabs and Share remain usable. It does not wait for Slack or remote metadata/comments. Source cleanup may take longer when other checkouts borrow its Git objects.
+- Switch tabs while a close is pending, then return: progress stays with that PR. Repeated clicks do not start duplicate deletion. An unsafe checkout stays visible with an error and can be retried after its unpublished work is preserved.
+- API integration and unit tests cover pending Slack/GitHub reads, late responses, close/reopen, source-operation safety, progress and retries. Visual checks remain manual under the no-UI-automation preference.

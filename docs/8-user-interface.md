@@ -102,6 +102,8 @@ The personal fork adds a PR tab rail, a Main view with description/reviewers/che
 
 The personal workspace retains loaded reviews and rendered files in memory across PR tab switches, without page navigation or refetching unchanged data. Divider preferences survive both switches and hidden sections; header resizing respects the full content height. GUIDE and LEARN share one scroll area without an internal divider.
 
+Closing a PR tab shows immediate progress in its Close button and prevents duplicate requests for that tab; other tabs remain usable. Deletion waits for source operations and safe local cleanup, never remote metadata/comment reads or Slack reactions. Late reads cannot restore a deleted tab or disrupt a fresh reopening. Cleanup failures keep the tab visible and allow retry.
+
 The compact PR rail's minimum follows the rendered ID text plus small padding, without a hashtag or status dot. A second Cmd/Ctrl+F returns focus to the file without closing search or resetting the match. A pending PR import clears the previous session and hides file content, file names, and guidance until the selected PR's own file list loads; an explicit indicator is shown in File view. Cold file loads also replace the previous diff with an indicator. Failed file lists offer Retry without discarding other cached PR sessions.
 
 Personal workflow polish: place + directly after the PR tabs; use thin dividers that widen on hover/focus. Only own PR titles can be edited, with the same font and immediate exit on blur. Show “You reviewed all the files 👍” after every file is hidden by review navigation. Desktop notifications are suppressed while any Glassbox client is visible and focused.

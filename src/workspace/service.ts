@@ -105,7 +105,7 @@ export function syncTab(tab: PullTab, mode: SyncMode = 'initial'): Promise<void>
     return existing.promise;
   }
   const promise = (mode === 'auto' ? applySourceRefresh(tab) : performSync(tab, mode)).finally(() => {
-    syncing.delete(tab.key);
+    if (syncing.get(tab.key)?.promise === promise) syncing.delete(tab.key);
     if (mode === 'background') void flushSourceRefreshes();
   });
   syncing.set(tab.key, { mode, promise });
@@ -568,7 +568,7 @@ async function discardTab(tab: PullTab): Promise<void> {
   cancelDeployment(tab);
   cancelSlackReaction(tab);
   const pending = discardQueue.catch(() => {}).then(async () => {
-    await syncing.get(tab.key)?.promise;
+    // Remote reads already reject closed tabs; only source operations must finish before deletion.
     await waitForCheckouts();
     await withCheckoutLock(tab.key, () => discardTabData(tab));
     const data = workspaceData();
@@ -576,6 +576,7 @@ async function discardTab(tab: PullTab): Promise<void> {
     data.archived = data.archived.filter(item => item !== tab);
     data.outbox = data.outbox.filter(item => item.tab !== tab.key);
     if (data.active === tab.key) data.active = data.tabs[0]?.key ?? null;
+    syncing.delete(tab.key);
     saveWorkspace();
   }).finally(() => { closingTabs.delete(tab); discarding.delete(tab.key); });
   discardQueue = pending;

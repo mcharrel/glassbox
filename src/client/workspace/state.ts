@@ -13,6 +13,7 @@ export const workspace = signal<Workspace>({ tabs: [], active: null });
 export const addingPull = signal(false);
 export const workspaceLoaded = signal(false);
 export const refreshingPulls = signal<ReadonlySet<string>>(new Set());
+export const closingPulls = signal<ReadonlySet<string>>(new Set());
 export const reviewRetry = signal(0);
 export const reviewSessionKey = (tab: PullTab): string => `${tab.key}:${tab.reviewId ?? ''}:${tab.reviewedBase}:${tab.reviewedHead}${tab.checkoutEvicted ? ':expired' : ''}`;
 export const reviewLoadState = signal<{ key: string; status: 'loading' | 'ready' | 'error'; error: string | null }>({
@@ -52,14 +53,21 @@ export async function refreshWorkspace(): Promise<void> {
   receive(state, true);
 }
 export async function mutate(input: WorkspaceMutation): Promise<boolean> {
+  if (input.op === 'close') {
+    if (closingPulls.value.has(input.key)) return false;
+    closingPulls.value = new Set([...closingPulls.value, input.key]);
+  }
   const version = ++mutationVersion;
   try {
     const result = await changeWorkspace(input);
-    if (version === mutationVersion) receive(result, input.op !== 'open' && input.op !== 'close');
+    if (version === mutationVersion) receive(result, input.op !== 'open');
+    else if (input.op === 'close') void refreshWorkspace().catch(() => {});
     return true;
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Request failed');
     return false;
+  } finally {
+    if (input.op === 'close') closingPulls.value = new Set([...closingPulls.value].filter(key => key !== input.key));
   }
 }
 export function setFileView(): void {

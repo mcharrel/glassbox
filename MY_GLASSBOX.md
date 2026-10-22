@@ -194,3 +194,5 @@ With shared-server mode enabled locally, rev connects directly to Codex’s Unix
 - **PR refresh feedback:** Cmd/Ctrl+R shows a small spinning indicator immediately left of Share for the refresh request and file-list reload. Progress belongs to the PR, survives metadata polling and clears on completion or failure. Share shows “Link copied!” directly below its button for two seconds; preserve it during same-PR header updates and remove it when switching PRs.
 
 - **Long code lines:** General settings lets me choose Wrap lines (default) or Scroll horizontally. The choice applies immediately and persists across PRs and app restarts. Horizontal scrolling moves the unified code pane together; wrapping fits long lines and tokens inside the pane without horizontal code scrolling, preserving indentation and source line numbers.
+
+Tab closing shows per-PR progress and suppresses duplicate clicks. Deletion waits for source operations and safety checks, not remote metadata/comments or Slack. Late responses cannot revive a deleted tab or clear the refresh of a reopened PR; cleanup failures keep the tab available to retry.

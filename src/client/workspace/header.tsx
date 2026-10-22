@@ -13,7 +13,7 @@ export async function copyPullLink(tab: PullTab, button: Element): Promise<void>
 }
 
 /** Shared Main/File header; unavailable totals stay pending instead of looking empty. */
-export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null, refreshing = false) {
+export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null, refreshing = false, closing = false) {
   const info = tab.info;
   const own = isPullAuthor(tab);
   const selected = own && info ? (info.state === 'CLOSED' ? 'close' : info.isDraft ? 'draft' : 'ready') : '';
@@ -33,7 +33,9 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
         <button className="btn btn-xs" data-workspace="share" title="Copy PR link" aria-label="Share PR: copy GitHub link"><IconShareApple /></button>
         <div className="pr-share-feedback" data-morph-skip-children="" aria-live="polite" aria-atomic="true"></div>
       </div>
-      <button className="btn btn-xs" data-workspace="close" title="Remove PR tab"><IconX /></button>
+      <button className="btn btn-xs" data-workspace="close" title={closing ? 'Closing PR tab…' : 'Remove PR tab'} disabled={closing}>
+        {closing ? <span className="analysis-spinner analysis-spinner-sm" role="status" aria-label="Closing PR tab"></span> : <IconX />}
+      </button>
     </div>
     <div className="pr-counts">
       {counts ? <><span className="pr-additions">+{counts.added}</span>{' '}<span className="pr-deletions">-{counts.removed}</span></> : 'Loading changes…'}

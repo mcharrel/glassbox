@@ -33,6 +33,7 @@ import { cancelDeployment, refreshDeployment, stopDeployments } from '../../../s
 import { flushOutbox, flushSourceRefreshes, refreshAfterReply, insertTab, mutateWorkspace, queueAnnotation, startWorkspace, syncTab } from '../../../src/workspace/service.js';
 import { loadComments, loadPull, parsePullUrl } from '../../../src/workspace/github.js';
 import { ensureCheckout, importPull } from '../../../src/workspace/checkout.js';
+import { withCheckoutLock } from '../../../src/workspace/lifecycle.js';
 
 function tab(number = 1) {
   return PullTabSchema.parse({
@@ -684,16 +685,59 @@ it('leaves the tab visible if its unpublished source cannot be discarded', async
   expect(mocks.data.tabs).toEqual([old]); expect(mocks.data.active).toBe(old.key);
   expect(mocks.data.archived).toEqual([]);
 });
-it('waits for a pending import before deleting, and prevents a late metadata response from restarting it', async () => {
+it('closes without waiting for metadata and prevents its late response from restarting an import', async () => {
   const old = mocks.data.tabs[0];
   let resolve!: (value: ReturnType<typeof pullInfo>) => void;
   vi.mocked(loadPull).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
   const sync = syncTab(old);
-  const close = mutateWorkspace({ op: 'close', key: old.key }, 'review');
-  expect(mocks.discard).not.toHaveBeenCalled();
-  resolve(pullInfo()); await Promise.all([sync, close]);
+  await mutateWorkspace({ op: 'close', key: old.key }, 'review');
   expect(mocks.discard).toHaveBeenCalledWith(old);
+  resolve(pullInfo()); await sync;
   expect(mocks.data.tabs).toEqual([]); expect(mocks.data.archived).toEqual([]);
+});
+it('ignores late comments after closure without holding up deletion', async () => {
+  const old = mocks.data.tabs[0];
+  let finish!: (comments: Awaited<ReturnType<typeof loadComments>>) => void;
+  vi.mocked(loadPull).mockResolvedValueOnce(old.info);
+  vi.mocked(loadComments).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const sync = syncTab(old, 'background');
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  await mutateWorkspace({ op: 'close', key: old.key }, 'review');
+  expect(mocks.data.tabs).toEqual([]);
+  finish([]); await sync;
+  expect(mocks.data.tabs).toEqual([]); expect(mocks.data.archived).toEqual([]);
+});
+it('keeps a reopened PR’s refresh independent of an old response', async () => {
+  const old = mocks.data.tabs[0];
+  vi.mocked(loadPull).mockClear();
+  let finishOld!: (info: ReturnType<typeof pullInfo>) => void;
+  let finishNew!: (info: ReturnType<typeof pullInfo>) => void;
+  vi.mocked(loadPull).mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+    .mockImplementationOnce(() => new Promise(resolve => { finishNew = resolve; }));
+  const previous = syncTab(old);
+  await mutateWorkspace({ op: 'close', key: old.key }, 'review');
+  mocks.github.mockResolvedValue({ login: 'alice' });
+  await mutateWorkspace({ op: 'open', url: old.ref.url }, 'review');
+  const reopened = mocks.data.tabs[0];
+  expect(reopened).not.toBe(old);
+  expect(finishNew).toBeDefined();
+  const current = syncTab(reopened);
+  finishOld(pullInfo()); await previous;
+  const repeated = syncTab(reopened);
+  expect(loadPull).toHaveBeenCalledTimes(2);
+  finishNew(pullInfo()); await Promise.all([current, repeated]);
+  expect(mocks.data.tabs).toEqual([reopened]); expect(reopened.info).not.toBeNull();
+});
+it('still waits for a running checkout before deleting shared Git data', async () => {
+  const old = mocks.data.tabs[0];
+  let finish!: () => void;
+  const checkout = withCheckoutLock(old.key, () => new Promise<void>(resolve => { finish = resolve; }));
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  const close = mutateWorkspace({ op: 'close', key: old.key }, 'review');
+  await new Promise(resolve => setImmediate(resolve));
+  expect(mocks.discard).not.toHaveBeenCalled(); expect(mocks.data.tabs).toEqual([old]);
+  finish(); await Promise.all([checkout, close]);
+  expect(mocks.discard).toHaveBeenCalledWith(old); expect(mocks.data.tabs).toEqual([]);
 });
 it('removes legacy archived tabs on startup without restoring them on reopening', async () => {
   const old = tab(9); mocks.data.tabs = []; mocks.data.archived = [old];
