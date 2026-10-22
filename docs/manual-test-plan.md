@@ -346,7 +346,7 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 
 ## Code conversation cards
 
-- In Main/File views and light/dark themes, verify only code threads use one light rounded card, sans-serif author/body, aligned avatars and relative timestamps with exact-date tooltips. Replies are indented without individual borders; new-comment composers match. Check a narrow pane, long words, Markdown, code blocks and large text zoom.
+- In Main/File views and light/dark themes, verify only code threads use one soft light-gray rounded card, sans-serif author/body, aligned avatars and relative timestamps with exact-date tooltips. Replies are indented without individual borders; new-comment composers match. Check a narrow pane, long words, Markdown, code blocks and large text zoom.
 - For local requests, verify gray before pickup, yellow while working, green after an answer; the band spans the root conversation and follow-ups retain their own status. Share/delete appear on hover and keyboard focus, with hover-D still deleting only its target.
 - Open Add reply…, type a draft, blur and refresh metadata. Preserve the draft and disclosure; Enter posts, Shift+Enter inserts a line, and successful posting closes the composer. Failed posting keeps the draft. Delete a root with replies and another thread at the same line: no orphan card or reply box remains.
 - Fold/unfold a resolved thread, search a folded reply and use C/V navigation through long conversations. Preserve expansion on tab switches and include the entire card in visibility calculations.
