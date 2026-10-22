@@ -1720,9 +1720,12 @@
     },
     "5.6": {
       "tests": [
-        "tests/e2e/annotations.test.ts"
+        "tests/e2e/annotations.test.ts",
+        "tests/unit/client/workspaceThreads.test.ts",
+        "tests/unit/client/commentNavigation.test.ts",
+        "tests/unit/client/commentDelete.test.ts"
       ],
-      "note": "Annotation display: content text rendered, correct categories, count badge in sidebar."
+      "note": "Annotation display and sidebar count; code-thread card grouping, reply disclosure/draft preservation, acknowledgement statuses, compact timestamps, resolved folding, navigation and hover deletion. Visual spacing/theme checks remain in the manual plan."
     },
     "15.5": {
       "tests": [

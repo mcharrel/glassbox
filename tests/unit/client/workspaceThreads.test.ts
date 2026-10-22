@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ active: vi.fn() }));
 vi.mock('../../../src/client/workspace/state.js', () => ({ activeTab: mocks.active }));
 vi.mock('../../../src/client/diff/find.js', () => ({ refreshFind: vi.fn() }));
 vi.mock('../../../src/client/stores/index.js', () => ({ reviewStore: {} }));
-import { messageHtml, threadHtml } from '../../../src/client/workspace/threads.js';
+import { commentTime, messageHtml, preserveReplyComposers, threadHtml } from '../../../src/client/workspace/threads.js';
 const root = () => ThreadMessageSchema.parse({ id: 'root', author: 'alice', body: 'Request', date: '', kind: 'review', path: 'file.ts', status: 'done', destination: 'local' });
 beforeEach(() => mocks.active.mockReturnValue(PullTabSchema.parse({ key: 'example/project#1', info: pullInfo(), viewer: 'alice', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: null })));
 it('shows local follow-ups and Codex answers without a GitHub ID, share button or offline marker', () => {
@@ -81,4 +81,50 @@ it('unfolds reopened threads and leaves unresolved code and Main comments unchan
     const html = String(threadHtml(r, [r], true));
     expect(html).not.toContain('class="resolved-thread"'); expect(html).toContain('Request');
   }
+});
+
+
+it('presents a single code-thread card with indented replies and a closed reply disclosure', () => {
+  const r = { ...root(), agentStatus: 'processing' as const };
+  const reply = { ...r, id: 'reply', parentKey: r.id, body: 'Follow-up' };
+  const html = String(threadHtml(r, [r, reply, { ...reply, id: 'deleted', body: 'Deleted text', deleted: true }]));
+  expect(html.match(/class="pr-thread code-thread-card"/g)).toHaveLength(1);
+  expect(html).toContain('data-agent-status="processing"');
+  expect(html.indexOf('data-message="root"')).toBeLessThan(html.indexOf('class="code-thread-replies"'));
+  expect(html.indexOf('class="code-thread-replies"')).toBeLessThan(html.indexOf('data-message="reply"'));
+  expect(html).toContain('<details class="code-reply-disclosure" data-reply-composer="root">');
+  expect(html).toContain('Add reply…');
+  expect(html).not.toContain('Deleted text');
+  expect(String(threadHtml({ ...r, kind: 'issue', path: undefined, destination: 'github' }, []))).not.toContain('code-thread-card');
+});
+
+it('keeps compact code timestamps and exposes the exact date on hover', () => {
+  const now = Date.parse('2026-01-20T12:00:00Z');
+  expect(commentTime('2026-01-20T12:00:10Z', now)).toBe('now');
+  expect(commentTime('2026-01-20T11:30:00Z', now)).toBe('30m');
+  expect(commentTime('2026-01-20T09:00:00Z', now)).toBe('3h');
+  expect(commentTime('2026-01-18T12:00:00Z', now)).toBe('2d');
+  expect(commentTime('invalid', now)).toBe('');
+  const date = new Date(Date.now() - 3 * 3600000).toISOString();
+  const html = String(messageHtml({ ...root(), date }));
+  expect(html).toContain('>3h</time>');
+  expect(html).toContain(`title="${new Date(date).toLocaleString()}"`);
+});
+
+it('preserves reply drafts and disclosure state through refreshes without reviving removed threads', () => {
+  const draft = { dataset: { replyComposer: 'root' }, open: true, text: 'Unsent reply' };
+  const deleted = { dataset: { replyComposer: 'deleted' } };
+  let elements: object[] = [draft, deleted];
+  const view = { querySelectorAll: () => elements } as unknown as Element;
+  const restore = preserveReplyComposers(view);
+  const replacement = { dataset: { replyComposer: 'root' }, replaceWith: vi.fn() };
+  const fresh = { dataset: { replyComposer: 'new' }, replaceWith: vi.fn() };
+  elements = [fresh, replacement];
+  restore();
+  expect(replacement.replaceWith).toHaveBeenCalledExactlyOnceWith(draft);
+  expect(fresh.replaceWith).not.toHaveBeenCalled();
+  expect(draft.open).toBe(true);
+  expect(draft.text).toBe('Unsent reply');
+  elements = [];
+  expect(preserveReplyComposers(view)).not.toThrow();
 });

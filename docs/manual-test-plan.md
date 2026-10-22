@@ -343,3 +343,11 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 - Start a Slack review reaction, select another PR and close it. Close immediately shows a spinner; other tabs and Share remain usable. It does not wait for Slack or remote metadata/comments. Source cleanup may take longer when other checkouts borrow its Git objects.
 - Switch tabs while a close is pending, then return: progress stays with that PR. Repeated clicks do not start duplicate deletion. An unsafe checkout stays visible with an error and can be retried after its unpublished work is preserved.
 - API integration and unit tests cover pending Slack/GitHub reads, late responses, close/reopen, source-operation safety, progress and retries. Visual checks remain manual under the no-UI-automation preference.
+
+## Code conversation cards
+
+- In Main/File views and light/dark themes, verify only code threads use one light rounded card, sans-serif author/body, aligned avatars and relative timestamps with exact-date tooltips. Replies are indented without individual borders; new-comment composers match. Check a narrow pane, long words, Markdown, code blocks and large text zoom.
+- For local requests, verify gray before pickup, yellow while working, green after an answer; the band spans the root conversation and follow-ups retain their own status. Share/delete appear on hover and keyboard focus, with hover-D still deleting only its target.
+- Open Add reply…, type a draft, blur and refresh metadata. Preserve the draft and disclosure; Enter posts, Shift+Enter inserts a line, and successful posting closes the composer. Failed posting keeps the draft. Delete a root with replies and another thread at the same line: no orphan card or reply box remains.
+- Fold/unfold a resolved thread, search a folded reply and use C/V navigation through long conversations. Preserve expansion on tab switches and include the entire card in visibility calculations.
+- Browser automation and screenshots are disabled by the user's preference; layout checks remain manual. Automated thread markup, draft preservation, navigation and deletion checks run in the unit suite.

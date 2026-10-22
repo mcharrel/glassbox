@@ -55,7 +55,7 @@ async function handleDelete(item: HTMLElement): Promise<void> {
   const lineEl = asElOrNull(annotationRow?.previousElementSibling);
 
   await deleteAnnotation({ id: annotation.id });
-  item.remove();
+  (item.closest('.local-code-thread') ?? item).remove();
   if (annotationRow !== null && annotationRow.querySelector('.annotation-item') === null) {
     annotationRow.remove();
     lineEl?.classList.remove('has-annotation');

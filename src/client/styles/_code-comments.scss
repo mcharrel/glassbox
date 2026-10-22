@@ -1,0 +1,163 @@
+// A conversation shares one light card; replies are separated by space, not boxes.
+.code-thread-card,
+.annotation-form-container .annotation-form {
+  --text: #1f2328;
+  --text-dim: #6e7781;
+  --text-muted: #6e7781;
+  --border: #d1d9e0;
+  --bg-surface: #fff;
+  --bg: #fff;
+  --bg-elevated: #f0f2f5;
+  --comment-indent: 36px;
+  position: relative;
+  color: var(--text);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  font: max(14px, var(--font-code-size))/1.5 var(--font-sans);
+  overflow-wrap: anywhere;
+
+  .comment-author { font: inherit; gap: 12px; }
+  .comment-author strong { font-size: inherit; font-weight: 600; }
+  .comment-avatar-fallback { background: var(--bg-elevated); }
+  .annotation-text,
+  .pr-message,
+  textarea { font: inherit; }
+  .pr-message,
+  .annotation-item {
+    display: block;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    color: inherit;
+  }
+  .pr-message-meta,
+  .local-comment-header {
+    gap: 10px;
+    padding: 0;
+    margin: 0 0 2px;
+    font: inherit;
+    color: var(--text-dim);
+    time { font: inherit; }
+  }
+  .pr-message-meta > .comment-author { font-size: inherit; color: var(--text); }
+  .local-comment-header .comment-author { color: var(--text); }
+  .local-comment-header .comment-author strong { font-size: inherit; }
+  .comment-local-label,
+  .local-comment-status { font-size: 11px; color: var(--text-dim); }
+  .local-comment-status:empty { display: none; }
+  .pr-message-body,
+  .annotation-text { display: block; margin-left: var(--comment-indent); line-height: inherit; }
+  .annotation-text { white-space: pre-wrap; }
+  .local-agent-status,
+  .pr-message > .agent-status,
+  .pr-message > .workspace-error { margin-left: var(--comment-indent); }
+  .agent-status { color: var(--text-dim); font: 11px/1.5 var(--font-sans); opacity: 1; }
+  .pr-message-actions,
+  .annotation-actions {
+    opacity: 0;
+    transition: opacity .12s;
+    .btn { background: transparent; border-color: transparent; color: var(--text-dim); }
+    .btn:hover { color: var(--text); background: var(--bg-elevated); }
+    .btn-danger:hover { color: #cf222e; }
+  }
+  .annotation-item .annotation-actions { top: 0; right: 0; }
+  .annotation-item .local-comment-header { padding-right: 60px; }
+  .pr-message:hover > .pr-message-meta .pr-message-actions,
+  .pr-message:focus-within > .pr-message-meta .pr-message-actions,
+  .annotation-item:hover > .annotation-actions,
+  .annotation-item:focus-within > .annotation-actions { opacity: 1; }
+  .code-thread-replies {
+    margin-left: var(--comment-indent);
+    > .pr-message { margin-top: 20px; }
+    > .pr-message[data-agent-status]::before { left: -12px; top: 0; bottom: 0; }
+  }
+  .local-thread-details { padding: 0; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .resolved-thread { margin: -8px -12px; background: transparent; border: 0; }
+  .resolved-thread > .resolved-thread-content { padding: 12px; }
+}
+
+.code-thread-card {
+  margin: 12px 0;
+  scroll-margin-top: 40px;
+  // The root's band spans the conversation; follow-ups retain their own acknowledgement.
+  &[data-agent-status] {
+    --comment-status: #656c76;
+    &[data-agent-status='processing'] { --comment-status: #d29922; }
+    &[data-agent-status='answered'] { --comment-status: #00b401; }
+    &::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 16px;
+      bottom: 16px;
+      width: 3px;
+      border-radius: 2px;
+      background: var(--comment-status);
+    }
+  }
+  > .pr-message::before,
+  > .annotation-item::before,
+  .resolved-thread-content > .pr-message::before,
+  .resolved-thread-content > .annotation-item::before { display: none; }
+}
+
+.code-reply-disclosure {
+  margin: 22px 0 0 var(--comment-indent);
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    color: var(--link);
+    cursor: pointer;
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+    > svg { width: 18px; height: 18px; }
+    &:hover { text-decoration: underline; }
+    &:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; border-radius: 2px; }
+  }
+  .code-comment-composer { margin-top: 16px; }
+  .pr-reply-input {
+    display: block;
+    width: calc(100% - var(--comment-indent));
+    min-height: 70px;
+    margin: 4px 0 8px var(--comment-indent);
+    padding: 8px 10px;
+    color: var(--text);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    resize: vertical;
+    &::placeholder { color: var(--text-dim); }
+  }
+  .annotation-form-hint { margin-left: var(--comment-indent); }
+}
+
+.annotation-form-container .annotation-form {
+  gap: 4px;
+  > .comment-author { margin-bottom: 0; }
+  > textarea {
+    width: calc(100% - var(--comment-indent));
+    margin-left: var(--comment-indent);
+    &::placeholder { color: var(--text-dim); }
+  }
+  .annotation-form-actions { margin-left: var(--comment-indent); flex-wrap: wrap; }
+}
+
+@media (max-width: 700px) {
+  .code-thread-card,
+  .annotation-form-container .annotation-form { padding: 16px; --comment-indent: 28px; }
+  .code-thread-card .comment-author { gap: 4px; }
+  .code-thread-card .code-thread-replies { margin-left: 16px; }
+}
+
+.annotation-row:has(> .local-code-thread),
+.annotation-row.pr-inline-thread,
+.annotation-form-container { padding: 8px 24px; }
+.annotation-form-container .annotation-form { margin: 12px 0; }

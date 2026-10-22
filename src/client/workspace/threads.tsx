@@ -2,7 +2,7 @@ import { delegate, delegateCapture, effect } from 'kerfjs';
 
 import { commentAgentStatus, commentDestination, type ThreadMessage } from '../../api/workspace.js';
 import { codeCommentPlaceholder,CommentAuthor } from '../../components/commentAuthor.js';
-import { IconCheck, IconTrash } from '../../icons.js';
+import { IconCheck, IconCornerDownRight, IconTrash } from '../../icons.js';
 import { renderGitHubMarkdown } from '../../utils/githubMarkdown.js';
 import { refreshFind } from '../diff/find.js';
 import { toElement } from '../dom.js';
@@ -24,14 +24,26 @@ export function codexStatus(message: ThreadMessage) {
     </>}
   </div>;
 }
+export function commentTime(date: string, now = Date.now()): string {
+  const elapsed = now - Date.parse(date);
+  if (!Number.isFinite(elapsed)) return '';
+  const minutes = Math.max(0, Math.floor(elapsed / 60000));
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
+  if (minutes < 10080) return `${Math.floor(minutes / 1440)}d`;
+  return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function messageHtml(message: ThreadMessage) {
+  const code = message.kind === 'review' || message.path !== undefined;
   const pending = message.destination !== 'local' && (message.status === 'pending' || message.status === 'error');
   return (
     <article
       className={`pr-message ${message.kind === 'ai' ? 'agent-message' : ''}`}
       data-message={message.id}
       data-key={message.id}
-      data-code-comment={message.kind === 'review' || message.path !== undefined ? 'true' : undefined}
+      data-code-comment={code ? 'true' : undefined}
       data-agent-status={commentAgentStatus(message)}
     >
       <div className="pr-message-meta">
@@ -44,8 +56,8 @@ export function messageHtml(message: ThreadMessage) {
           </span>
         )}
         <CommentAuthor author={message.author} agent={message.kind === 'ai'} />
-        {message.destination === 'local' && <span>Local</span>}
-        <time dateTime={message.date}>{new Date(message.date).toLocaleString()}</time>
+        <time dateTime={message.date} title={new Date(message.date).toLocaleString()}>{code ? commentTime(message.date) : new Date(message.date).toLocaleString()}</time>
+        {message.destination === 'local' && <span className="comment-local-label">Local</span>}
         <span className="pr-message-actions">
           {message.destination !== 'local' && <button
             className="btn btn-xs comment-share"
@@ -92,23 +104,43 @@ export function threadHtml(root: ThreadMessage, comments: ThreadMessage[], expan
   );
   const content = <>
     {messageHtml(root)}
-    {replies.map((reply) => <>
+    <div className="code-thread-replies">{replies.map((reply) => <>
       {messageHtml(reply)}
       {comments.filter((child) => !child.deleted && child.parentKey === reply.id).map(messageHtml)}
-    </>)}
+    </>)}</div>
     {replyInput(root)}
   </>;
-  return <div className="pr-thread" data-comment-thread={root.id} data-key={root.id}>
+  return <div className={`pr-thread${root.kind === 'review' ? ' code-thread-card' : ''}`}
+    data-agent-status={root.kind === 'review' ? commentAgentStatus(root) : undefined}
+    data-comment-thread={root.id} data-key={root.id}>
     {root.kind === 'review' && root.resolved === true ? resolvedThread(root, content, expanded) : content}
   </div>;
 }
 function replyInput(root: ThreadMessage) {
   const tab = activeTab();
-  if (tab && commentDestination(tab, root) === 'local')
-    return <div className="code-comment-composer"><CommentAuthor author={tab.viewer || 'You'} /><textarea className="pr-reply-input" data-parent-key={root.id} placeholder={codeCommentPlaceholder(tab)} /></div>;
-  if (root.destination !== 'local' && root.kind === 'review' && root.remoteId !== undefined)
-    return <div className="code-comment-composer"><CommentAuthor author={(tab?.viewer ?? '') || 'You'} /><textarea className="pr-reply-input" data-reply-to={root.remoteId} placeholder={codeCommentPlaceholder(tab)} /></div>;
-  return null;
+  const local = tab !== undefined && commentDestination(tab, root) === 'local';
+  if (!local && !(root.destination !== 'local' && root.kind === 'review' && root.remoteId !== undefined)) return null;
+  return <details className="code-reply-disclosure" data-reply-composer={root.id}>
+    <summary><IconCornerDownRight />Add reply…</summary>
+    <div className="code-comment-composer">
+      <CommentAuthor author={(tab?.viewer ?? '') || 'You'} />
+      <textarea className="pr-reply-input" aria-label="Reply"
+        data-parent-key={local ? root.id : undefined} data-reply-to={local ? undefined : root.remoteId}
+        placeholder={codeCommentPlaceholder(tab)} />
+      <span className="annotation-form-hint">Enter to reply · Shift+Enter for a new line</span>
+    </div>
+  </details>;
+}
+/** Retain disclosure state and unsent text only for threads still present in this file. */
+export function preserveReplyComposers(view: Element): () => void {
+  const composers = new Map([...view.querySelectorAll<HTMLDetailsElement>('[data-reply-composer]')]
+    .map(element => [element.dataset.replyComposer, element]));
+  return () => {
+    for (const replacement of view.querySelectorAll<HTMLElement>('[data-reply-composer]')) {
+      const composer = composers.get(replacement.dataset.replyComposer);
+      if (composer) replacement.replaceWith(composer);
+    }
+  };
 }
 export function bindThreads(): void {
   const candidate = document.getElementById('diff-container');
@@ -135,7 +167,10 @@ export function bindThreads(): void {
       const key = expansionKey(tab.key, id);
       if (details.open) expanded.add(key); else expanded.delete(key);
     }
+    // Keep the actual composer nodes so a refresh cannot discard an unfocused draft.
+    const restoreComposers = preserveReplyComposers(view);
     // Unwrap local annotations before rebuilding their thread decoration.
+    for (const card of pane.querySelectorAll('.local-code-thread')) card.replaceWith(...card.childNodes);
     for (const folded of pane.querySelectorAll('.local-resolved-thread')) {
       const content = folded.querySelector('.resolved-thread-content');
       if (content) folded.replaceWith(...content.childNodes);
@@ -173,10 +208,10 @@ export function bindThreads(): void {
         const status = toElement(
           <div className="local-comment-header">
             <CommentAuthor author={root.author} />
+            <time dateTime={root.date} title={new Date(root.date).toLocaleString()}>{commentTime(root.date)}</time>
             <span className="local-comment-status" title={root.destination === 'local' ? 'Only in rev' : root.error ?? 'Waiting to sync'}>
               {root.destination === 'local' ? 'Local' : root.status === 'synced' ? '' : '☁'}
             </span>
-            <time dateTime={root.date}>{new Date(root.date).toLocaleString()}</time>
           </div>,
         );
         local.prepend(status);
@@ -202,21 +237,22 @@ export function bindThreads(): void {
         );
         const details = toElement(
           <div className="local-thread-details">
-            {replies.map((reply) => (
+            <div className="code-thread-replies">{replies.map((reply) => (
               <>
                 {messageHtml(reply)}
                 {comments.filter((child) => !child.deleted && child.parentKey === reply.id).map(messageHtml)}
               </>
-            ))}
+            ))}</div>
             {replyInput(root)}
           </div>,
         );
-        local.after(details);
+        const card = toElement(<div className="code-thread-card local-code-thread" data-comment-thread={root.id} data-agent-status={agentStatus} />);
+        local.before(card);
+        card.append(local, details);
+        delete local.dataset.commentThread;
         if (root.resolved === true) {
           const folded = toElement(resolvedThread(root, <></>, expanded.has(expansionKey(tab.key, root.id))));
           folded.classList.add('local-resolved-thread');
-          folded.dataset.commentThread = root.id;
-          delete local.dataset.commentThread;
           local.before(folded);
           folded.querySelector('.resolved-thread-content')?.append(local, details);
         }
@@ -230,6 +266,7 @@ export function bindThreads(): void {
       );
       (line.closest('.split-row') ?? line).after(holder);
     }
+    restoreComposers();
     refreshFind();
   }
   effect(() => {
@@ -244,6 +281,9 @@ export function bindThreads(): void {
     if (!element.isConnected || element.dataset.resolvedTab === undefined || element.dataset.resolvedThread === undefined) return;
     const key = expansionKey(element.dataset.resolvedTab, element.dataset.resolvedThread);
     if (element.open) expanded.add(key); else expanded.delete(key);
+  });
+  void delegateCapture<HTMLDetailsElement>(pane, 'toggle', '.code-reply-disclosure', (_event, element) => {
+    if (element.open && element.isConnected) element.querySelector<HTMLTextAreaElement>('textarea')?.focus({ preventScroll: true });
   });
   document.addEventListener('glassbox-diff-ready', () => {
     previousView = null;
@@ -292,6 +332,8 @@ export function bindThreads(): void {
         if (ok) {
           input.value = '';
           input.blur();
+          const composer = input.closest('details');
+          if (composer) composer.open = false;
           previous = '';
           render();
         }

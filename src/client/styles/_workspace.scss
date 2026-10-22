@@ -467,12 +467,6 @@ body[data-review-pending='true'] .workspace-topbar .outline-dropdown {
   span, time { color: var(--text-dim); font-size: 11px; }
 }
 .local-agent-status { width: 100%; }
-.pr-message[data-code-comment='true'] {
-  padding: 14px 20px;
-  .pr-message-meta { font-size: 11px; opacity: 1; color: var(--text-dim); }
-  .pr-message-meta > span:first-of-type { font-size: var(--font-code-size); color: var(--text); }
-  .pr-message-meta time { font-size: 11px; }
-}
 // The band stays inside the card and reflects agent acknowledgement, not transport delivery.
 .annotation-item[data-agent-status],
 .pr-message[data-agent-status] {
