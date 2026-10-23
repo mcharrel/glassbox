@@ -93,3 +93,16 @@ it('anchors the copy confirmation to the clicked PR and does not show it after s
   expect(html).toContain('data-key="share:example/project#1"');
   expect(html).toContain('data-morph-skip-children=""');
 });
+
+it('offers Merge only for own PRs and disables it for drafts and closed PRs', () => {
+  const own = tab('main', 'me', 'OPEN', false); own.reviewedHead = 'reviewed-head';
+  const html = String(pullHeader(own, null));
+  expect(html).toContain('<option value="merge">Merge</option>');
+  expect(html).toContain('data-merge-head="reviewed-head"');
+  expect(String(pullHeader(tab(), null))).toContain('<option value="merge" disabled>Merge</option>');
+  expect(String(pullHeader(tab('main', 'me', 'CLOSED', false), null))).toContain('<option value="merge" disabled>Merge</option>');
+  expect(String(pullHeader(tab('main', 'other', 'OPEN', false), null))).not.toContain('value="merge"');
+  const busy = String(pullHeader(own, null, false, false, true));
+  expect(busy).toContain('disabled aria-busy="true">Merging…'); expect(busy).not.toContain('<select');
+  expect(busy).toContain('data-workspace="share"');
+});

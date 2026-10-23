@@ -697,9 +697,12 @@
         "tests/unit/workspace/notifications.test.ts",
         "tests/unit/workspace/service.test.ts",
         "tests/unit/client/workspaceHeader.test.ts",
+        "tests/unit/client/workspaceState.test.ts",
+        "tests/unit/workspace/merge.test.ts",
+        "tests/integration/workspace/merge.test.ts",
         "tests/unit/api/workspace-requests.test.ts"
       ],
-      "note": "sidebar+main; hide/show toggle (aria-pressed); sidebar contents rendered. The shared PR header, compact dropdown and workspace calls without a selected review are covered."
+      "note": "sidebar+main; hide/show toggle (aria-pressed); sidebar contents rendered. The shared PR header, compact dropdown and workspace calls without a selected review are covered. Own-PR merges exercise draft/closed/author gates, SHA matching, repository methods, pending/success/failure, duplicate requests, tab switching and older metadata arriving after a successful merge."
     },
     "8.2": {
       "tests": [

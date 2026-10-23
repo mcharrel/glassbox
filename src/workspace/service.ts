@@ -39,6 +39,7 @@ import {
   repoApi,
 } from './github.js';
 import { closingTabs, waitForCheckouts, withCheckoutLock } from './lifecycle.js';
+import { mergePull } from './merge.js';
 import { hasCodeFocus, notify } from './notifications.js';
 import { startWorkspaceCleanup } from './retention.js';
 import { cancelSlackReaction, cancelSlackReactions, queueSlackReaction, recoverSlackReactions, retrySlackReaction, stopSlackReactions } from './slack-reactions.js';
@@ -132,6 +133,11 @@ async function performSync(tab: PullTab, mode: Exclude<SyncMode, 'auto'>): Promi
     info.reviews.push(...newReviews.filter(review => !info.reviews.some(remote =>
       remote.author?.login.toLowerCase() === review.author?.login.toLowerCase() && remote.submittedAt === review.submittedAt &&
       (remote.state === review.state || remote.state === 'DISMISSED'))));
+    // A read started before a successful merge cannot reopen the PR in the UI.
+    if (tab.info?.state === 'MERGED' && info.state !== 'MERGED') {
+      info.state = 'MERGED';
+      info.mergedAt = tab.info.mergedAt;
+    }
     tab.info = info;
     // Deployment lookup must never hold up metadata, comments, or the source view.
     void refreshDeployment(tab, mode !== 'initial');
@@ -672,6 +678,12 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
       if (input.title !== undefined) tab.info.title = input.title;
       if (input.body !== undefined) { tab.info.body = input.body; delete tab.info.bodyHTML; }
     }
+  }
+  if (input.op === 'merge') {
+    const before = tab.info;
+    await mergePull(tab, input.expectedHead, () => workspaceData().tabs.includes(tab) && !closingTabs.has(tab));
+    notifyChanges(before, tab);
+    void syncTab(tab, 'background');
   }
   if (input.op === 'action') {
     const receipt = await mutatePull(tab, input.action, input.body);

@@ -351,3 +351,10 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 - Open Add reply…, type a draft, blur and refresh metadata. Preserve the draft and disclosure; Enter posts, Shift+Enter inserts a line, and successful posting closes the composer. Failed posting keeps the draft. Delete a root with replies and another thread at the same line: no orphan card or reply box remains.
 - Fold/unfold a resolved thread, search a folded reply and use C/V navigation through long conversations. Preserve expansion on tab switches and include the entire card in visibility calculations.
 - Browser automation and screenshots are disabled by the user's preference; layout checks remain manual. Automated thread markup, draft preservation, navigation and deletion checks run in the unit suite.
+
+## Own-PR merge action
+
+- On an own open PR, the status dropdown includes Merge. Draft and closed PRs show it disabled; other authors' PRs omit it, and merged PRs retain the green disabled Merged button.
+- Use a disposable PR for any manual merge: confirm Merging… disables the dropdown while Share, tabs and other PRs remain usable, then the status becomes green Merged. Do not use a real work PR for test merges.
+- New commits since the displayed/reviewed version must require refresh; rejected checks, review requirements, conflicts and authorization failures retain the confirmed status and show the error. Failed merges can be retried.
+- Switching PR tabs during merge keeps the current selection and shows the result on returning. Merging sends no Slack review reactions. Simulated HTTP integration and unit tests cover these transitions; visual checks remain manual.

@@ -198,6 +198,7 @@ export const WorkspaceMutationSchema = z.discriminatedUnion('op', [
     view: z.enum(['main', 'file']),
   }),
   z.object({ op: z.literal('refresh'), key: z.string() }),
+  z.object({ op: z.literal('merge'), key: z.string(), expectedHead: z.string().regex(/^[a-f0-9]{40}$/i) }),
   z.object({
     op: z.literal('edit'),
     key: z.string(),

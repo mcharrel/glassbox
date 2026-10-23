@@ -13,7 +13,7 @@ export async function copyPullLink(tab: PullTab, button: Element): Promise<void>
 }
 
 /** Shared Main/File header; unavailable totals stay pending instead of looking empty. */
-export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null, refreshing = false, closing = false) {
+export function pullHeader(tab: PullTab, counts: { added: number; removed: number } | null, refreshing = false, closing = false, merging = false) {
   const info = tab.info;
   const own = isPullAuthor(tab);
   const selected = own && info ? (info.state === 'CLOSED' ? 'close' : info.isDraft ? 'draft' : 'ready') : '';
@@ -21,7 +21,7 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
   const reviewLabel = review === 'APPROVED' ? 'Approved' : review === 'CHANGES_REQUESTED' ? 'Changes requested' : 'Review';
   const reviewClass = review === 'APPROVED' ? ' pr-review-approved' : review === 'CHANGES_REQUESTED' ? ' pr-review-changes' : '';
   const options = own
-    ? [['draft', 'Draft'], ['ready', 'Ready for Review'], ['close', 'Close']]
+    ? [['draft', 'Draft'], ['ready', 'Ready for Review'], ['merge', 'Merge'], ['close', 'Close']]
     : [['approve', 'Approve'], ['changes', 'Request code change'], ['humanize', 'Make explanations more human']];
   return <>
     <div className="pr-heading">
@@ -45,10 +45,11 @@ export function pullHeader(tab: PullTab, counts: { added: number; removed: numbe
         {!['prod', 'main'].includes(info.baseRefName) && <div>{'-> '}{info.baseRefName}</div>}</> : 'Loading…'}
     </div>
     <div className="pr-actions">
-      {info?.state === 'MERGED' ? <button className="pr-merged-status" disabled>Merged</button> :
-        <select className={`pr-action-select${reviewClass}`} aria-label={own ? 'PR status' : 'Review PR'} data-pr-action="" disabled={!info}>
+      {merging ? <button className="pr-action-select" disabled aria-busy="true">Merging…</button> : info?.state === 'MERGED' ? <button className="pr-merged-status" disabled>Merged</button> :
+        <select className={`pr-action-select${reviewClass}`} aria-label={own ? 'PR status' : 'Review PR'} data-pr-action="" data-merge-head={tab.reviewedHead || info?.headRefOid} disabled={!info}>
           {!own && <option value="" selected disabled>{reviewLabel}</option>}
-          {options.map(([action, label]) => <option value={action} selected={selected === action}>{label}</option>)}
+          {options.map(([action, label]) => <option value={action} selected={selected === action}
+            disabled={action === 'merge' && (info?.state !== 'OPEN' || info.isDraft)}>{label}</option>)}
         </select>}
     </div>
     {Boolean(tab.error) && <div className="workspace-error" title={tab.error}>{tab.error}</div>}

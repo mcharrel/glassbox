@@ -20,7 +20,7 @@ import { startFreshReview } from './freshReview.js';
 import { copyPullLink, pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
 import { initSourceRefresh, refreshActivePull } from './sourceRefresh.js';
-import { activeReviewReady, activeTab, addingPull, closingPulls, mutate, refreshingPulls, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
+import { activeReviewReady, activeTab, addingPull, closingPulls, mergingPulls, mutate, refreshingPulls, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads } from './threads.js';
 
 function lifecycle(tab: PullTab): string {
@@ -223,7 +223,7 @@ export function initWorkspace(): void {
       mountedHeader = true;
       mount(oldHeader, () => {
         const current = activeTab();
-        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null, refreshingPulls.value.has(current.key), closingPulls.value.has(current.key)) : null}</div>;
+        return <div className="pr-header-content">{current ? pullHeader(current, activeReviewReady() ? totals() : null, refreshingPulls.value.has(current.key), closingPulls.value.has(current.key), mergingPulls.value.has(current.key)) : null}</div>;
       });
     }
 
@@ -420,7 +420,10 @@ export function initWorkspace(): void {
     element.value = isPullAuthor(tab) && tab.info
       ? (tab.info.state === 'CLOSED' ? 'close' : tab.info.isDraft ? 'draft' : 'ready') : '';
     oldHeader.querySelector('.request-changes-form')?.remove();
-    if (action === 'changes') {
+    if (action === 'merge') {
+      const expectedHead = element.dataset.mergeHead;
+      if (expectedHead !== undefined && expectedHead !== '') void mutate({ op: 'merge', key: tab.key, expectedHead });
+    } else if (action === 'changes') {
       const box = toElement(
         <div className="request-changes-form">
           <textarea placeholder="Describe the changes needed…"></textarea>

@@ -13,6 +13,7 @@ export const workspace = signal<Workspace>({ tabs: [], active: null });
 export const addingPull = signal(false);
 export const workspaceLoaded = signal(false);
 export const refreshingPulls = signal<ReadonlySet<string>>(new Set());
+export const mergingPulls = signal<ReadonlySet<string>>(new Set());
 export const closingPulls = signal<ReadonlySet<string>>(new Set());
 export const reviewRetry = signal(0);
 export const reviewSessionKey = (tab: PullTab): string => `${tab.key}:${tab.reviewId ?? ''}:${tab.reviewedBase}:${tab.reviewedHead}${tab.checkoutEvicted ? ':expired' : ''}`;
@@ -57,16 +58,21 @@ export async function mutate(input: WorkspaceMutation): Promise<boolean> {
     if (closingPulls.value.has(input.key)) return false;
     closingPulls.value = new Set([...closingPulls.value, input.key]);
   }
+  if (input.op === 'merge') {
+    if (mergingPulls.value.has(input.key)) return false;
+    mergingPulls.value = new Set([...mergingPulls.value, input.key]);
+  }
   const version = ++mutationVersion;
   try {
     const result = await changeWorkspace(input);
     if (version === mutationVersion) receive(result, input.op !== 'open');
-    else if (input.op === 'close') void refreshWorkspace().catch(() => {});
+    else if (input.op === 'close' || input.op === 'merge') void refreshWorkspace().catch(() => {});
     return true;
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Request failed');
     return false;
   } finally {
+    if (input.op === 'merge') mergingPulls.value = new Set([...mergingPulls.value].filter(key => key !== input.key));
     if (input.op === 'close') closingPulls.value = new Set([...closingPulls.value].filter(key => key !== input.key));
   }
 }

@@ -3,7 +3,7 @@ import { PullTabSchema } from '../../../src/api/workspace.js';
 const remote = vi.hoisted(() => ({ get: vi.fn(), change: vi.fn() }));
 vi.mock('../../../src/api/workspace.js', async original => ({ ...(await original<typeof import('../../../src/api/workspace.js')>()), getWorkspace: remote.get, changeWorkspace: remote.change }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
-const { workspace, mutate, refreshWorkspace, addingPull, closingPulls } = await import('../../../src/client/workspace/state.js');
+const { workspace, mutate, refreshWorkspace, addingPull, closingPulls, mergingPulls } = await import('../../../src/client/workspace/state.js');
 const { showToast } = await import('../../../src/client/toast.js');
 const tab = (key: string) => PullTabSchema.parse({ key, reviewId: key, repoRoot: '/', info: null, ref: { owner: 'a', repo: 'b', number: 1, url: '' } });
 beforeEach(() => {
@@ -80,4 +80,28 @@ it('refreshes a completed close after switching tabs instead of applying its old
   finish({ tabs: [tab('b')], active: 'b' }); await close;
   await vi.waitFor(() => expect(workspace.value.tabs.map(t => t.key)).toEqual(['b']));
   expect(workspace.value.active).toBe('b'); expect(closingPulls.value.size).toBe(0);
+});
+
+
+it('tracks merge progress per PR, ignores duplicates and refreshes after switching tabs', async () => {
+  let finish!: (value: typeof workspace.value) => void;
+  remote.change.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const request = { op: 'merge' as const, key: 'a', expectedHead: 'a'.repeat(40) };
+  const pending = mutate(request);
+  expect(mergingPulls.value.has('a')).toBe(true); expect(mergingPulls.value.has('b')).toBe(false);
+  expect(await mutate(request)).toBe(false); expect(remote.change).toHaveBeenCalledOnce();
+  workspace.value = { ...workspace.value, active: 'b' };
+  remote.change.mockResolvedValueOnce(workspace.value);
+  await mutate({ op: 'select', key: 'b' });
+  const refreshed = structuredClone(workspace.value); refreshed.tabs[0].action = 'merge';
+  remote.get.mockResolvedValueOnce(refreshed);
+  finish({ ...refreshed, active: 'a' }); expect(await pending).toBe(true);
+  await vi.waitFor(() => expect(workspace.value.tabs[0].action).toBe('merge'));
+  expect(workspace.value.active).toBe('b'); expect(mergingPulls.value.size).toBe(0);
+});
+it('releases merge progress on failure without changing the PR status', async () => {
+  remote.change.mockRejectedValueOnce(new Error('GitHub 405: Required review missing'));
+  expect(await mutate({ op: 'merge', key: 'a', expectedHead: 'a'.repeat(40) })).toBe(false);
+  expect(mergingPulls.value.size).toBe(0); expect(workspace.value.tabs[0].action).not.toBe('merge');
+  expect(showToast).toHaveBeenCalledWith('GitHub 405: Required review missing');
 });
