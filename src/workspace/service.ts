@@ -626,13 +626,14 @@ export async function mutateWorkspace(input: WorkspaceMutation, currentReviewId:
     return;
   }
   if (input.op === 'order') {
+    const visible = data.tabs.filter(tab => !closingTabs.has(tab));
     if (
-      new Set(input.keys).size !== data.tabs.length ||
-      input.keys.length !== data.tabs.length ||
-      input.keys.some((key) => !data.tabs.some((t) => t.key === key))
+      new Set(input.keys).size !== visible.length ||
+      input.keys.length !== visible.length ||
+      input.keys.some((key) => !visible.some((t) => t.key === key))
     )
       throw new Error('Order must contain each PR exactly once');
-    data.tabs = input.keys.map(requireTab);
+    data.tabs = [...input.keys.map(requireTab), ...data.tabs.filter(tab => closingTabs.has(tab))];
     saveWorkspace();
     return;
   }

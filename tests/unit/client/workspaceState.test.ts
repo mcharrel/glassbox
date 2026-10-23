@@ -3,7 +3,7 @@ import { PullTabSchema } from '../../../src/api/workspace.js';
 const remote = vi.hoisted(() => ({ get: vi.fn(), change: vi.fn() }));
 vi.mock('../../../src/api/workspace.js', async original => ({ ...(await original<typeof import('../../../src/api/workspace.js')>()), getWorkspace: remote.get, changeWorkspace: remote.change }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
-const { workspace, mutate, refreshWorkspace, addingPull, closingPulls, mergingPulls } = await import('../../../src/client/workspace/state.js');
+const { workspace, mutate, refreshWorkspace, addingPull, closingPulls, mergingPulls, retainedTabs } = await import('../../../src/client/workspace/state.js');
 const { showToast } = await import('../../../src/client/toast.js');
 const tab = (key: string) => PullTabSchema.parse({ key, reviewId: key, repoRoot: '/', info: null, ref: { owner: 'a', repo: 'b', number: 1, url: '' } });
 beforeEach(() => {
@@ -65,7 +65,7 @@ it('releases closing progress after a failure and keeps the tab available to ret
   expect(await mutate({ op: 'close', key: 'a' })).toBe(false);
   expect(workspace.value.tabs.map(t => t.key)).toEqual(['a', 'b']);
   expect(closingPulls.value.size).toBe(0);
-  expect(showToast).toHaveBeenCalledWith('Unpublished changes');
+  expect(showToast).toHaveBeenCalledWith('Couldn’t close a: Unpublished changes');
   remote.change.mockResolvedValueOnce({ tabs: [tab('b')], active: 'b' });
   expect(await mutate({ op: 'close', key: 'a' })).toBe(true);
 });
@@ -104,4 +104,87 @@ it('releases merge progress on failure without changing the PR status', async ()
   expect(await mutate({ op: 'merge', key: 'a', expectedHead: 'a'.repeat(40) })).toBe(false);
   expect(mergingPulls.value.size).toBe(0); expect(workspace.value.tabs[0].action).not.toBe('merge');
   expect(showToast).toHaveBeenCalledWith('GitHub 405: Required review missing');
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void, reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+it('removes a tab synchronously and filters it out of polls and other mutation responses during cleanup', async () => {
+  const original = structuredClone(workspace.value);
+  const cleanup = deferred<typeof workspace.value>();
+  remote.change.mockReturnValueOnce(cleanup.promise);
+  const request = mutate({ op: 'close', key: 'a' });
+  expect(workspace.value.tabs.map(t => t.key)).toEqual(['b']);
+  expect(workspace.value.active).toBe('b');
+  expect(retainedTabs().map(t => t.key).sort()).toEqual(['a', 'b']);
+  remote.get.mockResolvedValue(original);
+  await refreshWorkspace();
+  remote.change.mockResolvedValueOnce(original);
+  await mutate({ op: 'view', key: 'b', view: 'file' });
+  expect(workspace.value.tabs.map(t => t.key)).toEqual(['b']);
+  expect(workspace.value.active).toBe('b');
+  remote.get.mockResolvedValue({ tabs: [tab('b')], active: 'b' });
+  cleanup.resolve({ tabs: [tab('b')], active: 'b' }); await request;
+  expect(retainedTabs().map(t => t.key)).toEqual(['b']);
+});
+it('keeps closed tabs gone when an older poll completes after deletion', async () => {
+  const original = structuredClone(workspace.value);
+  const cleanup = deferred<typeof workspace.value>(), poll = deferred<typeof workspace.value>();
+  remote.change.mockReturnValueOnce(cleanup.promise);
+  const close = mutate({ op: 'close', key: 'a' });
+  remote.get.mockReturnValueOnce(poll.promise);
+  const refresh = refreshWorkspace();
+  cleanup.resolve({ tabs: [tab('b')], active: 'b' }); await close;
+  poll.resolve(original); await refresh;
+  expect(workspace.value.tabs.map(t => t.key)).toEqual(['b']);
+});
+it('closes all tabs immediately even when cleanup responses arrive in reverse order', async () => {
+  const first = deferred<typeof workspace.value>(), second = deferred<typeof workspace.value>();
+  remote.change.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  const a = mutate({ op: 'close', key: 'a' }), b = mutate({ op: 'close', key: 'b' });
+  expect(workspace.value).toMatchObject({ tabs: [], active: null });
+  second.resolve({ tabs: [tab('a')], active: 'a' }); await b;
+  expect(workspace.value.tabs).toEqual([]);
+  remote.get.mockResolvedValue({ tabs: [], active: null });
+  first.resolve({ tabs: [tab('b')], active: 'b' }); await a;
+  await vi.waitFor(() => expect(retainedTabs()).toEqual([]));
+  expect(workspace.value).toMatchObject({ tabs: [], active: null });
+});
+it('restores only a failed tab, without undoing another close or stealing the current selection', async () => {
+  workspace.value = { tabs: [tab('a'), tab('b'), tab('c')], active: 'a' };
+  const first = deferred<typeof workspace.value>(), second = deferred<typeof workspace.value>();
+  remote.change.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  const a = mutate({ op: 'close', key: 'a' }), b = mutate({ op: 'close', key: 'b' });
+  expect(workspace.value.active).toBe('c');
+  second.resolve({ tabs: [tab('a'), tab('c')], active: 'a' }); await b;
+  first.reject(new Error('Unpublished commits')); expect(await a).toBe(false);
+  expect(workspace.value.tabs.map(t => t.key)).toEqual(['a', 'c']);
+  expect(workspace.value.active).toBe('c');
+  expect(workspace.value.tabs[0].error).toBe('Unpublished commits');
+});
+it('restores the last tab after a cleanup failure and permits a fresh retry', async () => {
+  workspace.value = { tabs: [tab('a')], active: 'a' };
+  const cleanup = deferred<typeof workspace.value>();
+  remote.change.mockReturnValueOnce(cleanup.promise);
+  const close = mutate({ op: 'close', key: 'a' });
+  expect(workspace.value).toMatchObject({ tabs: [], active: null });
+  cleanup.reject(new Error('Disk unavailable')); await close;
+  expect(workspace.value.active).toBe('a'); expect(retainedTabs()).toHaveLength(1);
+  remote.change.mockResolvedValueOnce({ tabs: [], active: null });
+  expect(await mutate({ op: 'close', key: 'a' })).toBe(true);
+  expect(retainedTabs()).toEqual([]);
+});
+it('accepts a newly opened PR even when its request straddles a completed close', async () => {
+  const cleanup = deferred<typeof workspace.value>(), open = deferred<typeof workspace.value>();
+  remote.change.mockReturnValueOnce(cleanup.promise).mockReturnValueOnce(open.promise);
+  const close = mutate({ op: 'close', key: 'a' });
+  const opening = mutate({ op: 'open', url: 'https://github.com/a/b/pull/1' });
+  const fresh = { tabs: [tab('b'), { ...tab('a'), reviewId: 'new-a' }], active: 'a' };
+  remote.get.mockResolvedValue(fresh);
+  cleanup.resolve({ tabs: [tab('b')], active: 'b' }); await close;
+  open.resolve(fresh); await opening;
+  await vi.waitFor(() => expect(workspace.value.active).toBe('a'));
+  expect(workspace.value.tabs.find(t => t.key === 'a')?.reviewId).toBe('new-a');
 });

@@ -358,3 +358,9 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 - Use a disposable PR for any manual merge: confirm Merging… disables the dropdown while Share, tabs and other PRs remain usable, then the status becomes green Merged. Do not use a real work PR for test merges.
 - New commits since the displayed/reviewed version must require refresh; rejected checks, review requirements, conflicts and authorization failures retain the confirmed status and show the error. Failed merges can be retried.
 - Switching PR tabs during merge keeps the current selection and shows the result on returning. Merging sends no Slack review reactions. Simulated HTTP integration and unit tests cover these transitions; visual checks remain manual.
+
+## Immediate PR closing
+
+- Close the active tab during a slow checkout deletion: the tab disappears and the next PR appears immediately. Closing the final tab immediately shows the add-PR screen. Keep switching and reordering other tabs while cleanup runs.
+- Reject deletion of a disposable fixture containing unpublished work: restore only its tab, keep the current selection, and show the reason. Return to it and verify unsent drafts and reading position survived. Retry after making its source disposable.
+- Unit and HTTP integration tests cover delayed cleanup, simultaneous closes, older polls/responses, new opens, failures, cache release and tab reordering. Browser automation remains disabled by user preference.

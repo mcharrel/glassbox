@@ -3,13 +3,15 @@ import { invalidateDiffCache } from '../../../src/client/diff/index.js';
 import { PullTabSchema } from '../../../src/api/workspace.js';
 
 const api = vi.hoisted(() => vi.fn());
+const change = vi.hoisted(() => vi.fn());
+vi.mock('../../../src/api/workspace.js', async original => ({ ...await original<typeof import('../../../src/api/workspace.js')>(), changeWorkspace: change }));
 vi.mock('../../../src/api/_runner.js', () => ({ apiCall: api, OkResponseSchema: {} }));
 vi.mock('../../../src/client/analysisEngine.js', () => ({ stopPolling: vi.fn(), resumePolling: vi.fn(), pollingGeneration: vi.fn(() => 0) }));
 vi.mock('../../../src/client/diff/index.js', () => ({ invalidateDiffCache: vi.fn(), forgetReviewDiff: vi.fn() }));
 vi.mock('../../../src/client/toast.js', () => ({ showToast: vi.fn() }));
 vi.stubGlobal('document', { body: { dataset: { reviewId: 'a' } } });
 const { reviewStore, aiStore, diffViewStore, editFormSignal } = await import('../../../src/client/stores/index.js');
-const { workspace, reviewLoadState, reviewRetry, activeReviewReady } = await import('../../../src/client/workspace/state.js');
+const { workspace, reviewLoadState, reviewRetry, activeReviewReady, mutate } = await import('../../../src/client/workspace/state.js');
 const { initReviewSessions } = await import('../../../src/client/workspace/reviewSessions.js');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const file = (id: string) => ({ id, file_path: `${id}.ts`, review_id: id[0], status: 'reviewed', diff_data: null, created_at: '' });
@@ -236,4 +238,23 @@ it('clears the last closed review and ignores its late loading response', async 
   finish({ scores: [] }); await tick();
   expect(reviewStore.state.value.files).toEqual([]);
   expect(window.history.replaceState).toHaveBeenLastCalledWith(null, '', '/');
+});
+
+it.each([false, true])('retains drafts while closing, restores them on failure, and evicts them only after success (last tab: %s)', async last => {
+  if (last) workspace.value = { tabs: [tab('a')], active: 'a' };
+  dispose = initReviewSessions(); await tick();
+  editFormSignal.value = { annotationId: null, formKey: '3:new', content: 'Keep on failure', category: 'bug' };
+  scroll.value = 'Main draft'; scroll.scrollTop = 42;
+  let fail!: (error: Error) => void;
+  change.mockImplementationOnce(() => new Promise((_yes, no) => { fail = no; }));
+  const close = mutate({ op: 'close', key: 'a' }); await tick();
+  expect(reviewStore.state.value.reviewId).toBe(last ? '' : 'b');
+  fail(new Error('Unpublished code')); await close;
+  workspace.value = { ...workspace.value, active: 'a' }; await tick();
+  expect(editFormSignal.value?.content).toBe('Keep on failure');
+  expect(scroll).toEqual({ scrollTop: 42, value: 'Main draft' });
+  change.mockResolvedValueOnce({ tabs: last ? [] : [tab('b')], active: last ? null : 'b' });
+  await mutate({ op: 'close', key: 'a' }); await tick();
+  workspace.value = { tabs: [tab('a'), ...workspace.value.tabs], active: 'a' }; await tick();
+  expect(editFormSignal.value).toBeNull(); expect(scroll.value).toBe('');
 });

@@ -11,7 +11,7 @@ import { loadAnalysisResults } from '../sidebar/sortMode.js';
 import { defaultAnalysisModeState } from '../state.js';
 import { aiStore, diffViewStore, editFormSignal, reviewStore, visibleFileOrder } from '../stores/index.js';
 import { showToast } from '../toast.js';
-import { activeTab, reviewLoadState, reviewRetry, reviewSessionKey, workspace, workspaceLoaded } from './state.js';
+import { activeTab, retainedTabs, reviewLoadState, reviewRetry, reviewSessionKey, workspace, workspaceLoaded } from './state.js';
 
 interface Session {
   status: 'loading' | 'ready' | 'error';
@@ -166,10 +166,11 @@ export function initReviewSessions(): () => void {
   const stop = effect(() => {
     void workspace.value;
     void workspaceLoaded.value;
+    void retainedTabs();
     const retry = reviewRetry.value;
     queueMicrotask(() => {
       if (!live) return;
-      const tabs = workspace.value.tabs;
+      const tabs = retainedTabs();
       const keys = new Set(tabs.map(sessionKey));
       const ids = new Set(tabs.map(tab => tab.reviewId));
       for (const [key, session] of sessions) if (!keys.has(key)) {
@@ -196,6 +197,8 @@ export function initReviewSessions(): () => void {
         if (!clearedEmpty && (current !== '' || workspaceLoaded.value)) {
           clearedEmpty = true;
           for (const mode of ['risk', 'narrative', 'guided'] as const) stopPolling(mode);
+          const previous = sessions.get(current);
+          if (previous) Object.assign(previous, capture());
           initial = null; current = ''; restore(empty);
           window.history.replaceState(null, '', '/');
           document.dispatchEvent(new Event('glassbox-review-selected'));

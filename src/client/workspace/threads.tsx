@@ -9,7 +9,7 @@ import { toElement } from '../dom.js';
 import { reviewStore } from '../stores/index.js';
 import { showToast } from '../toast.js';
 import { commentAnchor } from './commentAnchor.js';
-import { activeTab, mutate, workspace } from './state.js';
+import { activeTab, mutate,retainedTabs } from './state.js';
 
 export function codexStatus(message: ThreadMessage) {
   const status = commentAgentStatus(message);
@@ -270,7 +270,7 @@ export function bindThreads(): void {
     refreshFind();
   }
   effect(() => {
-    const resolved = new Set(workspace.value.tabs.flatMap(tab => tab.comments
+    const resolved = new Set(retainedTabs().flatMap(tab => tab.comments
       .filter(message => message.resolved === true && !message.deleted)
       .map(message => expansionKey(tab.key, message.id))));
     for (const key of expanded) if (!resolved.has(key)) expanded.delete(key);

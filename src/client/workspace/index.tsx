@@ -20,7 +20,7 @@ import { startFreshReview } from './freshReview.js';
 import { copyPullLink, pullHeader } from './header.js';
 import { bindDivider } from './resize.js';
 import { initSourceRefresh, refreshActivePull } from './sourceRefresh.js';
-import { activeReviewReady, activeTab, addingPull, closingPulls, mergingPulls, mutate, refreshingPulls, refreshWorkspace, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
+import { activeReviewReady, activeTab, addingPull, closingPulls, mergingPulls, mutate, refreshingPulls, refreshWorkspace, retainedTabs, reviewLoadState, reviewRetry, reviewSessionKey, workspace } from './state.js';
 import { bindThreads } from './threads.js';
 
 function lifecycle(tab: PullTab): string {
@@ -257,7 +257,7 @@ export function initWorkspace(): void {
   const descriptionDrafts = new Map<string, Node[]>();
   effect(() => {
     const tab = activeTab();
-    const keys = new Set(workspace.value.tabs.filter(isPullAuthor).map(item => item.key));
+    const keys = new Set(retainedTabs().filter(isPullAuthor).map(item => item.key));
     for (const key of descriptionDrafts.keys()) if (!keys.has(key)) descriptionDrafts.delete(key);
     if (descriptionKey !== tab?.key) {
       if (descriptionKey !== undefined && keys.has(descriptionKey) && editingDescription) {
