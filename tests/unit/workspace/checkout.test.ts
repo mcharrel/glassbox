@@ -12,9 +12,10 @@ vi.mock('../../../src/review-update.js', () => ({ updateReviewDiffs: vi.fn() }))
 vi.mock('../../../src/workspace/storage.js', () => ({ workspaceData: () => ({ tabs: [] }) }));
 vi.mock('../../../src/workspace/github.js', () => ({ githubToken: async () => 'fixture', github: mocks.github, repoApi: () => 'repos/example/project' }));
 vi.mock('../../../src/workspace/repositories.js', () => ({ findLocalRepository: mocks.find }));
+import { repositoryCache } from '../../../src/workspace/object-cache.js';
 import { importPull } from '../../../src/workspace/checkout.js';
 
-it('fetches missing objects through a shared checkout, protects them from GC, and leaves its source untouched', async () => {
+it('shares independent snapshots across PRs without modifying or depending on the user clone', async () => {
   const root = mkdtempSync(join(tmpdir(), 'glassbox-import-test-'));
   try {
     const remote = join(root, 'remote'); const source = join(root, 'source');
@@ -28,10 +29,14 @@ it('fetches missing objects through a shared checkout, protects them from GC, an
     writeFileSync(join(source, 'file.ts'), 'user work\n');
     writeFileSync(join(remote, 'file.ts'), 'after\n'); git(remote, 'add', '.'); git(remote, 'commit', '-qm', 'change');
     const head = git(remote, 'rev-parse', 'HEAD');
-    git(source, 'config', `url.${remote}.insteadOf`, 'https://github.com/example/project.git');
+    mocks.find.mockResolvedValue(source); mocks.github.mockResolvedValue({ merge_base_commit: { sha: base } });
     const tab = PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: source,
       info: { id: 'PR1', number: 1, url: '', title: 'Example', body: '', author: { login: 'test' }, state: 'OPEN', isDraft: false,
         baseRefName: 'main', headRefName: 'topic', baseRefOid: base, headRefOid: head, mergeable: 'MERGEABLE', mergedAt: null } });
+    const cache = await repositoryCache(tab.ref);
+    git(cache, 'config', `url.file://${remote}.insteadOf`, 'https://github.com/example/project.git');
+    const sourceRefs = git(source, 'show-ref', '--head');
+    const sourceConfig = readFileSync(join(source, '.git/config'), 'utf8');
     // Focus returns during the fetch: keep the old source snapshot until later.
     const canApply = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
     mocks.file.mockClear();
@@ -41,13 +46,19 @@ it('fetches missing objects through a shared checkout, protects them from GC, an
     expect(tab.reviewId).toBe('review');
     expect(readFileSync(join(source, 'file.ts'), 'utf8')).toBe('user work\n');
     expect(git(source, 'rev-parse', 'HEAD')).toBe(base);
-    expect(git(source, 'rev-parse', `refs/glassbox/cache/${head}`)).toBe(head);
+    expect(git(source, 'show-ref', '--head')).toBe(sourceRefs);
+    expect(readFileSync(join(source, '.git/config'), 'utf8')).toBe(sourceConfig);
     expect(readFileSync(join(tab.repoRoot!, 'file.ts'), 'utf8')).toBe('after\n');
     expect(mocks.file).toHaveBeenCalledWith('review', 'file.ts', expect.stringContaining('after'));
-    git(source, 'gc', '--prune=now');
-    expect(git(tab.repoRoot!, 'show', 'HEAD:file.ts')).toBe('after');
+    const second = PullTabSchema.parse({ ...tab, key: 'example/project#2', ref: { ...tab.ref, number: 2 }, reviewId: null, repoRoot: null });
+    const third = PullTabSchema.parse({ ...second, key: 'example/project#3', ref: { ...tab.ref, number: 3 } });
+    await Promise.all([importPull(second), importPull(third)]);
+    expect(readFileSync(join(second.repoRoot!, '.git/objects/info/alternates'), 'utf8').trim()).toBe(join(cache, 'objects'));
+    rmSync(tab.repoRoot!, { recursive: true }); rmSync(source, { recursive: true }); rmSync(remote, { recursive: true });
+    expect(git(second.repoRoot!, 'show', 'HEAD:file.ts')).toBe('after');
+    expect(git(third.repoRoot!, 'show', `${base}:file.ts`)).toBe('before');
   } finally { rmSync(root, { recursive: true, force: true }); }
-});
+}, 15000);
 
 it('uses the exact remote merge base for cold snapshots without downloading a history window', async () => {
   const root = mkdtempSync(join(tmpdir(), 'glassbox-cold-import-'));
@@ -66,11 +77,13 @@ it('uses the exact remote merge base for cold snapshots without downloading a hi
     const head = git(remote, 'rev-parse', 'HEAD');
     mocks.dataDir = join(root, 'data');
     const checkout = join(mocks.dataDir, 'workspaces/example-project-1'); mkdirSync(checkout, { recursive: true });
-    git(checkout, 'init', '-q'); git(checkout, 'config', `url.file://${remote}.insteadOf`, 'https://github.com/example/project.git');
+    git(checkout, 'init', '-q');
     mocks.github.mockResolvedValue({ merge_base_commit: { sha: ancestor } });
     const tab = PullTabSchema.parse({ key: 'example/project#1', ref: { owner: 'example', repo: 'project', number: 1, url: '' }, reviewId: null, repoRoot: null,
       info: { id: 'PR1', number: 1, url: '', title: 'Example', body: '', author: { login: 'test' }, state: 'OPEN', isDraft: false,
         baseRefName: 'main', headRefName: 'topic', baseRefOid: target, headRefOid: head, mergeable: 'MERGEABLE', mergedAt: null } });
+    const cache = await repositoryCache(tab.ref);
+    git(cache, 'config', `url.file://${remote}.insteadOf`, 'https://github.com/example/project.git');
     await importPull(tab);
     expect(tab.reviewedBase).toBe(ancestor);
     expect(mocks.file.mock.calls.map(call => call[1])).toEqual(['file.ts']);

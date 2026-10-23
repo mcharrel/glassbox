@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Hono } from 'hono';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { PullTabSchema, ThreadMessageSchema } from '../../../src/api/workspace.js';
 import type { WorkspaceDisk } from '../../../src/workspace/storage.js';
@@ -14,6 +15,8 @@ import { createAnalysis } from '../../../src/db/ai-queries.js';
 import { createAttachment } from '../../../src/db/attachment-queries.js';
 import { addAnnotation, addReviewFile, createReview, getReview, getReviewFiles } from '../../../src/db/queries.js';
 import { discardTabData } from '../../../src/workspace/discard.js';
+import { workspaceRoutes } from '../../../src/workspace/routes.js';
+import type { AppEnv } from '../../../src/types.js';
 
 const git = (root: string, ...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 async function fixture(number = 1, root = join(mocks.root, 'workspaces', `example-project-${number}`)) {
@@ -59,17 +62,24 @@ it('removes a clean checkout and its detached agent worktree immediately', async
   expect(existsSync(root)).toBe(false); expect(existsSync(tab.repoRoot!)).toBe(false);
   expect(await getReview(tab.reviewId!)).toBeUndefined();
 });
-it('copies borrowed Git objects before deleting a provider so an open PR keeps working', async () => {
+it('retains borrowed Git objects without repacking even with a broken cache ref before deleting a provider so an open PR keeps working', async () => {
   const provider = await fixture();
   const borrower = await fixture(2); rmSync(borrower.repoRoot!, { recursive: true });
   git(mocks.root, 'clone', '--shared', provider.repoRoot!, borrower.repoRoot!);
   expect(existsSync(join(borrower.repoRoot!, '.git/objects/info/alternates'))).toBe(true);
   borrower.reviewedHead = provider.reviewedHead; borrower.reviewedBase = provider.reviewedBase;
-  await discardTabData(provider);
+  mkdirSync(join(borrower.repoRoot!, '.git/refs/glassbox/cache'), { recursive: true });
+  writeFileSync(join(borrower.repoRoot!, '.git/refs/glassbox/cache/broken'), 'a'.repeat(40) + '\n');
+  const app = new Hono<AppEnv>().use('*', async (c, next) => { c.set('reviewId', provider.reviewId!); await next(); }).route('/workspace', workspaceRoutes);
+  const response = await app.request('/workspace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'close', key: provider.key }) });
+  expect(response.status).toBe(200);
+  expect((await response.json()).tabs.map((tab: { key: string }) => tab.key)).toEqual([borrower.key]);
   expect(existsSync(provider.repoRoot!)).toBe(false);
-  expect(existsSync(join(borrower.repoRoot!, '.git/objects/info/alternates'))).toBe(false);
+  expect(readFileSync(join(borrower.repoRoot!, '.git/objects/info/alternates'), 'utf8')).toContain(join(mocks.root, 'git-cache/legacy-'));
   expect(git(borrower.repoRoot!, 'show', `${borrower.reviewedBase}:file.ts`)).toBe('source');
   expect(await getReview(borrower.reviewId!)).toBeDefined();
+  await discardTabData(borrower);
+  expect(readdirSync(join(mocks.root, 'git-cache'))).toEqual([]);
 });
 it.each(['dirty', 'untracked', 'commit', 'branch', 'symlink'])('refuses to silently discard %s work', async kind => {
   const tab = await fixture(), root = tab.repoRoot!;

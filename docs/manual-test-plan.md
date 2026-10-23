@@ -340,8 +340,8 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 
 ## Closing tabs during background work
 
-- Start a Slack review reaction, select another PR and close it. Close immediately shows a spinner; other tabs and Share remain usable. It does not wait for Slack or remote metadata/comments. Source cleanup may take longer when other checkouts borrow its Git objects.
-- Switch tabs while a close is pending, then return: progress stays with that PR. Repeated clicks do not start duplicate deletion. An unsafe checkout stays visible with an error and can be retried after its unpublished work is preserved.
+- Start a Slack review reaction, select another PR and close it. Close immediately removes the tab; other tabs and Share remain usable. It does not wait for Slack or remote metadata/comments. Legacy shared objects are retained in an independent cache without repacking.
+- Switch tabs while a close is pending: the closing tab remains hidden until cleanup succeeds or fails. Repeated clicks do not start duplicate deletion. An unsafe checkout stays visible with an error and can be retried after its unpublished work is preserved.
 - API integration and unit tests cover pending Slack/GitHub reads, late responses, close/reopen, source-operation safety, progress and retries. Visual checks remain manual under the no-UI-automation preference.
 
 ## Code conversation cards
@@ -364,3 +364,5 @@ Automated coverage: header order, per-PR request lifecycle, polling, duplicate s
 - Close the active tab during a slow checkout deletion: the tab disappears and the next PR appears immediately. Closing the final tab immediately shows the add-PR screen. Keep switching and reordering other tabs while cleanup runs.
 - Reject deletion of a disposable fixture containing unpublished work: restore only its tab, keep the current selection, and show the reason. Return to it and verify unsent drafts and reading position survived. Retry after making its source disposable.
 - Unit and HTTP integration tests cover delayed cleanup, simultaneous closes, older polls/responses, new opens, failures, cache release and tab reordering. Browser automation remains disabled by user preference.
+
+- Real-Git tests now verify independent snapshot imports, legacy dependency migration and HTTP closure with broken borrower refs. They also verify object access after provider removal and final cache collection. The visual immediate-close behavior remains covered by the manual checks above.

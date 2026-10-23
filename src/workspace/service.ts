@@ -38,7 +38,7 @@ import {
   RemoteCommentSchema,
   repoApi,
 } from './github.js';
-import { closingTabs, waitForCheckouts, withCheckoutLock } from './lifecycle.js';
+import { closingTabs, waitForCheckouts, withCheckoutLock, writeGitStorage } from './lifecycle.js';
 import { mergePull } from './merge.js';
 import { hasCodeFocus, notify } from './notifications.js';
 import { startWorkspaceCleanup } from './retention.js';
@@ -576,7 +576,7 @@ async function discardTab(tab: PullTab): Promise<void> {
   const pending = discardQueue.catch(() => {}).then(async () => {
     // Remote reads already reject closed tabs; only source operations must finish before deletion.
     await waitForCheckouts();
-    await withCheckoutLock(tab.key, () => discardTabData(tab));
+    await writeGitStorage(() => withCheckoutLock(tab.key, () => discardTabData(tab)));
     const data = workspaceData();
     data.tabs = data.tabs.filter(item => item !== tab);
     data.archived = data.archived.filter(item => item !== tab);

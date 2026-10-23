@@ -1,10 +1,11 @@
-import { lstat, readdir, readFile, realpath, rm } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { lstat, readdir, realpath, rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import type { PullTab, ThreadMessage } from '../api/workspace.js';
 import { getDataDir } from '../db/connection.js';
 import { gitAsync } from './checkout.js';
-import { checkoutBusy, closingTabs, withCheckoutLock } from './lifecycle.js';
+import { checkoutBusy, closingTabs, withCheckoutLock, writeGitStorage } from './lifecycle.js';
+import { cleanupObjectCaches, preserveBorrowedObjects } from './object-cache.js';
 import { saveWorkspace, workspaceData } from './storage.js';
 
 export const WORKSPACE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -62,25 +63,6 @@ async function removeAgent(tab: PullTab, message: ThreadMessage, cutoff: number)
   return true;
 }
 
-async function borrowedByAnother(root: string): Promise<boolean> {
-  const dataDir = getDataDir();
-  if (dataDir === null) return true;
-  const objects = await realpath(join(root, '.git', 'objects'));
-  for (const entry of await readdir(join(dataDir, 'workspaces'), { withFileTypes: true })) {
-    const other = join(dataDir, 'workspaces', entry.name);
-    if (other === root || !entry.isDirectory()) continue;
-    try {
-      const directory = join(other, '.git', 'objects');
-      const lines = (await readFile(join(directory, 'info', 'alternates'), 'utf8')).trim().split('\n');
-      for (const line of lines) if (line &&
-        await realpath(resolve(directory, line)).catch(() => resolve(directory, line)) === objects) return true;
-    } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-    }
-  }
-  return false;
-}
-
 async function removeReview(tab: PullTab, cutoff: number, pinnedRoot?: string): Promise<boolean> {
   if (!idle(tab, cutoff) || checkoutBusy(tab.key)) return false;
   return withCheckoutLock(tab.key, async () => {
@@ -88,7 +70,7 @@ async function removeReview(tab: PullTab, cutoff: number, pinnedRoot?: string): 
     if (root === null || (pinnedRoot !== undefined && await realpath(root) === await realpath(pinnedRoot))) return false;
     if (tab.repoRoot !== null && await realpath(tab.repoRoot) !== root) return false;
     if ((await lstat(root)).mtimeMs > cutoff || !(await lstat(join(root, '.git'))).isDirectory()) return false;
-    if (!(await clean(root)) || await borrowedByAnother(root)) return false;
+    if (!(await clean(root))) return false;
     if (await lstat(join(root, '.git', 'modules')).then(() => true, () => false)) return false;
     const worktrees = await gitAsync(['worktree', 'list', '--porcelain'], root);
     if (worktrees.split('\n').filter(line => line.startsWith('worktree ')).length > 1) return false;
@@ -105,6 +87,8 @@ async function removeReview(tab: PullTab, cutoff: number, pinnedRoot?: string): 
     if (!idle(tab, cutoff) || [...current.tabs, ...current.archived].some(other =>
       other.loading || (other.key !== tab.key && checkoutBusy(other.key)) ||
       other.comments.some(message => message.kind === 'ai' && message.status === 'working'))) return false;
+    await preserveBorrowedObjects(root);
+    if (!idle(tab, cutoff)) return false;
     tab.checkoutEvicted = true;
     saveWorkspace();
     await rm(root, { recursive: true });
@@ -114,30 +98,28 @@ async function removeReview(tab: PullTab, cutoff: number, pinnedRoot?: string): 
 
 /** Expire disposable source only. The database, comments, attachments and tab history stay intact. */
 export async function cleanupWorkspaces(now = Date.now(), pinnedRoot?: string): Promise<{ reviews: number; agents: number }> {
-  const data = workspaceData();
-  const tabs = [...data.tabs, ...data.archived];
-  const result = { reviews: 0, agents: 0 };
-  const cutoff = now - WORKSPACE_RETENTION_MS;
-  // Shared Git stores may be in use by any import or agent, including one in another PR.
-  const busy = () => [...workspaceData().tabs, ...workspaceData().archived].some(tab => tab.loading || checkoutBusy(tab.key) ||
-    tab.comments.some(message => message.kind === 'ai' && message.status === 'working'));
-  if (busy()) return result;
-  for (const tab of tabs) for (const message of tab.comments) {
+  return writeGitStorage(async () => {
+    const data = workspaceData();
+    const tabs = [...data.tabs, ...data.archived];
+    const result = { reviews: 0, agents: 0 };
+    const cutoff = now - WORKSPACE_RETENTION_MS;
+    // Shared Git stores may be in use by any import or agent, including one in another PR.
+    const busy = () => [...workspaceData().tabs, ...workspaceData().archived].some(tab => tab.loading || checkoutBusy(tab.key) ||
+      tab.comments.some(message => message.kind === 'ai' && message.status === 'working'));
     if (busy()) return result;
-    try { if (await removeAgent(tab, message, cutoff)) result.agents++; }
-    catch (error) { console.warn(`Kept agent workspace ${message.id}: ${String(error)}`); }
-  }
-  // Delete borrowers before their providers; cycles and still-needed providers remain intact.
-  let removed: boolean;
-  do {
-    removed = false;
+    for (const tab of tabs) for (const message of tab.comments) {
+      if (busy()) return result;
+      try { if (await removeAgent(tab, message, cutoff)) result.agents++; }
+      catch (error) { console.warn(`Kept agent workspace ${message.id}: ${String(error)}`); }
+    }
     for (const tab of tabs) {
       if (busy()) return result;
-      try { if (await removeReview(tab, cutoff, pinnedRoot)) { result.reviews++; removed = true; } }
+      try { if (await removeReview(tab, cutoff, pinnedRoot)) result.reviews++; }
       catch (error) { console.warn(`Kept review workspace ${tab.key}: ${String(error)}`); }
     }
-  } while (removed);
-  return result;
+    await cleanupObjectCaches();
+    return result;
+  });
 }
 
 export function startWorkspaceCleanup(pinnedRoot?: string): () => void {

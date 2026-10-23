@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
-import { appendFile, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import { z } from 'zod';
@@ -11,9 +12,10 @@ import { addReviewFile, createReview, updateReviewSource } from '../db/queries.j
 import { parseDiff } from '../git/parseDiff.js';
 import { updateReviewDiffs } from '../review-update.js';
 import { github, githubToken, repoApi } from './github.js';
-import { closingTabs, withCheckoutLock } from './lifecycle.js';
+import { closingTabs, readGitStorage, withCheckoutLock } from './lifecycle.js';
+import { attachObjectCache, repositoryCache } from './object-cache.js';
 import { findLocalRepository } from './repositories.js';
-import { saveWorkspace, workspaceData } from './storage.js';
+import { saveWorkspace } from './storage.js';
 
 const exec = promisify(execFile);
 const fetches = new Map<string, Promise<string>>();
@@ -52,7 +54,7 @@ async function remoteMergeBase(tab: PullTab): Promise<string> {
 }
 /** Import into a dedicated checkout; never switch the user's existing working tree. */
 export async function importPull(tab: PullTab, canApply: () => boolean = () => true): Promise<void> {
-  return withCheckoutLock(tab.key, async () => { if (!closingTabs.has(tab) && canApply()) await prepareCheckout(tab, false, canApply); });
+  return readGitStorage(() => withCheckoutLock(tab.key, async () => { if (!closingTabs.has(tab) && canApply()) await prepareCheckout(tab, false, canApply); }));
 }
 
 const restoring = new Map<string, Promise<void>>();
@@ -61,7 +63,7 @@ export async function ensureCheckout(tab: PullTab): Promise<void> {
   if (!tab.checkoutEvicted || closingTabs.has(tab)) return;
   const existing = restoring.get(tab.key);
   if (existing) return existing;
-  const pending = withCheckoutLock(tab.key, async () => {
+  const pending = readGitStorage(() => withCheckoutLock(tab.key, async () => {
     if (!tab.checkoutEvicted || closingTabs.has(tab)) return;
     tab.loading = true;
     tab.error = undefined;
@@ -74,7 +76,7 @@ export async function ensureCheckout(tab: PullTab): Promise<void> {
       tab.error = error instanceof Error ? error.message : 'Could not restore the review checkout';
       throw error;
     } finally { tab.loading = false; saveWorkspace(); }
-  });
+  }));
   restoring.set(tab.key, pending);
   try { await pending; }
   finally { if (restoring.get(tab.key) === pending) restoring.delete(tab.key); }
@@ -99,48 +101,36 @@ async function prepareCheckout(tab: PullTab, restore: boolean, canApply: () => b
   const exclude = join(root, '.git', 'info', 'exclude');
   if (!(await readFile(exclude, 'utf8')).split('\n').includes('/.glassbox/'))
     await appendFile(exclude, '\n/.glassbox/\n');
-  const source =
-    (!tab.checkoutEvicted ? tab.repoRoot : null) ??
-    workspaceData().tabs.find(
-      (other) =>
-        other.key !== tab.key && !closingTabs.has(other) && !other.checkoutEvicted && other.ref.owner === tab.ref.owner && other.ref.repo === tab.ref.repo && other.repoRoot !== null,
-    )?.repoRoot ?? await findLocalRepository(tab.ref);
-  if (source !== undefined && source !== root) {
-    const objects = (
-      await gitAsync(['rev-parse', '--path-format=absolute', '--git-path', 'objects'], source)
-    ).trim();
-    await writeFile(join(root, '.git', 'objects', 'info', 'alternates'), `${await realpath(objects)}\n`);
+  const source = await findLocalRepository(tab.ref);
+  let base = target;
+  if (!restore) {
+    // A user clone can answer this read-only; never fetch into or pin refs in it.
+    base = source === undefined ? await remoteMergeBase(tab)
+      : await gitAsync(['merge-base', target, head], source).then(value => value.trim(), () => remoteMergeBase(tab));
   }
-  const env = await gitAuthEnv(tab);
-  // Fetch through an existing checkout so Git can negotiate its known history.
-  const fetchRoot = source ?? root;
-  // A cold clone needs two snapshots, not an arbitrary window of commit history.
-  let base = restore ? target : source !== undefined ? undefined : await remoteMergeBase(tab);
-  const commits = [...new Set([target, head, ...(base !== undefined ? [base] : [])])];
-  const available = await Promise.all(commits.map(sha =>
-    gitAsync(['cat-file', '-e', `${sha}^{commit}`], root).then(() => true, () => false)));
-  if (!available.every(Boolean)) await gitAsync(
-    [
-      'fetch',
-      '--no-tags',
-      ...(source === undefined ? ['--depth=1'] : []),
-      `https://github.com/${tab.ref.owner}/${tab.ref.repo}.git`,
-      // Keep borrowed commits reachable when the shared object store runs GC.
-      ...commits.map(sha => `${sha}:refs/glassbox/cache/${sha}`),
-    ],
-    fetchRoot,
-    env,
-  );
-  if (fetchRoot !== root) {
-    const shallow = (await gitAsync(['rev-parse', '--path-format=absolute', '--git-path', 'shallow'], fetchRoot)).trim();
-    try { await writeFile(join(root, '.git', 'shallow'), await readFile(shallow)); }
-    catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-      await rm(join(root, '.git', 'shallow'), { force: true });
-    }
-    // Even a network-free import must protect borrowed commits from source-repo GC.
-    for (const sha of commits) await gitAsync(['update-ref', `refs/glassbox/cache/${sha}`, sha], fetchRoot);
+  const cache = await repositoryCache(tab.ref);
+  const commits = [...new Set([base, head])];
+  const missing = async () => (await Promise.all(commits.map(async sha =>
+    await gitAsync(['cat-file', '-e', `${sha}^{commit}`], cache).then(() => null, () => sha)))).filter(sha => sha !== null);
+  let needed = await missing();
+  if (needed.length && source !== undefined) {
+    // file:// honors depth=1 and copies snapshots instead of borrowing the user's object store.
+    await gitAsync(['fetch', '--no-tags', '--depth=1', pathToFileURL(source).href,
+      ...needed.map(sha => `${sha}:refs/glassbox/cache/${sha}`)], cache).catch(() => {});
+    needed = await missing();
   }
+  if (needed.length) await gitAsync(['fetch', '--no-tags', '--depth=1',
+    `https://github.com/${tab.ref.owner}/${tab.ref.repo}.git`,
+    ...needed.map(sha => `${sha}:refs/glassbox/cache/${sha}`)], cache, await gitAuthEnv(tab));
+  await attachObjectCache(root, cache);
+  // Retain older boundaries too: a refreshed checkout may still contain its previous snapshot.
+  const shallow = join(root, '.git', 'shallow');
+  const boundaries = await Promise.all([shallow, join(cache, 'shallow')].map(path => readFile(path, 'utf8').catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return '';
+    throw error;
+  })));
+  const lines = [...new Set(boundaries.flatMap(value => value.split('\n').filter(Boolean)))];
+  if (lines.length) await writeFile(shallow, `${lines.join('\n')}\n`);
   const dirty = await gitAsync(['status', '--porcelain'], root);
   if (dirty.trim()) throw new Error('The managed checkout has local changes; they were preserved.');
   if (restore) {
@@ -148,16 +138,6 @@ async function prepareCheckout(tab: PullTab, restore: boolean, canApply: () => b
     tab.repoRoot = root;
     tab.checkoutEvicted = false;
     return;
-  }
-  try {
-    base ??= (await gitAsync(['merge-base', info.baseRefOid, info.headRefOid], root)).trim();
-  } catch {
-    base = await remoteMergeBase(tab);
-    try { await gitAsync(['cat-file', '-e', `${base}^{commit}`], root); }
-    catch {
-      await gitAsync(['fetch', '--no-tags', '--depth=1', `https://github.com/${tab.ref.owner}/${tab.ref.repo}.git`,
-        `${base}:refs/glassbox/cache/${base}`], root, env);
-    }
   }
   const diff = await gitAsync(['diff', '--no-ext-diff', '--find-renames', base, info.headRefOid, '--'], root);
   if (closingTabs.has(tab) || !canApply()) return;

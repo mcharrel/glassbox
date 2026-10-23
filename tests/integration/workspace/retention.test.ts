@@ -86,14 +86,15 @@ it('uses the last saved update for legacy tabs without an activity timestamp', a
   tab.updatedAt = old;
   expect((await cleanupWorkspaces(now)).reviews).toBe(1);
 });
-it('keeps a shared provider until its last borrower expires, then removes dependents first', async () => {
+it('expires a provider without breaking its live borrower, then collects the last dependency', async () => {
   const provider = fixture(1), borrower = fixture(2);
   writeFileSync(join(borrower.repoRoot!, '.git/objects/info/alternates'), join(provider.repoRoot!, '.git/objects') + '\n');
   borrower.lastUsedAt = now;
-  expect((await cleanupWorkspaces(now)).reviews).toBe(0);
+  expect((await cleanupWorkspaces(now)).reviews).toBe(1);
+  expect(existsSync(provider.repoRoot!)).toBe(false);
   expect(git(borrower.repoRoot!, 'show', 'HEAD:file.ts')).toBe('before');
   borrower.lastUsedAt = old;
-  expect((await cleanupWorkspaces(now)).reviews).toBe(2);
+  expect((await cleanupWorkspaces(now)).reviews).toBe(1);
 });
 it.each(['clean', 'published', 'dirty', 'unpublished', 'working', 'recent', 'locked'])(
   'handles %s agent worktrees with Git and preserves unsafe ones', async kind => {

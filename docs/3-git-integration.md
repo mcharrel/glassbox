@@ -70,3 +70,5 @@ Requirements for interacting with git repositories.
 ### 3.7 Performance
 
 - **Diff speed** — Diff generation shall complete within seconds for typical repositories (hundreds of files).
+
+- **PR snapshots** — Fetch exact head and merge-base snapshots with depth one into an independent repository cache. Use a matching local clone read-only when it has the snapshots; otherwise use GitHub. Never fetch or pin refs in a user's clone. Multiple PRs reuse the cache without depending on each other's checkout lifetime (storage §9.8).

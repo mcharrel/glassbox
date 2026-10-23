@@ -15,3 +15,20 @@ export async function withCheckoutLock<T>(key: string, run: () => Promise<T>): P
 }
 
 export function checkoutBusy(key: string): boolean { return operations.has(key); }
+
+let storageWrites: Promise<unknown> = Promise.resolve();
+const storageReads = new Set<Promise<unknown>>();
+
+/** Imports may run together, but object relocation/deletion waits for their Git processes. */
+export async function readGitStorage<T>(run: () => Promise<T>): Promise<T> {
+  const pending = storageWrites.catch(() => {}).then(run);
+  storageReads.add(pending);
+  try { return await pending; }
+  finally { storageReads.delete(pending); }
+}
+export async function writeGitStorage<T>(run: () => Promise<T>): Promise<T> {
+  const readers = [...storageReads];
+  const pending = storageWrites.catch(() => {}).then(() => Promise.allSettled(readers)).then(run);
+  storageWrites = pending.catch(() => {});
+  return pending;
+}

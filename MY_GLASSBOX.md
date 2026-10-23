@@ -200,3 +200,9 @@ Closing a PR immediately removes its tab and selects another open PR (or the add
 Code comments use one soft light-gray (`#e6e8eb`) rounded card per conversation, with avatar-aligned sans-serif author/body text, compact relative timestamps (exact date on hover), indented unboxed replies and a blue Add reply… disclosure. New-comment composers share the card style. The root gray/yellow/green agent-status band spans the conversation; follow-up requests keep their own acknowledgement. Share/delete appear on hover or keyboard focus. Preserve resolved folding, comment navigation, search and unsent reply drafts through metadata refreshes. Main-view conversation styling and comment publication rules are unchanged.
 
 Own PRs offer Merge in the status dropdown, disabled for drafts and closed PRs. Show per-PR Merging… progress, suppress duplicate requests and switch to green Merged only after GitHub accepts the merge. Recheck the authenticated author, current state and merge readiness; require the displayed/reviewed head SHA so a newer push cannot be merged silently. Prefer a merge commit when enabled, otherwise squash, then rebase. Errors keep the prior state, and merge actions never trigger Slack review reactions. Older metadata responses cannot overwrite a confirmed merge.
+
+### Independent Git storage for PR closing
+
+- New PRs share a separate shallow repository cache, never another PR's checkout or a user clone. Local clones supply snapshots read-only.
+- Closing older PRs retains shared object files and redirects borrowers atomically, without repacking Git history. Broken unrelated cache refs do not block closure.
+- Keep the immediate UI close and unpublished-work protections. Collect caches after their last managed dependency disappears, including during the fourteen-day workspace sweep; never retain closed review records or workspaces.
